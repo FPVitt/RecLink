@@ -30,7 +30,7 @@ static const char *TAG = "cam";
 static const uint32_t k_backoff_s[] = { 1, 2, 4, 8, 16, 30, 30 };
 
 // ---- internal event queue -----------------------------------------
-typedef enum { IQ_BLE_EVT, IQ_NOTIFY, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET } iq_kind_t;
+typedef enum { IQ_BLE_EVT, IQ_NOTIFY, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET, IQ_CMD_SUSPEND } iq_kind_t;
 typedef struct {
     uint8_t kind;
     union {
@@ -197,6 +197,11 @@ esp_err_t cam_forget(void)
     return xQueueSend(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE ? ESP_OK : ESP_FAIL;
 }
 esp_err_t cam_refresh(void) { return cam_submit(CAM_OP_REFRESH, 0); }
+void cam_ble_suspend(void)
+{
+    iq_item_t it = { .kind = IQ_CMD_SUSPEND };
+    xQueueSend(s_iq, &it, pdMS_TO_TICKS(100));
+}
 QueueHandle_t cam_events(void) { return s_evq; }
 
 void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
@@ -424,6 +429,17 @@ static void cam_task(void *arg)
                 invalidate_cam_values();
                 set_link(CAM_LINK_IDLE);
                 applog_note("camera forgotten");
+                break;
+            case IQ_CMD_SUSPEND:
+                // OTA in progress: drop BLE so it doesn't contend with Wi-Fi +
+                // flash writes on the single core. A reboot restores it.
+                ble_central_scan(false);
+                ble_central_disconnect();
+                if (s_drv && s_drv->link_down) { s_drv->link_down(); }
+                s_drv = NULL;                 // don't reconnect
+                invalidate_cam_values();
+                set_link(CAM_LINK_IDLE);
+                applog_note("BLE suspended for OTA");
                 break;
             }
         }

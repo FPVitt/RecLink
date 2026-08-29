@@ -47,7 +47,7 @@ static const ble_uuid128_t U_QRY_RSP    = GP_UUID(0x77);
 //   setting 2 VIDEO_RESOLUTION  3 FRAMES_PER_SECOND  121 VIDEO_LENS
 enum { ST_BATT_BARS = 2, ST_HOT = 6, ST_BUSY = 8, ST_ENCODING = 10,
        ST_SD_STATUS = 33, ST_REMAIN_VIDEO_S = 35, ST_SD_REMAIN_KB = 54, ST_BATT_PCT = 70,
-       ST_ACTIVE_PRESET = 89 };   // Current Preset ID (VERIFY.md GOPRO-STATUS-89)
+       ST_PRESET_GROUP = 96 };   // 1000 VIDEO / 1001 PHOTO / 1002 TIMELAPSE
 enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_LENS = 121 };
 
 // ---- driver state ---------------------------------------------------
@@ -257,7 +257,7 @@ static void gp_pull_all(void)
 {
     static const uint8_t reg_st[]  = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
                                        ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S,
-                                       ST_SD_STATUS, ST_ACTIVE_PRESET };
+                                       ST_SD_STATUS, ST_PRESET_GROUP };
     static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_LENS };
     for (unsigned i = 0; i < sizeof(reg_st); i++)  { uint8_t b[2] = { 0x53, reg_st[i] };  wr(h_qry, b, 2); }
     for (unsigned i = 0; i < sizeof(reg_set); i++) { uint8_t b[2] = { 0x52, reg_set[i] }; wr(h_qry, b, 2); }
@@ -341,27 +341,26 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
         s->sd_missing = (v[0] == 2);
         s->sd_full    = (v[0] == 1);
         break;
-    case ST_ACTIVE_PRESET: {
-        // Preset ID high bits = group: 0x0000xxxx video, 0x0001xxxx photo,
-        // 0x0002xxxx timelapse (VERIFY.md GOPRO-STATUS-89). GoPro "mode" only
-        // exists as the preset group -- switching to Photo does not change the
-        // video-resolution setting, so blank res/fps when not in a video mode.
-        uint32_t pid = be(v, n);
-        uint8_t grp = (pid >> 16) & 0xFF;
-        if (s->mode.valid && s->mode.v != grp) {
-            getall_retry = 0;           // re-poll settings for the new mode
-            last_getall_ms = now_ms();
+    case ST_PRESET_GROUP: {
+        // status 96 = preset group: 1000 VIDEO / 1001 PHOTO / 1002 TIMELAPSE.
+        // (GoPro has no plain "mode" -- switching to Photo doesn't touch the
+        // video-resolution setting, so blank res/fps when not VIDEO.)
+        uint32_t g = be(v, n);
+        uint8_t code = (g == 1001) ? 1 : (g == 1002) ? 2 : (g == 1000) ? 0 : 0xFF;
+        if (s->mode.valid && s->mode.v != code) {
+            last_getall_ms = 0;         // re-poll settings for the new mode
         }
-        s->mode.valid = true; s->mode.v = grp;
-        const char *mn = grp == 0 ? "VID" : grp == 1 ? "PHOTO" : grp == 2 ? "TLAPSE" : "";
+        s->mode.valid = (code != 0xFF);
+        s->mode.v = code;
+        const char *mn = code == 0 ? "VID" : code == 1 ? "PHOTO" : code == 2 ? "TLAPSE" : "";
         val_str_set(&s->mode_name, mn);
         if (!*mn) { s->mode_name.valid = false; }
-        if (grp != 0) {
+        if (code != 0) {
             s->resolution.valid = false;
             s->framerate.valid = false;
             s->aspect.valid = false;
         }
-        ESP_LOGI(TAG, "active preset 0x%08lx -> %s", (unsigned long)pid, mn);
+        ESP_LOGI(TAG, "preset group %lu -> %s", (unsigned long)g, mn);
         break;
     }
     default: break;

@@ -20,6 +20,7 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_app_desc.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -348,6 +349,12 @@ static esp_err_t h_ota(httpd_req_t *r)
         httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"too small -- upload build/fc_cam_bridge.bin\"}");
         return ESP_OK;
     }
+    // Free the single core for Wi-Fi + flash: drop the BLE link and disable
+    // Wi-Fi power-save for the duration (reboot restores both).
+    cam_ble_suspend();
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    vTaskDelay(pdMS_TO_TICKS(300));
+
     if (ota_stream_begin((size_t)total) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "ota_begin"); }
 
     char chunk[1460];
@@ -379,6 +386,7 @@ static esp_err_t h_ota(httpd_req_t *r)
         }
         if (ota_stream_write(p, m) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "flash write"); }
         written += m;
+        taskYIELD();                     // let the Wi-Fi task run between writes
         if (now_ms() - last_log > 1000) {
             last_log = now_ms();
             ESP_LOGI("api", "OTA %u / %d B (%d%%)", (unsigned)written, total, (int)(100LL * written / total));

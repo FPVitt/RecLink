@@ -92,6 +92,7 @@ esp_err_t cam_submit_gps(const gps_fix_t *fix, int64_t utc_ms);
 esp_err_t cam_pair_begin(const char *brand);   // scan-and-bond
 esp_err_t cam_forget(void);                    // delete bond + cfg + go IDLE
 esp_err_t cam_refresh(void);                    // portal: re-pull all camera state
+void      cam_ble_suspend(void);                // drop the BLE link (for OTA)
 void      cam_erase_all_bonds(void);           // factory reset path (spec 11.0)
 bool      cam_reconcile_bonds(bool erase_orphan_bond);  // boot; -> FLAG_REPAIR_NEEDED
 
