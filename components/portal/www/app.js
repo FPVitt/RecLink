@@ -23,7 +23,7 @@ $('#tokens').innerHTML =
   'Tokens: %st rec &nbsp; %et elapsed &nbsp; %rt time-left &nbsp; %bt cam batt% &nbsp; %bb bars &nbsp; ' +
   '%rs res &nbsp; %fp fps &nbsp; %ar aspect &nbsp; %ln lens &nbsp; %pr profile &nbsp; %bd bit-depth &nbsp; ' +
   '%sd SD &nbsp; %md mode &nbsp; %cr cam RSSI &nbsp; %gs GPS sats &nbsp; %gf GPS fix &nbsp; ' +
-  '%fb FC batt &nbsp; %cn craft &nbsp; %wr warning &nbsp; + literal text';
+  '%fb FC batt &nbsp; %sp speed &nbsp; %cn craft &nbsp; %wr warning &nbsp; + literal text';
 
 // ---- config load/save ----
 function setField(name, val) {

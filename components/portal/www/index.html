@@ -110,6 +110,8 @@
   <label>Portal timeout (min) <input type="number" name="wifi.portal_timeout_min"></label>
   <label>MSP baud
     <select name="msp.baud"><option>115200</option><option>230400</option><option>250000</option><option>460800</option></select></label>
+  <label><input type="checkbox" name="msp.swap_pins"> Swap MSP TX/RX pins</label>
+  <p class="muted">Enable if the FC UART is wired backwards (bridge RX↔FC RX). Takes effect after a reboot.</p>
 </section>
 
 <section id="system" class="tab">

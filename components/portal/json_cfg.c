@@ -77,7 +77,9 @@ cJSON *cfg_to_json(const cfg_t *c)
 
     cJSON_AddNumberToObject(cJSON_AddObjectToObject(r, "hilight"), "channel", c->hilight.channel);
 
-    cJSON_AddNumberToObject(cJSON_AddObjectToObject(r, "msp"), "baud", c->msp.baud);
+    cJSON *msp = cJSON_AddObjectToObject(r, "msp");
+    cJSON_AddNumberToObject(msp, "baud", c->msp.baud);
+    cJSON_AddNumberToObject(msp, "swap_pins", c->msp_swap_pins);
 
     cJSON *wifi = cJSON_AddObjectToObject(r, "wifi");
     cJSON_AddStringToObject(wifi, "ssid", c->wifi.ssid);
@@ -207,7 +209,10 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
         mnum_u(o, "rate_hz", &c->gps_push.rate_hz, 1);
     }
     if ((o = J_OBJ(j, "hilight"))) { mnum_u(o, "channel", &c->hilight.channel, 1); }
-    if ((o = J_OBJ(j, "msp"))) { mnum_u(o, "baud", &c->msp.baud, 4); }
+    if ((o = J_OBJ(j, "msp"))) {
+        mnum_u(o, "baud", &c->msp.baud, 4);
+        mbool(o, "swap_pins", &c->msp_swap_pins);
+    }
     if ((o = J_OBJ(j, "wifi"))) {
         mstr(o, "ssid", c->wifi.ssid, sizeof(c->wifi.ssid));
         const cJSON *pw = J_OBJ(o, "password");

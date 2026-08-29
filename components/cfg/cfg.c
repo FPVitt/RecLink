@@ -87,6 +87,8 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
 
     CLAMP(c->gps_push.rate_hz, 1, 2);
 
+    CLAMP(c->msp_swap_pins, 0, 1);
+
     if (c->msp.baud != 115200 && c->msp.baud != 230400 &&
         c->msp.baud != 250000 && c->msp.baud != 460800) {
         c->msp.baud = 115200;

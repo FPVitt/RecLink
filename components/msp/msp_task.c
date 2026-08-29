@@ -152,8 +152,13 @@ static void msp_task(void *arg)
     };
     ESP_ERROR_CHECK(uart_driver_install(UART_PORT, UART_RX_BUF, UART_TX_BUF, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART_PORT, &uc));
-    ESP_ERROR_CHECK(uart_set_pin(UART_PORT, TX_GPIO, RX_GPIO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-    ESP_LOGI(TAG, "UART%d @ %lu  tx=%d rx=%d", UART_PORT, (unsigned long)baud, TX_GPIO, RX_GPIO);
+    // Optional pin swap (cfg.msp_swap_pins) for boards/harnesses wired backwards.
+    bool swap = cfg && cfg->msp_swap_pins;
+    int tx_pin = swap ? RX_GPIO : TX_GPIO;
+    int rx_pin = swap ? TX_GPIO : RX_GPIO;
+    ESP_ERROR_CHECK(uart_set_pin(UART_PORT, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_LOGI(TAG, "UART%d @ %lu  tx=%d rx=%d%s", UART_PORT, (unsigned long)baud,
+             tx_pin, rx_pin, swap ? " (swapped)" : "");
 
     msp_sched_init();
     msp_rx_t rx;
