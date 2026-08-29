@@ -36,7 +36,7 @@ typedef struct {
     union {
         struct { int ev; int status; } ble;
         struct { uint16_t handle; uint16_t len; uint8_t data[256]; } notify;
-        struct { uint8_t addr[6]; uint8_t addr_type; } adv;
+        ble_adv_t adv;                    // full advert; cam_task does the matching
         struct { char brand[6]; } pair;
     };
 } iq_item_t;
@@ -119,20 +119,15 @@ static const camera_cbs_t k_cbs = {
 };
 void cam_registry_set_cbs(const camera_cbs_t *c);   // cam_registry.c
 
-// ---- NimBLE host-task callbacks: only enqueue -------------------
+// ---- NimBLE host-task callbacks: ONLY enqueue -----------------------
+// These run on the NimBLE host task. They must not read cam_task's private
+// state (s_drv / s_target_addr / s_first_pair) -- that is a data race and a
+// NULL-deref reboot when a portal "forget" nulls s_drv mid-scan (review H4).
+// The advert is forwarded whole; cam_task does all the matching.
 static void h_scan(const ble_adv_t *adv)
 {
-    if (!s_drv) { return; }
-    bool want = false;
-    if (s_first_pair) {
-        want = s_drv->adv_match && s_drv->adv_match(adv);
-    } else {
-        want = memcmp(adv->addr, s_target_addr, 6) == 0;
-    }
-    if (!want) { return; }
     iq_item_t it = { .kind = IQ_ADV };
-    memcpy(it.adv.addr, adv->addr, 6);
-    it.adv.addr_type = adv->addr_type;
+    it.adv = *adv;
     xQueueSend(s_iq, &it, 0);
 }
 static void h_evt(ble_central_evt_t ev, int status)
@@ -200,6 +195,17 @@ void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
 // 3.6 step 1). Returns true if FLAG_REPAIR_NEEDED should be raised.
 bool cam_reconcile_bonds(bool erase_orphan_bond)
 {
+    // Wait for the NimBLE host: bond-store queries before sync are meaningless,
+    // and acting on a wrong count either strands the camera (REPAIR_NEEDED) or
+    // erases a valid bond (review H15).
+    for (int i = 0; i < 200 && !ble_central_synced(); i++) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (!ble_central_synced()) {
+        applog_note("BLE host not synced -- skipping bond reconcile (no changes)");
+        return false;
+    }
+
     if (erase_orphan_bond) {
         ble_central_erase_all_bonds();
         return false;
@@ -264,6 +270,10 @@ static void go_lost(const char *why)
 
 static void handle_ble_evt(int ev, int status)
 {
+    // A queued BLE event can arrive after a portal "forget" nulled s_drv
+    // (both drain from s_iq). Everything past CONNECTED needs the driver.
+    if (!s_drv && ev != BLE_EVT_DISCONNECTED) { return; }
+
     switch (ev) {
     case BLE_EVT_CONNECTED:
         if (s_cs.link == CAM_LINK_CONNECTING) {
@@ -341,16 +351,21 @@ static void cam_task(void *arg)
         iq_item_t it;
         if (xQueueReceive(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE) {
             switch (it.kind) {
-            case IQ_ADV:
-                if (s_cs.link == CAM_LINK_SCAN) {
-                    memcpy(s_target_addr, it.adv.addr, 6);
-                    s_target_addr_type = it.adv.addr_type;
-                    memcpy(s_cs.addr, it.adv.addr, 6);
-                    ble_central_scan(false);
-                    set_link(CAM_LINK_CONNECTING);
-                    ble_central_connect(s_target_addr, s_target_addr_type);
-                }
+            case IQ_ADV: {
+                if (s_cs.link != CAM_LINK_SCAN || !s_drv) { break; }
+                bool want = s_first_pair
+                    ? (s_drv->adv_match && s_drv->adv_match(&it.adv))
+                    : (memcmp(it.adv.addr, s_target_addr, 6) == 0);
+                if (!want) { break; }
+                memcpy(s_target_addr, it.adv.addr, 6);
+                s_target_addr_type = it.adv.addr_type;
+                memcpy(s_cs.addr, it.adv.addr, 6);
+                if (it.adv.name[0]) { strlcpy(s_cs.name, it.adv.name, sizeof(s_cs.name)); }
+                ble_central_scan(false);
+                set_link(CAM_LINK_CONNECTING);
+                ble_central_connect(s_target_addr, s_target_addr_type);
                 break;
+            }
             case IQ_BLE_EVT:
                 handle_ble_evt(it.ble.ev, it.ble.status);
                 break;

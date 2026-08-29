@@ -252,6 +252,8 @@ static void on_sync(void)
 }
 static void on_reset(int reason) { ESP_LOGW(TAG, "host reset %d", reason); s_host_synced = false; }
 
+bool ble_central_synced(void) { return s_host_synced; }
+
 static void host_task(void *arg) { (void)arg; nimble_port_run(); nimble_port_freertos_deinit(); }
 
 void ble_central_set_cbs(ble_scan_cb_t scan, ble_evt_cb_t evt, ble_notify_cb_t notify)

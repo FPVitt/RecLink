@@ -25,6 +25,10 @@ typedef void (*ble_notify_cb_t)(uint16_t val_handle, const uint8_t *data, uint16
 
 // Start the controller + host. Idempotent. Call once from app_main.
 void ble_central_init(void);
+
+// True once the NimBLE host has synced (address ready, stack usable). Bond-store
+// queries before this return garbage -- callers must wait (review H15).
+bool ble_central_synced(void);
 void ble_central_set_cbs(ble_scan_cb_t scan, ble_evt_cb_t evt, ble_notify_cb_t notify);
 
 esp_err_t ble_central_scan(bool enable);
