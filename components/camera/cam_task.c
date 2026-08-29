@@ -171,9 +171,10 @@ esp_err_t cam_submit_datetime(int64_t utc_ms, int16_t off, bool dst)
     xQueueSend(s_cmdq, &c, 0);
     return ESP_OK;
 }
+static gps_fix_t s_gps_for_push;   // latest fix to accompany CAM_OP_PUSH_GPS
 esp_err_t cam_submit_gps(const gps_fix_t *fix, int64_t utc_ms)
 {
-    (void)fix;
+    if (fix) { s_gps_for_push = *fix; }
     cam_cmd_t c = { .op = CAM_OP_PUSH_GPS, .arg64 = utc_ms };
     xQueueSend(s_cmdq, &c, 0);
     return ESP_OK;
@@ -207,11 +208,9 @@ static void exec_cmd(const cam_cmd_t *c)
         s_drv->set_datetime(c->arg64, (int16_t)(c->arg >> 8), c->arg & 1);
         break;
     case CAM_OP_GET_DATETIME: s_drv->get_datetime(); break;
-    case CAM_OP_PUSH_GPS: {
-        gps_fix_t f; memset(&f, 0, sizeof(f));   // ctrl_task passes fresh fix via cam_state? keep simple
-        s_drv->push_gps(&f, c->arg64);
+    case CAM_OP_PUSH_GPS:
+        s_drv->push_gps(&s_gps_for_push, c->arg64);
         break;
-    }
     case CAM_OP_HILIGHT: s_drv->hilight(); break;
     }
 }
@@ -269,9 +268,9 @@ static void handle_ble_evt(int ev, int status)
         }
         esp_err_t r = s_drv->link_up ? s_drv->link_up(s_first_pair) : ESP_OK;
         if (r != ESP_OK) { go_lost("driver link_up failed"); break; }
-        // Driver reports READY itself once its sync completes (get-all / handshake).
-        // If it's a synchronous driver, mark READY now.
-        if (s_cs.link == CAM_LINK_SYNCING) { set_link(CAM_LINK_READY); }
+        // Driver must call CB->on_link_state(CAM_LINK_READY) once its protocol
+        // sync completes (GoPro get-all returns / DUML handshake acks). The
+        // CONNECT_TIMEOUT_MS guard covers a driver that never gets there.
         s_backoff_idx = 0;
         s_cs.last_rx_ms = now_ms();
         if (s_first_pair) {

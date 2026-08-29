@@ -196,6 +196,9 @@ static esp_err_t gp_link_up(bool first_pair)
         cam_state_t s; cam_state_get(&s);
         CB->on_paired(s.addr, s.name[0] ? s.name : "GoPro", 0);
     }
+    // GoPro sync is fire-and-forget writes; the link is usable immediately and
+    // status/setting pushes will fill cam_state within ~1 s.
+    if (CB->on_link_state) { CB->on_link_state(CAM_LINK_READY); }
     return ESP_OK;
 }
 
