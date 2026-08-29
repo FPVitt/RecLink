@@ -255,16 +255,22 @@ static void gp_link_down(void)
 }
 
 // ---- notification parsing -----------------------------------
+// Big-endian integer. If the field is wider than 32 bits (newer GoPro fw sends
+// status 54 / 35 as 8 bytes), keep the LEAST-significant 32 bits -- i.e. the
+// trailing bytes -- not the leading zeros (that made SD read 0.0 GB).
 static uint32_t be(const uint8_t *p, uint8_t n)
 {
+    if (n > 4) { p += (n - 4); n = 4; }
     uint32_t v = 0;
-    for (uint8_t i = 0; i < n && i < 4; i++) { v = (v << 8) | p[i]; }
+    for (uint8_t i = 0; i < n; i++) { v = (v << 8) | p[i]; }
     return v;
 }
 
 // Mutates the scratch in place; the caller (walk_tuples) commits once at the end.
 static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n)
 {
+    ESP_LOGD(TAG, "status %u len %u = %02x%02x%02x%02x", id, n,
+             n > 0 ? v[0] : 0, n > 1 ? v[1] : 0, n > 2 ? v[2] : 0, n > 3 ? v[3] : 0);
     switch (id) {
     case ST_ENCODING: {
         tribool_t was = s->recording;
@@ -288,7 +294,11 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
     case ST_HOT:  s->hot = v[0] != 0; break;
     case ST_BATT_PCT: s->battery_pct.valid = true; s->battery_pct.v = v[0]; break;
     case ST_SD_REMAIN_KB:
-        s->sd_remaining_kb.valid = true; s->sd_remaining_kb.v = be(v, n); break;
+        s->sd_remaining_kb.valid = true; s->sd_remaining_kb.v = be(v, n);
+        ESP_LOGI(TAG, "SD remaining: %lu KB (~%lu MB), field len %u",
+                 (unsigned long)s->sd_remaining_kb.v,
+                 (unsigned long)(s->sd_remaining_kb.v / 1024), n);
+        break;
     case ST_REMAIN_VIDEO_S:
         s->rec_remaining_s.valid = true; s->rec_remaining_s.v = be(v, n); break;
     case ST_SD_STATUS:

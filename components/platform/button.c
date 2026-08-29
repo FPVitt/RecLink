@@ -37,8 +37,10 @@ void button_hw_init(void)
     };
     gpio_config(&io);
 
-    // Sample the boot-time hold. Blocking here is fine: no tasks exist yet and
-    // the worst case is a 10 s wait only when the user is deliberately holding.
+    // Sample the boot-time hold. Blocks only while the button is actually held
+    // (release -> loop exits): >=3 s => portal, >=10 s => factory reset. The
+    // normal portal case is also covered by button_poll() once tasks run, so a
+    // few seconds of blocked init here is acceptable.
     if (!pressed()) { return; }
     uint32_t start = now_ms();
     while (pressed()) {
