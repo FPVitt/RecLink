@@ -35,8 +35,6 @@ uint32_t bridge_flags_all(void);
 enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3 };
 // -------- portal trigger ----------------------------------------------------
 enum { PORTAL_TRIG_BUTTON = 0, PORTAL_TRIG_ALWAYS_DISARMED = 1 };
-// -------- interlock requirement -------------------------------------------
-enum { INTERLOCK_CONNECTED = 0, INTERLOCK_RECORDING = 1 };
 
 // ---------------------------------------------------------------------------
 // The blob. Layout is frozen per CFG_VERSION; changes require a bump + migration.
@@ -112,10 +110,7 @@ typedef struct __attribute__((packed)) {
         uint8_t  channel;
     } hilight;
 
-    struct {
-        uint8_t  enabled;
-        uint8_t  require;         // INTERLOCK_*
-    } interlock;
+    uint8_t  _rsvd[2];           // was `interlock` -- removed (passenger-only, spec 1.2.1)
 
     struct {
         uint32_t baud;

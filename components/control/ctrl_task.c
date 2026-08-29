@@ -86,7 +86,6 @@ static void ctrl_task(void *arg)
         ctrl_record_tick(&c);
         ctrl_preset_tick(&c);
         ctrl_clock_tick(&c);
-        ctrl_interlock_tick(&c);
         ctrl_extras_tick(&c);
 
         twdt_feed(WDT_CTRL);

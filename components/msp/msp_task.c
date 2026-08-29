@@ -47,9 +47,33 @@ static QueueHandle_t s_cmdq, s_osdq, s_evq;
 
 static volatile bool s_refresh_req;
 
+// ---- passenger guard (spec 1.2.1 / 4.6 / 13.1) -----------------------
+// The bridge may only issue MSP read requests, MSP2_SET_TEXT, and (opt-in)
+// the 4 OSD-placement writes. Anything that could touch arming / RC / the FC
+// clock / GPS / DisplayPort / reboot is refused HERE, at the one place that
+// owns the UART -- not left to reviewer diligence.
+static bool msp_func_forbidden(uint16_t func)
+{
+    switch (func) {
+    case MSP_SET_ARMING_DISABLED:
+    case MSP_SET_RAW_RC:
+    case MSP_SET_RAW_GPS:
+    case MSP_SET_RTC:
+    case MSP_DISPLAYPORT:
+    case MSP_REBOOT:
+        return true;
+    default:
+        return false;
+    }
+}
+
 // ---- public API -------------------------------------------------------
 esp_err_t msp_send(uint16_t func, const uint8_t *payload, uint16_t len)
 {
+    if (msp_func_forbidden(func)) {
+        ESP_LOGE(TAG, "REFUSED forbidden MSP func %u (passenger guard)", func);
+        return ESP_ERR_NOT_ALLOWED;
+    }
     if (len > sizeof(((msp_cmd_t *)0)->payload)) { return ESP_ERR_INVALID_SIZE; }
     msp_cmd_t c = { .func = func, .len = len };
     if (payload && len) { memcpy(c.payload, payload, len); }
@@ -88,6 +112,12 @@ static void emit_event(uint8_t type, int32_t value)
 
 static void uart_write_frame(uint16_t func, const uint8_t *payload, uint16_t len)
 {
+    // Last line of defence: nothing forbidden ever reaches the wire, even if a
+    // bug enqueued it or called here directly.
+    if (msp_func_forbidden(func)) {
+        ESP_LOGE(TAG, "BLOCKED forbidden MSP func %u at TX", func);
+        return;
+    }
     uint8_t buf[MSP_MAX_PAYLOAD + 16];
     size_t n = msp_encode(buf, sizeof(buf), func, payload, len);
     if (n) { uart_write_bytes(UART_PORT, buf, n); }

@@ -65,10 +65,6 @@ static void hk_task(void *arg)
             cam_liveness_check();
         }
 
-        // --- interlock failsafe (spec 8.6) ------------------
-        // (ctrl_task owns the interlock; if it stalls, the Task WDT reboots and
-        //  the FC clears ARMING_DISABLED_MSP itself -- nothing to force here.)
-
         // --- stats flush (<= 1 / 30 s) --------------------
         cfg_stats_flush();
 

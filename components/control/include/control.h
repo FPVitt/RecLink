@@ -40,9 +40,6 @@ int  ctrl_clock_force(char *reason, size_t rlen);
 void ctrl_clock_status(bool *readable, int32_t *delta_ms, bool *last_ok,
                        uint32_t *last_result_uptime_ms, bool *ever_synced);
 
-void ctrl_interlock_tick(const ctrl_ctx_t *c);
-void ctrl_interlock_failopen(void);      // housekeeping failsafe (spec 8.6)
-
 void ctrl_extras_tick(const ctrl_ctx_t *c);   // hilight switch + DJI GPS push
 
 // switch decode helper (spec 8.2), shared by record + hilight

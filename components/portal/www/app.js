@@ -54,7 +54,7 @@ function fillConfig(c) {
 
 function collectConfig() {
   const c = { record:{switch:{}}, preset:{bands:[{},{},{}]}, osd:{lines:[],warn:{}},
-              clock:{}, gps_push:{}, hilight:{}, interlock:{}, msp:{}, wifi:{} };
+              clock:{}, gps_push:{}, hilight:{}, msp:{}, wifi:{} };
   const set = (path, val) => {
     const p = path.split('.'); let o = c;
     for (let i = 0; i < p.length - 1; i++) {

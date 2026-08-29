@@ -105,9 +105,7 @@
 </section>
 
 <section id="system" class="tab">
-  <label><input type="checkbox" name="interlock.enabled"> Arming interlock</label>
-  <label>Interlock requires
-    <select name="interlock.require"><option value="0">Camera connected</option><option value="1">Recording</option></select></label>
+  <p class="muted">The bridge is a passenger: it only reads FC arm state and writes OSD text. It never touches arming, RC, PIDs, or navigation.</p>
   <label><input type="checkbox" name="gps_push.enabled"> DJI GPS position push</label>
   <label>GPS push rate (Hz) <input type="number" name="gps_push.rate_hz" min="1" max="2"></label>
   <label>LED brightness <input type="number" name="led_brightness" min="0" max="255"></label>

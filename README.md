@@ -42,7 +42,7 @@ embedded in the app image — `gzip` must be on `PATH`.
 | `components/camera/` | driver interface, `cam_state`, NimBLE central, the BLE-link owner task |
 | `components/camera_gopro/` | Open GoPro BLE driver |
 | `components/camera_dji/` | DJI DUML BLE driver |
-| `components/control/` | record / preset / clock-sync / interlock / extras state machines |
+| `components/control/` | record / preset / clock-sync / hilight+GPS-push state machines |
 | `components/osd/` | token → 4×16 line formatter + osd_task |
 | `components/portal/` | SoftAP + captive HTTP config portal + OTA (bench only) |
 | `main/` | `app_main` init order + `housekeeping` |
@@ -50,7 +50,9 @@ embedded in the app image — `gzip` must be on `PATH`.
 ## The rules that shape the code (spec §1.2 / §3)
 
 1. **Passenger, not pilot** — the bridge only *reads* the FC and *writes OSD
-   text*. The sole exception (arming interlock) is opt-in, default off, fails open.
+   text*. No exceptions. It never touches arming: `msp_task` refuses
+   `MSP_SET_ARMING_DISABLED` (and RC/GPS/RTC/DisplayPort/reboot writes)
+   structurally, not by convention.
 2. **One owner per resource** — exactly one task touches the FC UART
    (`msp_task`), exactly one touches the camera BLE link (`cam_task`). Everything
    else communicates by fixed-length queue.

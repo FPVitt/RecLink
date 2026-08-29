@@ -64,9 +64,6 @@ void cfg_load_defaults(cfg_t *d)
 
     d->hilight.channel = 0;
 
-    d->interlock.enabled = 0;
-    d->interlock.require = INTERLOCK_CONNECTED;
-
     d->msp.baud = 115200;
 
     // wifi

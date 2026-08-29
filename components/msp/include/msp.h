@@ -25,10 +25,22 @@ enum {
     MSP_OSD_CANVAS       = 189,
     MSP_RTC              = 247,
     MSP_SET_OSD_CONFIG   = 85,
-    MSP_SET_ARMING_DISABLED = 99,
     MSP_EEPROM_WRITE     = 250,
     MSP2_GET_TEXT        = 0x3006,
     MSP2_SET_TEXT        = 0x3007,
+};
+
+// ---- opcodes the bridge MUST NEVER transmit (spec 1.2.1 / 4.6 / 13.1) ------
+// Enforced structurally at the transmit boundary in msp_task.c, not by
+// convention. The bridge is a passenger: it never influences arming, RC, the
+// FC clock, GPS, or takes over the OSD.
+enum {
+    MSP_SET_RAW_RC          = 200,
+    MSP_SET_RAW_GPS         = 201,
+    MSP_SET_RTC             = 246,
+    MSP_SET_ARMING_DISABLED = 99,
+    MSP_DISPLAYPORT         = 182,
+    MSP_REBOOT              = 68,
 };
 
 // MSP2 text sub-ids (spec 4.4). CUSTOM_MSG slot 0..3 -> sub_id 7..10.
