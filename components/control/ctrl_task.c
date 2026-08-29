@@ -108,15 +108,18 @@ void ctrl_extras_tick(const ctrl_ctx_t *c)
         hl_prev = a;
     }
 
-    // DJI GPS position push (only DJI; GoPro driver returns NOT_SUPPORTED)
+    // DJI GPS position push (only DJI; GoPro driver returns NOT_SUPPORTED).
+    // The push's date/time fields set the Osmo clock, so a stale/invalid FC RTC
+    // must NOT be sent -- that would stamp footage 1970-01-01 (review H11).
     if (c->cfg->gps_push.enabled && c->cam.link == CAM_LINK_READY &&
         c->fc.gps_good && strcmp(c->cfg->camera.brand, "dji") == 0) {
         uint32_t period = 1000 / (c->cfg->gps_push.rate_hz ? c->cfg->gps_push.rate_hz : 1);
-        if (c->now_ms >= next_gps_push_ms) {
+        if ((int32_t)(c->now_ms - next_gps_push_ms) >= 0) {
             next_gps_push_ms = c->now_ms + period;
             int64_t fc_ms = 0;
-            fc_now_utc_ms(&fc_ms, 120000);
-            cam_submit_gps(&c->fc.gps, fc_ms);
+            if (fc_now_utc_ms(&fc_ms, 120000)) {
+                cam_submit_gps(&c->fc.gps, fc_ms);
+            }
         }
     }
 }

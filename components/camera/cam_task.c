@@ -54,7 +54,9 @@ static uint8_t  s_target_addr[6];
 static uint8_t  s_target_addr_type;
 static int      s_backoff_idx;
 static uint32_t s_state_since_ms;
-static cam_state_t s_cs;              // cam_task's private scratch; published atomically
+// The one shared camera-state scratch (spec 3.4). cam_task + the driver
+// callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
+#define s_cs (*cam_scratch())
 
 // ---- helpers ----------------------------------------------------
 static void set_link(cam_link_state_t st)
@@ -62,7 +64,7 @@ static void set_link(cam_link_state_t st)
     if (s_cs.link == st) { return; }
     s_cs.link = st;
     s_state_since_ms = now_ms();
-    cam_state_publish(&s_cs);
+    cam_state_commit();
     cam_event_t e = { .type = CAM_EV_LINK, .value = (int32_t)st };
     xQueueSend(s_evq, &e, 0);
     ESP_LOGI(TAG, "link -> %d", st);
@@ -70,7 +72,7 @@ static void set_link(cam_link_state_t st)
 
 static void publish_dirty(void)
 {
-    cam_state_publish(&s_cs);
+    cam_state_commit();
     cam_event_t e = { .type = CAM_EV_STATE_DIRTY };
     xQueueSend(s_evq, &e, 0);
 }
@@ -343,6 +345,7 @@ static void cam_task(void *arg)
                 if (s_cs.link == CAM_LINK_SCAN) {
                     memcpy(s_target_addr, it.adv.addr, 6);
                     s_target_addr_type = it.adv.addr_type;
+                    memcpy(s_cs.addr, it.adv.addr, 6);
                     ble_central_scan(false);
                     set_link(CAM_LINK_CONNECTING);
                     ble_central_connect(s_target_addr, s_target_addr_type);

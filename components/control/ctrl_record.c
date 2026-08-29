@@ -20,7 +20,12 @@ static struct {
     uint8_t  phase;
     uint32_t phase_deadline;
     uint8_t  retries_left;
-    uint32_t give_up_at;         // verify_timeout_ms * retry_count cap
+    uint32_t give_up_at;         // absolute cap: arm_delay + verify_timeout*(retry+1)
+    bool     gave_up;            // latched on verify exhaustion; cleared on a
+                                 // desired transition or a reconnect (review H1)
+    bool     desired_prev;
+    bool     reconcile_pending;  // waiting for cam.recording != UNKNOWN (review H3)
+    uint32_t reconcile_by;
 } S;
 
 void ctrl_record_reset(void) { memset(&S, 0, sizeof(S)); S.phase = PH_IDLE; }
@@ -69,17 +74,31 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
         if (S.combi_cut) { desired = false; }
     }
     S.desired = desired;
+    if (desired != S.desired_prev) { S.gave_up = false; }   // fresh intent, retry
+    S.desired_prev = desired;
 
     // ---- reconcile after reconnect (spec 8.1 edge case) -----------
+    // Do NOT act on cam.recording == UNKNOWN (review H3): the clip may still be
+    // rolling through the BLE drop. Wait for the first real status, bounded.
     if (c->cam_ready_edge) {
         S.phase = PH_IDLE;
-        if (desired != cam_is_recording(c)) {
-            ESP_LOGI(TAG, "reconcile: desired=%d cam=%d", desired, cam_is_recording(c));
-            issue(desired);
-            S.phase = desired ? PH_VERIFY_START : PH_VERIFY_STOP;
-            S.retries_left = cfg->record.retry_count;
-            S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
-            S.give_up_at = c->now_ms + (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+        S.gave_up = false;
+        S.reconcile_pending = true;
+        S.reconcile_by = c->now_ms + cfg->record.verify_timeout_ms + 2000;
+    }
+    if (S.reconcile_pending && cam_ready(c)) {
+        if (c->cam.recording != TRIBOOL_UNKNOWN) {
+            S.reconcile_pending = false;
+            if (desired != cam_is_recording(c)) {
+                ESP_LOGI(TAG, "reconcile: desired=%d cam=%d", desired, cam_is_recording(c));
+                issue(desired);
+                S.phase = desired ? PH_VERIFY_START : PH_VERIFY_STOP;
+                S.retries_left = cfg->record.retry_count;
+                S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
+                S.give_up_at = c->now_ms + (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+            }
+        } else if ((int32_t)(c->now_ms - S.reconcile_by) >= 0) {
+            S.reconcile_pending = false;   // camera never reported; leave it alone
         }
     }
 
@@ -91,26 +110,35 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
 
     switch (S.phase) {
     case PH_IDLE:
-        if (desired && !cam_is_recording(c)) {
+        if (desired && !S.gave_up && !cam_is_recording(c)) {
             S.phase = PH_START_DELAY;
             S.phase_deadline = c->now_ms + cfg->record.arm_delay_ms;
-        } else if (!desired && cam_is_recording(c)) {
+            // Absolute cap covers a camera stuck `busy` (review H2): armed here,
+            // not after issue(), so a hold that never clears still ends in REC FAIL.
+            S.give_up_at = c->now_ms + cfg->record.arm_delay_ms +
+                           (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+        } else if (!desired && !S.gave_up && cam_is_recording(c)) {
             S.phase = PH_STOP_DELAY;
             S.phase_deadline = c->now_ms + cfg->record.stop_delay_ms;
-        } else {
-            osd_set_rec_fail(false);
+            S.give_up_at = c->now_ms + cfg->record.stop_delay_ms +
+                           (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+        } else if (desired == cam_is_recording(c)) {
+            osd_set_rec_fail(false);      // actual state matches intent
         }
         break;
 
     case PH_START_DELAY:
         if (!desired) { S.phase = PH_IDLE; break; }          // bounce absorbed
+        if ((int32_t)(c->now_ms - S.give_up_at) >= 0) {      // stuck busy / no progress
+            applog_note("REC FAIL (start never got going)");
+            osd_set_rec_fail(true); S.gave_up = true; S.phase = PH_IDLE; break;
+        }
         if (c->cam.busy == TRIBOOL_TRUE) { break; }          // hold while busy
         if ((int32_t)(c->now_ms - S.phase_deadline) >= 0) {
             issue(true);
             S.retries_left = cfg->record.retry_count;
             S.phase = PH_VERIFY_START;
             S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
-            S.give_up_at = c->now_ms + (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
         }
         break;
 
@@ -125,19 +153,24 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             } else {
                 applog_note("REC FAIL (start not confirmed)");
                 osd_set_rec_fail(true);
-                S.phase = PH_IDLE;      // give up until next rising edge
+                S.gave_up = true;      // latched -- no re-entry until desired flips
+                S.phase = PH_IDLE;
             }
         }
         break;
 
     case PH_STOP_DELAY:
         if (desired) { S.phase = PH_IDLE; break; }
+        if ((int32_t)(c->now_ms - S.give_up_at) >= 0) {
+            applog_note("REC FAIL (stop never got going)");
+            osd_set_rec_fail(true); S.gave_up = true; S.phase = PH_IDLE; break;
+        }
+        if (c->cam.busy == TRIBOOL_TRUE) { break; }
         if ((int32_t)(c->now_ms - S.phase_deadline) >= 0) {
             issue(false);
             S.retries_left = cfg->record.retry_count;
             S.phase = PH_VERIFY_STOP;
             S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
-            S.give_up_at = c->now_ms + (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
         }
         break;
 
@@ -151,6 +184,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             } else {
                 applog_note("REC FAIL (stop not confirmed)");
                 osd_set_rec_fail(true);
+                S.gave_up = true;
                 S.phase = PH_IDLE;
             }
         }

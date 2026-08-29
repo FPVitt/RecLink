@@ -1,31 +1,53 @@
 #include "cam_state.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include <string.h>
+#include "esp_log.h"
 
-static cam_state_t s_cs;
+// Single-writer model (spec 3.4). `s_scratch` is mutated ONLY from cam_task
+// context -- by cam_task itself and by the driver callbacks it invokes, which
+// all run on cam_task. There is therefore no concurrency on the scratch. The
+// mutex guards only the publish into `s_shared`, which external readers
+// (osd_task, ctrl_task, portal, housekeeping) copy out under.
+static cam_state_t s_shared;
+static cam_state_t s_scratch;
 static StaticSemaphore_t s_mux_buf;
 static SemaphoreHandle_t  s_mux;
+static TaskHandle_t s_owner;      // set on first cam_scratch() call, for the assert
 
 void cam_state_init(void)
 {
     s_mux = xSemaphoreCreateMutexStatic(&s_mux_buf);
-    memset(&s_cs, 0, sizeof(s_cs));
-    s_cs.link = CAM_LINK_IDLE;
-    s_cs.recording = TRIBOOL_UNKNOWN;
-    s_cs.busy = TRIBOOL_UNKNOWN;
+    memset(&s_scratch, 0, sizeof(s_scratch));
+    s_scratch.link = CAM_LINK_IDLE;
+    s_scratch.recording = TRIBOOL_UNKNOWN;
+    s_scratch.busy = TRIBOOL_UNKNOWN;
+    s_shared = s_scratch;
 }
 
 void cam_state_get(cam_state_t *dst)
 {
     xSemaphoreTake(s_mux, portMAX_DELAY);
-    *dst = s_cs;
+    *dst = s_shared;
     xSemaphoreGive(s_mux);
 }
 
-void cam_state_publish(const cam_state_t *scratch)
+cam_state_t *cam_scratch(void)
+{
+    if (s_owner == NULL) {
+        s_owner = xTaskGetCurrentTaskHandle();
+    } else if (s_owner != xTaskGetCurrentTaskHandle()) {
+        // A second task touched the scratch -- the one-writer rule is broken.
+        ESP_LOGE("cam_state", "cam_scratch() from wrong task!");
+        assert(0);
+    }
+    return &s_scratch;
+}
+
+void cam_state_commit(void)
 {
     xSemaphoreTake(s_mux, portMAX_DELAY);
-    s_cs = *scratch;
+    s_shared = s_scratch;
     xSemaphoreGive(s_mux);
 }

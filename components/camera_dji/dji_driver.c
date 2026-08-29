@@ -272,7 +272,7 @@ static void dji_link_down(void)
 static void parse_status_push(const uint8_t *p, uint16_t n)
 {
     if (n < 38) { return; }
-    cam_state_t s; cam_state_get(&s);
+    cam_state_t *s = cam_scratch();
 
     uint8_t  camera_mode  = p[0];
     uint8_t  camera_status = p[1];
@@ -285,9 +285,9 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
     uint8_t  batt_pct     = p[37];
     /* uint8_t power_mode = p[28]; uint8_t temp_over = p[30]; */
 
-    s.mode.valid = true; s.mode.v = camera_mode;
-    val_str_set(&s.mode_name, dji_mode_str(camera_mode));
-    if (!*s.mode_name.v) { s.mode_name.valid = false; }
+    s->mode.valid = true; s->mode.v = camera_mode;
+    val_str_set(&s->mode_name, dji_mode_str(camera_mode));
+    if (!*s->mode_name.v) { s->mode_name.valid = false; }
 
     // recording: camera_status 0x03 = "photo or recording in progress",
     // 0x05 = "pre-recording". verified camera_mode_t @ 92fe23e5 -- video-capable
@@ -300,26 +300,22 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
                      camera_mode == 0x0A || camera_mode == 0x28 || camera_mode == 0x34);
     tribool_t rec = (camera_status == 3 && is_video) ? TRIBOOL_TRUE :
                     (camera_status == 5 ? TRIBOOL_TRUE : TRIBOOL_FALSE);
-    if (rec != s.recording && CB->on_ack) {
-        // no explicit ack on 0x1D/0x03 resp handling here; treat push as truth
-    }
-    s.recording = rec;
+    s->recording = rec;
 
-    s.rec_elapsed_s.valid = true; s.rec_elapsed_s.v = record_time;
-    s.rec_remaining_s.valid = true; s.rec_remaining_s.v = remain_time;
-    s.sd_remaining_kb.valid = true; s.sd_remaining_kb.v = remain_mb * 1024;   // MB -> KB
-    s.sd_missing = (remain_mb == 0);
-    s.battery_pct.valid = true; s.battery_pct.v = batt_pct;
+    s->rec_elapsed_s.valid = true; s->rec_elapsed_s.v = record_time;
+    s->rec_remaining_s.valid = true; s->rec_remaining_s.v = remain_time;
+    s->sd_remaining_kb.valid = true; s->sd_remaining_kb.v = remain_mb * 1024;   // MB -> KB
+    s->sd_missing = (remain_mb == 0);
+    s->battery_pct.valid = true; s->battery_pct.v = batt_pct;
 
-    val_str_set(&s.resolution, dji_resolution_str(res_idx));
-    if (!*s.resolution.v) { s.resolution.valid = false; }
-    val_str_set(&s.framerate, dji_fps_str(fps_idx));
-    if (!*s.framerate.v) { s.framerate.valid = false; }
+    val_str_set(&s->resolution, dji_resolution_str(res_idx));
+    if (!*s->resolution.v) { s->resolution.valid = false; }
+    val_str_set(&s->framerate, dji_fps_str(fps_idx));
+    if (!*s->framerate.v) { s->framerate.valid = false; }
 
-    s.busy = TRIBOOL_FALSE;   // DJI has no explicit busy; mode switch latency handled by ctrl dwell
+    s->busy = TRIBOOL_FALSE;   // DJI has no explicit busy; mode switch latency handled by ctrl dwell
 
-    cam_state_publish(&s);
-    if (CB->on_state_dirty) { CB->on_state_dirty(); }
+    if (CB->on_state_dirty) { CB->on_state_dirty(); }   // commits + wakes osd_task
 }
 
 static void handle_msg(const duml_msg_t *m)
@@ -332,8 +328,8 @@ static void handle_msg(const duml_msg_t *m)
             s_handshaked = true;
             send_subscribe();
             if (s_first_pair && CB->on_paired) {
-                cam_state_t s; cam_state_get(&s);
-                CB->on_paired(s.addr, s.name[0] ? s.name : "DJI Osmo", s_device_id);
+                const cam_state_t *s = cam_scratch();
+                CB->on_paired(s->addr, s->name[0] ? s->name : "DJI Osmo", s_device_id);
                 s_first_pair = false;
             }
             if (CB->on_link_state) { CB->on_link_state(CAM_LINK_READY); }

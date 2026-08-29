@@ -166,13 +166,12 @@ static esp_err_t gp_tick_1s(void)
         wr(h_set, b, 3);
     }
     // local elapsed counter (spec 6.5)
-    cam_state_t s; cam_state_get(&s);
-    if (s.recording == TRIBOOL_TRUE) {
+    cam_state_t *s = cam_scratch();
+    if (s->recording == TRIBOOL_TRUE) {
         uint32_t el = (now_ms() - rec_start_ms) / 1000;
-        if (!s.rec_elapsed_s.valid || s.rec_elapsed_s.v != el) {
-            s.rec_elapsed_s.valid = true;
-            s.rec_elapsed_s.v = el;
-            cam_state_publish(&s);
+        if (!s->rec_elapsed_s.valid || s->rec_elapsed_s.v != el) {
+            s->rec_elapsed_s.valid = true;
+            s->rec_elapsed_s.v = el;
             if (CB->on_state_dirty) { CB->on_state_dirty(); }
         }
     }
@@ -220,8 +219,8 @@ static esp_err_t gp_link_up(bool first_pair)
 
     applog_note("gopro link up%s", first_pair ? " (first pair)" : "");
     if (first_pair && CB->on_paired) {
-        cam_state_t s; cam_state_get(&s);
-        CB->on_paired(s.addr, s.name[0] ? s.name : "GoPro", 0);
+        const cam_state_t *s = cam_scratch();
+        CB->on_paired(s->addr, s->name[0] ? s->name : "GoPro", 0);
     }
     // GoPro sync is fire-and-forget writes; the link is usable immediately and
     // status/setting pushes will fill cam_state within ~1 s.
@@ -243,9 +242,9 @@ static uint32_t be(const uint8_t *p, uint8_t n)
     return v;
 }
 
+// Mutates the scratch in place; the caller (walk_tuples) commits once at the end.
 static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n)
 {
-    bool dirty = true;
     switch (id) {
     case ST_ENCODING: {
         tribool_t was = s->recording;
@@ -281,9 +280,8 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
         s->sd_missing = (v[0] == 2);
         s->sd_full    = (v[0] == 1);
         break;
-    default: dirty = false; break;
+    default: break;
     }
-    if (dirty && CB->on_state_dirty) { CB->on_state_dirty(); }
 }
 
 static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n)
@@ -303,26 +301,25 @@ static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t 
         if (!*s->lens.v) { s->lens.valid = false; }
         break;
     default:
-        return;
+        break;
     }
-    if (CB->on_state_dirty) { CB->on_state_dirty(); }
 }
 
 static void walk_tuples(const uint8_t *p, uint16_t len, bool is_status)
 {
-    cam_state_t s; cam_state_get(&s);
+    cam_state_t *s = cam_scratch();
     uint16_t i = 0;
     while (i + 2 <= len) {
         uint8_t id = p[i++];
         uint8_t n  = p[i++];
         if (i + n > len) { break; }
         if (n) {
-            if (is_status) { apply_status(&s, id, p + i, n); }
-            else           { apply_setting(&s, id, p + i, n); }
+            if (is_status) { apply_status(s, id, p + i, n); }
+            else           { apply_setting(s, id, p + i, n); }
         }
         i += n;
     }
-    cam_state_publish(&s);
+    if (CB->on_state_dirty) { CB->on_state_dirty(); }   // commits + wakes osd_task
 }
 
 static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
@@ -344,11 +341,10 @@ static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
         int16_t off = (int16_t)((p[9] << 8) | p[10]);
         int64_t local_epoch = epoch_from_civil_utc(y, mon, day, hh, mm, ss);
         int64_t utc_ms = (local_epoch - off * 60) * 1000;
-        cam_state_t s; cam_state_get(&s);
-        s.cam_utc_ms.valid = true;
-        s.cam_utc_ms.v = utc_ms;
-        s.cam_clock_read_uptime_ms = now_ms();
-        cam_state_publish(&s);
+        cam_state_t *s = cam_scratch();
+        s->cam_utc_ms.valid = true;
+        s->cam_utc_ms.v = utc_ms;
+        s->cam_clock_read_uptime_ms = now_ms();
         if (CB->on_state_dirty) { CB->on_state_dirty(); }
         ESP_LOGI(TAG, "gopro clock read: %04d-%02d-%02d %02d:%02d:%02d off%+d",
                  y, mon, day, hh, mm, ss, off);

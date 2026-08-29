@@ -36,8 +36,15 @@ typedef struct {
 } cam_state_t;
 
 void cam_state_init(void);
+
+// External readers (osd_task / ctrl_task / portal / housekeeping): atomic copy.
 void cam_state_get(cam_state_t *dst);
-void cam_state_publish(const cam_state_t *scratch);   // cam_task only
+
+// cam_task context ONLY (cam_task + the driver callbacks it invokes). Returns
+// the single shared scratch; mutate in place then call cam_state_commit().
+// Asserts if called from any other task.
+cam_state_t *cam_scratch(void);
+void         cam_state_commit(void);   // publish the scratch to readers
 
 // Convenience for the OSD/portal: link is usable.
 static inline bool cam_link_ready(const cam_state_t *s) { return s->link == CAM_LINK_READY; }
