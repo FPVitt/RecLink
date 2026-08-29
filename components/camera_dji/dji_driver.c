@@ -39,6 +39,10 @@ static const ble_uuid16_t U_WRITE  = BLE_UUID16_INIT(0xFFF5);
 #define ID_SUBSCRIBE    0x05   // CS_CAMERA
 #define ID_STATUS_PUSH  0x02   // CS_CAMERA (camera -> us)
 
+// connection_request_command_frame length (spec 7.3): device_id[4] mac_len[1]
+// mac[16] fw[4] conidx[1] verify_mode[1] verify_data[2] reserved[4]. @ 92fe23e5
+#define DJI_CONN_REQ_LEN 33
+
 static const camera_cbs_t *CB;
 static uint16_t h_write;
 static uint16_t vh_notify;
@@ -129,25 +133,41 @@ static void send_subscribe(void)
 // §7.4 record fallback: some Osmo firmware ignores the 1D03 record-control cmd
 // in certain modes. If the same record request is re-issued while still
 // unconfirmed (ctrl_task retry), also press the physical Record key.
-static bool     s_rec_want;
-static bool     s_rec_confirmed;
-static uint32_t s_rec_sent_ms;
+static bool     s_rec_want;          // last requested record target
+static bool     s_rec_confirmed;     // camera has reported matching state since
+static bool     s_key_fallback_used; // hard-key toggled once for this intent
+static uint32_t s_rec_sent_ms;       // when this intent was first issued (0 = none)
+
+// Fold a status-push observation into the record-confirm latch. Called from
+// parse_status_push once it has decided `rec`.
+static void dji_rec_observe(tribool_t rec)
+{
+    if (!s_rec_sent_ms || s_rec_confirmed) { return; }
+    if (rec == (s_rec_want ? TRIBOOL_TRUE : TRIBOOL_FALSE)) { s_rec_confirmed = true; }
+}
 
 static void dji_key_report_record(void)
 {
     // verified: key_report_command_frame + enums_logic.h KEY_CODE (Osmo Record
     // hard-key = 0x01), mode 0x01 report-event, key_value 0x00 short-press
-    // @ 92fe23e5. Record key is a toggle -- no start/stop param.
+    // @ 92fe23e5. The Record key is a TOGGLE with no start/stop param -- it may
+    // only be pressed once per intent, and only after the primary 1D03 command
+    // has demonstrably not taken (see dji_record).
     uint8_t p[4] = { 0x01, 0x01, 0x00, 0x00 };
     tx(DJI_CMD_RESPONSE_OPT, CS_COMMON, ID_KEY_REPORT, p, sizeof(p));
-    applog_note("dji record via key-report fallback");
+    applog_note("dji record: 1D03 unconfirmed 2.5s -> hard-key fallback (once)");
 }
 
 static esp_err_t dji_record(bool start)
 {
     uint32_t now = now_ms();
-    bool retry = (s_rec_want == start) && !s_rec_confirmed &&
-                 s_rec_sent_ms && (now - s_rec_sent_ms < 4000);
+    bool new_intent = (s_rec_want != start) || !s_rec_sent_ms;
+    if (new_intent) {
+        s_rec_want = start;
+        s_rec_confirmed = false;
+        s_key_fallback_used = false;
+        s_rec_sent_ms = now ? now : 1;
+    }
 
     uint8_t p[9]; memset(p, 0, sizeof(p));
     put_u32(p, s_device_id);
@@ -156,11 +176,14 @@ static esp_err_t dji_record(bool start)
     // reserved u8[4]) @ 92fe23e5; cmd_type CMD_RESPONSE_OR_NOT (command_logic.c).
     tx(DJI_CMD_RESPONSE_OPT, CS_CAMERA, ID_REC, p, sizeof(p));
 
-    if (retry) { dji_key_report_record(); }   // §7.4 fallback on unconfirmed retry
-
-    s_rec_want = start;
-    s_rec_confirmed = false;
-    s_rec_sent_ms = now ? now : 1;
+    // §7.4 fallback: fire the hard-key toggle only when this same intent has
+    // gone unconfirmed by the 2 Hz status push for >= 2.5 s, and only once.
+    // (A toggle fired on a retry that raced a slow ACK would invert the clip.)
+    if (!new_intent && !s_rec_confirmed && !s_key_fallback_used &&
+        (now - s_rec_sent_ms) >= 2500) {
+        dji_key_report_record();
+        s_key_fallback_used = true;
+    }
     return ESP_OK;
 }
 
@@ -291,6 +314,7 @@ static void dji_link_down(void)
     s_handshaked = false;
     s_rec_sent_ms = 0;
     s_rec_confirmed = false;
+    s_key_fallback_used = false;
 }
 
 // ---- status push parsing (spec 7.5) --------------------
@@ -341,6 +365,7 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
                     (camera_status == 5 ? TRIBOOL_TRUE : TRIBOOL_FALSE);
     s->recording = rec;
     s->pre_record = (camera_status == 5) ? TRIBOOL_TRUE : TRIBOOL_FALSE;   // spec 7.5 / %st PRE
+    dji_rec_observe(rec);   // §7.4: confirm record intent from the push, not the optional ACK
 
     s->rec_elapsed_s.valid = true; s->rec_elapsed_s.v = record_time;
     s->rec_remaining_s.valid = true; s->rec_remaining_s.v = remain_time;
@@ -360,6 +385,7 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
 
 static void dji_go_ready(void)
 {
+    if (s_handshaked) { return; }   // idempotent: response + command frame can both arrive
     s_handshaked = true;
     send_subscribe();
     if (s_first_pair && CB->on_paired) {
@@ -383,7 +409,10 @@ static void handle_msg(const duml_msg_t *m)
             ESP_LOGI(TAG, "connect resp ret=%u (first_pair=%d)", ret, s_first_pair);
             if (ret != 0) { applog_note("dji connect rejected ret=%u", ret); return; }
             if (!s_first_pair) { dji_go_ready(); }
-            // first pair: wait for the camera's verify command frame below
+            // Reconnect: we go READY on the response so a push-happy firmware
+            // works immediately; if the camera still sends its 0x19 command
+            // frame we ACK it in the branch below (dji_go_ready is idempotent).
+            // First pair: nothing is READY yet -- wait for that command frame.
             return;
         }
 
@@ -391,7 +420,7 @@ static void handle_msg(const duml_msg_t *m)
         // verify_mode @ 26 (must be 2 = result), verify_data u16 LE @ 27
         // (0 = user confirmed), reserved[0] @ 29. Verified: connect_logic.c
         // @ 92fe23e5.
-        if (m->payload_len < 30) { applog_note("dji: short verify frame"); return; }
+        if (m->payload_len < DJI_CONN_REQ_LEN) { applog_note("dji: short verify frame"); return; }
         uint8_t  verify_mode = m->payload[26];
         uint16_t verify_data = m->payload[27] | ((uint16_t)m->payload[28] << 8);
         uint8_t  cam_reserved = m->payload[29];
@@ -413,7 +442,10 @@ static void handle_msg(const duml_msg_t *m)
     } else if (m->cmd_set == CS_CAMERA && m->cmd_id == ID_STATUS_PUSH) {
         parse_status_push(m->payload, m->payload_len);
     } else if (m->cmd_set == CS_CAMERA && (m->cmd_id == ID_REC || m->cmd_id == ID_MODE)) {
+        if (!(m->cmd_type & 0x20)) { return; }   // only our ACKs, not a camera-initiated cmd
         uint8_t ret = m->payload_len ? m->payload[0] : 0xFF;
+        // Note: 1D03 ACK is optional (CMD_RESPONSE_OR_NOT); the status-push
+        // confirm in dji_rec_observe() is the primary signal (§7.4).
         if (m->cmd_id == ID_REC && ret == 0) { s_rec_confirmed = true; }
         if (CB->on_ack) {
             CB->on_ack(m->cmd_id == ID_REC ? CAM_OP_RECORD_START : CAM_OP_SELECT_PRESET, ret == 0);

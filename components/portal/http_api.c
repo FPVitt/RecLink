@@ -327,8 +327,9 @@ static esp_err_t h_clock_sync(httpd_req_t *r)
     ctrl_clock_force(reason, sizeof(reason));
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", true);
-    cJSON_AddNumberToObject(resp, "delta_ms", ctrl_clock_last_delta_ms());
     cJSON_AddStringToObject(resp, "action", "queued");
+    // delta from the *previous* completed sync, for context (0 if none / DJI blind).
+    cJSON_AddNumberToObject(resp, "last_delta_ms", ctrl_clock_last_delta_ms());
     return send_json(r, resp, NULL);
 }
 

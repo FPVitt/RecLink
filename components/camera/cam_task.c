@@ -60,13 +60,15 @@ static uint8_t  s_target_addr[6];
 static uint8_t  s_target_addr_type;
 static int      s_backoff_idx;
 static uint32_t s_state_since_ms;
-// spec 3.5 / FMEA 12.5: a camera stack-hang looks like connect-then-silent,
-// repeating. Count relink failures that follow a READY; 3 in a row without an
-// intervening healthy link => reboot (fast, clears any partial state). A camera
-// simply powered off never reaches READY, so it sits in SCAN and never trips
-// this (F5 acceptance: no reboot).
-static int      s_relink_fails;
-static bool     s_was_ready;
+// spec 3.5 / FMEA row 3: "camera stack hang (connected, silent)" -- the link
+// reaches READY, then the camera falls silent and we hit the RX timeout,
+// repeatedly. Count ONLY that failure mode (not RF dropouts / power-off, which
+// present as a GATT disconnect and are rated impact-none). 3 such failures,
+// each following a READY, clustered within 120 s => reboot (fast, clears any
+// partial state). The counter is cleared once a READY link has survived 30 s.
+static int      s_hang_fails;
+static uint32_t s_first_hang_ms;
+static bool     s_was_ready;      // link reached READY since the last go_lost
 // The one shared camera-state scratch (spec 3.4). cam_task + the driver
 // callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
 #define s_cs (*cam_scratch())
@@ -77,7 +79,7 @@ static void set_link(cam_link_state_t st)
     if (s_cs.link == st) { return; }
     s_cs.link = st;
     s_state_since_ms = now_ms();
-    if (st == CAM_LINK_READY) { s_relink_fails = 0; s_was_ready = true; }
+    if (st == CAM_LINK_READY) { s_was_ready = true; }
     cam_state_commit();
     cam_event_t e = { .type = CAM_EV_LINK, .value = (int32_t)st };
     xQueueSend(s_evq, &e, 0);
@@ -289,7 +291,9 @@ static void begin_scan(void)
     ble_central_scan(true);
 }
 
-static void go_lost(const char *why)
+// `silent_hang` = the loss was an RX-silence timeout on an established link
+// (FMEA row 3), as opposed to a disconnect / bond / discovery failure.
+static void go_lost(const char *why, bool silent_hang)
 {
     applog_note("cam LOST: %s", why);
     rtcnv_set_last_disconnect(why);
@@ -302,15 +306,22 @@ static void go_lost(const char *why)
     while (xQueueReceive(s_cmdq, &drop, 0) == pdTRUE) { }
     cfg_stats_bump_reconnect();
 
-    // spec 3.5 / FMEA: only failures of a link that had reached READY count.
-    if (s_was_ready) {
-        s_was_ready = false;
-        if (++s_relink_fails >= 3) {
-            applog_note("cam relink failed x%d -> reboot", s_relink_fails);
+    // spec 3.5 / FMEA row 3: reboot only on a repeating connect-then-silent
+    // pattern. A GATT disconnect (camera off, RF dropout) is not counted.
+    if (s_was_ready && silent_hang) {
+        uint32_t now = now_ms();
+        if (s_hang_fails == 0 || (now - s_first_hang_ms) > 120000) {
+            s_hang_fails = 0;
+            s_first_hang_ms = now;
+        }
+        if (++s_hang_fails >= 3) {
+            applog_note("cam silent-hang x%d in %lus -> reboot",
+                        s_hang_fails, (unsigned long)((now - s_first_hang_ms) / 1000));
             vTaskDelay(pdMS_TO_TICKS(50));   // let the log flush
             esp_restart();
         }
     }
+    s_was_ready = false;
 }
 
 static void handle_ble_evt(int ev, int status)
@@ -331,7 +342,7 @@ static void handle_ble_evt(int ev, int status)
         ble_central_discover_all();
         break;
     case BLE_EVT_ENC_FAIL:
-        go_lost("bond failed");
+        go_lost("bond failed", false);
         break;
     case BLE_EVT_MTU_DONE:
         ESP_LOGI(TAG, "MTU = %d", status);
@@ -347,7 +358,7 @@ static void handle_ble_evt(int ev, int status)
             }
         }
         esp_err_t r = s_drv->link_up ? s_drv->link_up(s_first_pair) : ESP_OK;
-        if (r != ESP_OK) { go_lost("driver link_up failed"); break; }
+        if (r != ESP_OK) { go_lost("driver link_up failed", false); break; }
         // Driver must call CB->on_link_state(CAM_LINK_READY) once its protocol
         // sync completes (GoPro get-all returns / DUML handshake acks). The
         // CONNECT_TIMEOUT_MS guard covers a driver that never gets there.
@@ -360,10 +371,10 @@ static void handle_ble_evt(int ev, int status)
         break;
     }
     case BLE_EVT_DISC_FAIL:
-        go_lost("gatt discovery failed");
+        go_lost("gatt discovery failed", false);
         break;
     case BLE_EVT_DISCONNECTED:
-        if (s_cs.link != CAM_LINK_IDLE) { go_lost("gatt disconnect"); }
+        if (s_cs.link != CAM_LINK_IDLE) { go_lost("gatt disconnect", false); }
         break;
     }
 }
@@ -482,7 +493,9 @@ static void cam_task(void *arg)
 
                 // RX-silence timeout (spec 8.5)
                 if (now - s_cs.last_rx_ms > CAM_RX_TIMEOUT_MS) {
-                    go_lost("rx timeout 5 s");
+                    go_lost("rx timeout 5 s", true);
+                } else if (now - s_state_since_ms > 30000) {
+                    s_hang_fails = 0;   // a READY link that has held 30 s is healthy
                 }
             }
 

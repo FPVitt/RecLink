@@ -40,17 +40,18 @@ static void heap_watch(void)
     if (lwm + 4096 < warned_at && up - last_log_ms > 10000) {
         last_log_ms = up;
         warned_at = lwm;
-        ESP_LOGW(TAG, "heap low-water regressed: %lu B (baseline %lu) -- possible post-init alloc/leak",
-                 (unsigned long)lwm, (unsigned long)baseline_lwm);
+        applog_note("heap low-water regressed: %lu B (baseline %lu) -- possible post-init alloc/leak",
+                    (unsigned long)lwm, (unsigned long)baseline_lwm);
     }
 }
 
 static led_pattern_t pick_led(const fc_state_t *fc, const cam_state_t *cam)
 {
     if (portal_active())               { return LED_PORTAL; }
-    // Surface a watchdog-recovery reboot on the LED for the first few seconds
-    // after boot; the sticky flag itself stays until acked in the portal.
-    if (bridge_flag_get(FLAG_WDT_RECOVERED) && now_ms() < 8000) { return LED_FAULT; }
+    // A watchdog-recovery boot flashes LED_FAULT until roughly the point the
+    // link would normally be up; the sticky flag stays until acked in the
+    // portal. Kept short so it doesn't read as a dead board.
+    if (bridge_flag_get(FLAG_WDT_RECOVERED) && now_ms() < 3000) { return LED_FAULT; }
     if (cam->recording == TRIBOOL_TRUE) { return LED_RECORDING; }
     if (!fc->link_up)                  { return LED_FC_DOWN; }
     switch (cam->link) {
@@ -86,9 +87,18 @@ static void hk_task(void *arg)
 
         // --- portal supervision (spec 10.1) -------------------
         const cfg_t *c = cfg_get();
-        bool trig = (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED) && !fc.armed && fc.link_up;
-        // if FC link is down we allow the portal too (bench case, spec 10.1)
-        if (!fc.link_up && c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED) { trig = true; }
+        bool always = (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED);
+        bool trig = always && !fc.armed && fc.link_up;
+        // FC link down: bench case (spec 10.1) -- but never open the AP on a
+        // flying aircraft after a mid-flight reboot. Refuse if the FC has
+        // reported armed at any point this boot, within the first 5 s, or on a
+        // watchdog-recovery boot (spec 13.3 / 12.3).
+        static bool armed_seen;
+        if (fc.armed) { armed_seen = true; }
+        if (!fc.link_up && always && !armed_seen && now_ms() > 5000 &&
+            !bridge_flag_get(FLAG_WDT_RECOVERED)) {
+            trig = true;
+        }
         portal_supervise(fc.armed, trig, be == BTN_LONG);
 
         // --- camera liveness (spec 3.5) ----------------------

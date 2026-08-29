@@ -46,10 +46,22 @@ size_t duml_build(uint8_t *out, size_t cap, uint8_t cmd_type, uint16_t seq,
     return i;
 }
 
-void duml_reasm_reset(duml_reasm_t *r) { r->have = 0; r->need = 0; }
+void duml_reasm_reset(duml_reasm_t *r) { r->have = 0; r->need = 0; r->consumed = 0; }
+
+// Compact out the previously-returned frame. Deferred to here so the caller can
+// finish reading msg->payload (which points into r->buf) before we clobber it.
+static void compact(duml_reasm_t *r)
+{
+    if (!r->consumed) { return; }
+    uint16_t leftover = (r->have > r->consumed) ? (r->have - r->consumed) : 0;
+    memmove(r->buf, r->buf + r->consumed, leftover);
+    r->have = leftover;
+    r->consumed = 0;
+}
 
 static bool try_parse(duml_reasm_t *r, duml_msg_t *msg)
 {
+    compact(r);
     if (r->have < DUML_HDR_LEN) { return false; }
     uint16_t total = r->buf[1] | ((uint16_t)(r->buf[2] & 0x03) << 8);
     if (total < DUML_HDR_LEN + 6 || total > DUML_MAX_FRAME) {
@@ -80,16 +92,16 @@ static bool try_parse(duml_reasm_t *r, duml_msg_t *msg)
     msg->payload = &r->buf[14];
     msg->payload_len = total - DUML_HDR_LEN - 2 - 4;
 
-    // shift any trailing bytes of the next frame down
-    uint16_t leftover = r->have - total;
-    memmove(r->buf, r->buf + total, leftover);
-    r->have = leftover;
+    // Do NOT compact here -- msg->payload aliases r->buf[14..]. Mark the frame
+    // consumed; compact() runs on the next try_parse, once the caller is done.
+    r->consumed = total;
     r->need = 0;
     return true;
 }
 
 bool duml_reasm_feed(duml_reasm_t *r, const uint8_t *data, uint16_t len, duml_msg_t *msg)
 {
+    compact(r);   // clear any frame the previous call returned before appending
     for (uint16_t i = 0; i < len; i++) {
         uint8_t b = data[i];
         if (r->have == 0 && b != DUML_SOF) { continue; }   // resync on SOF

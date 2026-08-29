@@ -81,6 +81,11 @@ int ctrl_clock_force(char *reason, size_t rlen)
 // still re-runs in ctrl_clock_tick().
 bool ctrl_clock_gate_check(char *why, size_t wl)
 {
+    // Runs on the httpd task. gate_ok() takes no locks; fc_state_get /
+    // cam_state_get are leaf mutexes. The only cross-task read is S.last_attempt_ms
+    // (word-aligned uint32, single-core C3 / aligned S3) -- a torn-free stale
+    // read at worst yields a slightly stale 412 reason. A mutex around S would
+    // let the portal block ctrl_task, which is the worse trade.
     ctrl_ctx_t c = { .cfg = cfg_get(), .now_ms = now_ms() };
     fc_state_get(&c.fc);
     cam_state_get(&c.cam);

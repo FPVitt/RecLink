@@ -75,6 +75,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     CLAMP(c->osd.warn.batt_pct, 0, 100);
     CLAMP(c->osd.warn.sd_low_min, 0, 60);
     CLAMP(c->osd.units, 0, 1);
+    CLAMP(c->led_brightness, 16, 255);   // 0 would blank every status indication
 
     CLAMP(c->clock.min_sats, 3, 32);
     if (c->clock.threshold_s < 2) { c->clock.threshold_s = 2; }

@@ -28,6 +28,7 @@ typedef struct {
     uint8_t  buf[DUML_MAX_FRAME];
     uint16_t have;
     uint16_t need;
+    uint16_t consumed;   // bytes of a just-returned frame, compacted on next call
 } duml_reasm_t;
 
 void duml_reasm_reset(duml_reasm_t *r);
