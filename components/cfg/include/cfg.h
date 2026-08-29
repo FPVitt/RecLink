@@ -25,6 +25,12 @@ typedef enum {
     FLAG_WDT_RECOVERED    = 1u << 5,
 } bridge_flag_t;
 
+// Runtime flag store (flags.c). Not persisted -- recomputed each boot.
+void     bridge_flag_set(bridge_flag_t f);
+void     bridge_flag_clear(bridge_flag_t f);
+bool     bridge_flag_get(bridge_flag_t f);
+uint32_t bridge_flags_all(void);
+
 // -------- record modes -------------------------------------------------------
 enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3 };
 // -------- portal trigger ----------------------------------------------------
