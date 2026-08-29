@@ -19,7 +19,11 @@ for (let i = 0; i < 3; i++) {
      <label>Max us <input type="number" name="preset.bands.${i}.max_us"></label>
      <label>Preset/mode id <input type="number" name="preset.bands.${i}.id"></label></fieldset>`);
 }
-$('#tokens').textContent = 'Tokens: %st %et %rt %bt %bb %rs %fp %ln %sd %md %cn %wr';
+$('#tokens').innerHTML =
+  'Tokens: %st rec &nbsp; %et elapsed &nbsp; %rt time-left &nbsp; %bt cam batt% &nbsp; %bb bars &nbsp; ' +
+  '%rs res &nbsp; %fp fps &nbsp; %ar aspect &nbsp; %ln lens &nbsp; %pr profile &nbsp; %bd bit-depth &nbsp; ' +
+  '%sd SD &nbsp; %md mode &nbsp; %cr cam RSSI &nbsp; %gs GPS sats &nbsp; %gf GPS fix &nbsp; ' +
+  '%fb FC batt &nbsp; %cn craft &nbsp; %wr warning &nbsp; + literal text';
 
 // ---- config load/save ----
 function setField(name, val) {
@@ -33,7 +37,11 @@ function getField(name) {
   if (!el) return undefined;
   if (el.type === 'checkbox') return el.checked;
   if (el.type === 'number') return el.value === '' ? 0 : Number(el.value);
-  return el.value;
+  // <select> and text: coerce a pure-numeric value to a Number so it lands as
+  // a JSON number (the server ignores numeric strings).
+  const v = el.value;
+  if (el.tagName === 'SELECT' && /^-?\d+$/.test(v)) return Number(v);
+  return v;
 }
 
 function fillConfig(c) {

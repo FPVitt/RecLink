@@ -127,6 +127,38 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
             if (!field_on(cfg, OSD_TOK_WR)) { continue; }
             const char *w = osd_active_warning(fc, cam, cfg);
             if (*w && !(cfg->osd.warn.blink && blink_phase)) { len = app(out, out_cap, len, w); }
+        } else if (TOK2('a','r')) {                // aspect ratio
+            p++;
+            if (!field_on(cfg, OSD_TOK_AR) || !cam->aspect.valid) { continue; }
+            len = app(out, out_cap, len, cam->aspect.v);
+        } else if (TOK2('p','r')) {                // colour profile (STD/LOG/HDR/HLG)
+            p++;
+            if (!field_on(cfg, OSD_TOK_PR) || !cam->profile.valid) { continue; }
+            len = app(out, out_cap, len, cam->profile.v);
+        } else if (TOK2('b','d')) {                // bit depth (8/10)
+            p++;
+            if (!field_on(cfg, OSD_TOK_BD) || !cam->bit_depth.valid) { continue; }
+            snprintf(tmp, sizeof(tmp), "%ub", cam->bit_depth.v);
+            len = app(out, out_cap, len, tmp);
+        } else if (TOK2('c','r')) {                // camera link RSSI
+            p++;
+            if (!field_on(cfg, OSD_TOK_CR) || cam->link != CAM_LINK_READY) { continue; }
+            snprintf(tmp, sizeof(tmp), "%d", cam->rssi);
+            len = app(out, out_cap, len, tmp);
+        } else if (TOK2('g','s')) {                // GPS sat count (FC)
+            p++;
+            if (!field_on(cfg, OSD_TOK_GS) || !fc->gps_present) { continue; }
+            snprintf(tmp, sizeof(tmp), "%u", fc->gps.sats);
+            len = app(out, out_cap, len, tmp);
+        } else if (TOK2('g','f')) {                // GPS fix (2D/3D/NO)
+            p++;
+            if (!field_on(cfg, OSD_TOK_GF) || !fc->gps_present) { continue; }
+            len = app(out, out_cap, len, fc->gps.fix >= 3 ? "3D" : fc->gps.fix == 2 ? "2D" : "NO");
+        } else if (TOK2('f','b')) {                // FC battery state
+            p++;
+            if (!field_on(cfg, OSD_TOK_FB)) { continue; }
+            static const char *bs[] = { "OK", "LOW", "CRIT", "" };
+            len = app(out, out_cap, len, bs[fc->batt_state & 3]);
         } else {
             // unknown token: emit literally
             if (len + 2 < out_cap) { out[len++] = '%'; out[len++] = a; out[len] = '\0'; }

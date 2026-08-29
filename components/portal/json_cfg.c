@@ -2,6 +2,7 @@
 // POST is a partial merge onto a snapshot, then cfg_commit validates/clamps.
 #include "portal_internal.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void addr_to_str(const uint8_t a[6], char *s, size_t n)
@@ -93,11 +94,23 @@ cJSON *cfg_to_json(const cfg_t *c)
 #define J_OBJ(parent, key)  cJSON_GetObjectItemCaseSensitive((parent), (key))
 // dst may point at a packed (unaligned) cfg_t member -- always memcpy, never
 // dereference a typed pointer into the blob (misaligned store -> panic on Xtensa).
+// Accept a JSON number OR a numeric string ("1"): the portal's <select>
+// elements post their value as a string, and dropdown settings were silently
+// dropped when this only took numbers.
+static bool jnum(const cJSON *it, double *out)
+{
+    if (cJSON_IsNumber(it)) { *out = it->valuedouble; return true; }
+    if (cJSON_IsString(it) && it->valuestring && it->valuestring[0]) {
+        char *end = NULL;
+        double v = strtod(it->valuestring, &end);
+        if (end && *end == '\0') { *out = v; return true; }
+    }
+    return false;
+}
 static void mnum_u(const cJSON *o, const char *k, void *dst, size_t sz)
 {
-    const cJSON *it = J_OBJ(o, k);
-    if (!cJSON_IsNumber(it)) { return; }
-    double v = it->valuedouble;
+    double v;
+    if (!jnum(J_OBJ(o, k), &v)) { return; }
     if (v < 0) { v = 0; }
     switch (sz) {
     case 1: { uint8_t  t = (uint8_t)v;  memcpy(dst, &t, 1); break; }
@@ -107,16 +120,17 @@ static void mnum_u(const cJSON *o, const char *k, void *dst, size_t sz)
 }
 static void mnum_i16(const cJSON *o, const char *k, void *dst)
 {
-    const cJSON *it = J_OBJ(o, k);
-    if (!cJSON_IsNumber(it)) { return; }
-    int16_t t = (int16_t)it->valuedouble;
+    double v;
+    if (!jnum(J_OBJ(o, k), &v)) { return; }
+    int16_t t = (int16_t)v;
     memcpy(dst, &t, sizeof(t));
 }
 static void mbool(const cJSON *o, const char *k, uint8_t *dst)
 {
     const cJSON *it = J_OBJ(o, k);
+    double v;
     if (cJSON_IsBool(it)) { *dst = cJSON_IsTrue(it) ? 1 : 0; }
-    else if (cJSON_IsNumber(it)) { *dst = it->valuedouble != 0; }
+    else if (jnum(it, &v)) { *dst = v != 0; }
 }
 static void mstr(const cJSON *o, const char *k, char *dst, size_t cap)
 {

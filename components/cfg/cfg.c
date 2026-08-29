@@ -66,6 +66,11 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
 
     CLAMP(c->osd.refresh_hz, 1, 10);
     CLAMP(c->osd.corner, 0, 3);
+    // New OSD tokens appended over time: if a blob has every classic token on
+    // but none of the newer ones, turn the newer ones on too.
+    if ((c->osd.fields_mask & 0xFFFu) == 0xFFFu) {
+        c->osd.fields_mask |= ((1u << OSD_TOK_COUNT) - 1u);
+    }
     for (int i = 0; i < 4; i++) { c->osd.line[i][sizeof(c->osd.line[i]) - 1] = '\0'; }
     CLAMP(c->osd.warn.batt_pct, 0, 100);
     CLAMP(c->osd.warn.sd_low_min, 0, 60);

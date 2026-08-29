@@ -132,7 +132,10 @@ typedef struct __attribute__((packed)) {
 enum {
     OSD_TOK_ST = 0, OSD_TOK_ET, OSD_TOK_RT, OSD_TOK_BT, OSD_TOK_BB,
     OSD_TOK_RS, OSD_TOK_FP, OSD_TOK_LN, OSD_TOK_SD, OSD_TOK_MD,
-    OSD_TOK_CN, OSD_TOK_WR, OSD_TOK_COUNT
+    OSD_TOK_CN, OSD_TOK_WR,
+    OSD_TOK_AR, OSD_TOK_PR, OSD_TOK_BD, OSD_TOK_CR, OSD_TOK_GS, OSD_TOK_GF,
+    OSD_TOK_FB,
+    OSD_TOK_COUNT
 };
 
 // ---------------------------------------------------------------------------
