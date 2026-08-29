@@ -98,11 +98,23 @@ $('#syncnow').onclick = async () => { const r = await post('/api/clock/sync'); m
 $('#identify').onclick = () => post('/api/identify');
 $('#reboot').onclick = () => { if (confirm('Reboot the bridge?')) post('/api/reboot'); };
 $('#factory').onclick = () => { if (confirm('Erase ALL settings and camera pairing?')) fetch('/api/config?factory=1',{method:'POST'}); };
-$('#otago').onclick = async () => {
+$('#otago').onclick = () => {
   const f = $('#otafile').files[0]; if (!f) return msg('pick a .bin first');
+  if (f.size < 500000) return msg('that file looks too small -- use fc_cam_bridge.bin');
+  const bar = $('#otabar');
+  bar.style.display = 'block'; bar.value = 0;
   msg('uploading ' + (f.size/1024|0) + ' KB...');
-  const r = await fetch('/api/ota', {method:'POST', body:f}).then(r=>r.json()).catch(()=>({ok:false}));
-  msg(r.ok ? 'flashed, rebooting' : 'OTA failed');
+  const x = new XMLHttpRequest();
+  x.open('POST', '/api/ota');
+  x.upload.onprogress = e => { if (e.lengthComputable) { bar.value = 100*e.loaded/e.total; } };
+  x.onload = () => {
+    bar.value = 100;
+    let r = {}; try { r = JSON.parse(x.responseText); } catch(_){}
+    if (r.ok) { msg('flashed OK -- rebooting, reconnect to Wi-Fi in ~10 s'); }
+    else { msg('OTA failed: ' + (r.error || ('HTTP ' + x.status))); }
+  };
+  x.onerror = () => msg('OTA upload error (connection dropped)');
+  x.send(f);
 };
 
 // ---- live status ----

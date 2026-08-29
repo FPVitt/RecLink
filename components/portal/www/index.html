@@ -116,8 +116,10 @@
     <button type="button" id="factory" class="danger">Factory reset</button>
   </div>
   <h3>Firmware update</h3>
+  <p class="muted">Upload <code>build/fc_cam_bridge.bin</code> (the app image, ~1&nbsp;MB).</p>
   <input type="file" id="otafile" accept=".bin">
   <button type="button" id="otago">Upload &amp; flash</button>
+  <progress id="otabar" value="0" max="100" style="width:100%;display:none"></progress>
   <h3>Log</h3>
   <pre id="log" class="mono"></pre>
 </section>

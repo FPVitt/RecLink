@@ -11,7 +11,7 @@ cJSON *cfg_to_json(const cfg_t *c);
 esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen);
 
 // ota.c
-esp_err_t ota_stream_begin(void);
+esp_err_t ota_stream_begin(size_t total_bytes);
 esp_err_t ota_stream_write(const void *data, size_t len);
 esp_err_t ota_stream_finish(void);   // sets boot partition; caller reboots
 void      ota_stream_abort(void);

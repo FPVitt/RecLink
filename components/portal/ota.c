@@ -10,20 +10,29 @@ static esp_ota_handle_t s_handle;
 static const esp_partition_t *s_part;
 static bool s_active;
 
-esp_err_t ota_stream_begin(void)
+esp_err_t ota_stream_begin(size_t total)
 {
     if (s_active) { return ESP_ERR_INVALID_STATE; }
     s_part = esp_ota_get_next_update_partition(NULL);
-    if (!s_part) { return ESP_FAIL; }
-    esp_err_t e = esp_ota_begin(s_part, OTA_SIZE_UNKNOWN, &s_handle);
-    if (e == ESP_OK) { s_active = true; ESP_LOGI(TAG, "ota -> %s", s_part->label); }
+    if (!s_part) { ESP_LOGE(TAG, "no next OTA partition"); return ESP_FAIL; }
+    ESP_LOGI(TAG, "begin -> %s (0x%06lx, %u B), image %u B -- erasing...",
+             s_part->label, (unsigned long)s_part->address,
+             (unsigned)s_part->size, (unsigned)total);
+    // Pass the real size so only the needed sectors are erased (much faster
+    // than OTA_SIZE_UNKNOWN, which erases the whole ~1.9 MB partition and can
+    // stall the HTTP task long enough for the client to give up).
+    esp_err_t e = esp_ota_begin(s_part, total ? total : OTA_SIZE_UNKNOWN, &s_handle);
+    if (e == ESP_OK) { s_active = true; ESP_LOGI(TAG, "erased, ready for data"); }
+    else { ESP_LOGE(TAG, "esp_ota_begin: %s", esp_err_to_name(e)); }
     return e;
 }
 
 esp_err_t ota_stream_write(const void *data, size_t len)
 {
     if (!s_active) { return ESP_ERR_INVALID_STATE; }
-    return esp_ota_write(s_handle, data, len);
+    esp_err_t e = esp_ota_write(s_handle, data, len);
+    if (e != ESP_OK) { ESP_LOGE(TAG, "esp_ota_write(%u): %s", (unsigned)len, esp_err_to_name(e)); }
+    return e;
 }
 
 esp_err_t ota_stream_finish(void)
@@ -31,10 +40,11 @@ esp_err_t ota_stream_finish(void)
     if (!s_active) { return ESP_ERR_INVALID_STATE; }
     s_active = false;
     esp_err_t e = esp_ota_end(s_handle);
-    if (e != ESP_OK) { ESP_LOGE(TAG, "ota_end %s", esp_err_to_name(e)); return e; }
+    if (e != ESP_OK) { ESP_LOGE(TAG, "esp_ota_end: %s", esp_err_to_name(e)); return e; }
     e = esp_ota_set_boot_partition(s_part);
-    if (e == ESP_OK) { ESP_LOGW(TAG, "ota complete -- reboot to apply"); }
-    return e;
+    if (e != ESP_OK) { ESP_LOGE(TAG, "set_boot_partition: %s", esp_err_to_name(e)); return e; }
+    ESP_LOGW(TAG, "OTA complete -> boot %s next", s_part->label);
+    return ESP_OK;
 }
 
 void ota_stream_abort(void)

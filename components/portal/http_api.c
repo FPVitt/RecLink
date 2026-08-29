@@ -341,38 +341,50 @@ static esp_err_t h_msp_scan(httpd_req_t *r)
 static esp_err_t h_ota(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
-    if (r->content_len < 65536) {
+    int total = r->content_len;
+    ESP_LOGW("api", "OTA POST: content-len %d", total);
+    if (total < 65536) {
         httpd_resp_set_status(r, "400 Bad Request");
         httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"too small -- upload build/fc_cam_bridge.bin\"}");
         return ESP_OK;
     }
-    if (ota_stream_begin() != ESP_OK) { OTA_FAIL("500 Internal Server Error", "ota_begin"); }
+    if (ota_stream_begin((size_t)total) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "ota_begin"); }
 
-    char chunk[1024];
-    int  remaining = r->content_len;
+    char chunk[1460];
+    int  remaining = total;
     bool started = false;          // seen the ESP image magic 0xE9 yet
     size_t written = 0;
+    int  timeouts = 0;
+    uint32_t last_log = 0;
 
     while (remaining > 0) {
         int want = sizeof(chunk) < (size_t)remaining ? (int)sizeof(chunk) : remaining;
         int n = httpd_req_recv(r, chunk, want);
-        if (n == HTTPD_SOCK_ERR_TIMEOUT) { continue; }
-        if (n <= 0) { OTA_FAIL("400 Bad Request", "recv"); }
+        if (n == HTTPD_SOCK_ERR_TIMEOUT) {
+            if (++timeouts > 20) { ESP_LOGE("api", "OTA recv stalled"); OTA_FAIL("408 Request Timeout", "upload stalled"); }
+            continue;
+        }
+        if (n <= 0) { ESP_LOGE("api", "OTA recv=%d after %u B", n, (unsigned)written); OTA_FAIL("400 Bad Request", "recv"); }
+        timeouts = 0;
         remaining -= n;
 
         const char *p = chunk;
         int m = n;
         if (!started) {
-            // Tolerate a multipart/form-data wrapper: skip to the image magic.
-            const char *e9 = memchr(chunk, 0xE9, n);
-            if (!e9) { continue; }          // still in the wrapper header
+            const void *e9 = memchr(chunk, 0xE9, n);   // skip a multipart wrapper
+            if (!e9) { continue; }
             started = true;
-            m = n - (int)(e9 - chunk);
+            m = n - (int)((const char *)e9 - chunk);
             p = e9;
         }
-        if (ota_stream_write(p, m) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "write"); }
+        if (ota_stream_write(p, m) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "flash write"); }
         written += m;
+        if (now_ms() - last_log > 1000) {
+            last_log = now_ms();
+            ESP_LOGI("api", "OTA %u / %d B (%d%%)", (unsigned)written, total, (int)(100LL * written / total));
+        }
     }
+    ESP_LOGW("api", "OTA received %u B, finalising", (unsigned)written);
     if (!started || written < 65536) { OTA_FAIL("400 Bad Request", "no valid image found"); }
 
     esp_err_t e = ota_stream_finish();
@@ -385,7 +397,10 @@ static esp_err_t h_ota(httpd_req_t *r)
     }
     ESP_LOGW("api", "OTA ok (%u bytes) -- rebooting", (unsigned)written);
     httpd_resp_sendstr(r, "{\"ok\":true,\"rebooting\":true}");
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // Give the TCP stack time to flush the response over the (slow) SoftAP link
+    // before the reboot kills the socket -- else the client's fetch rejects and
+    // the UI shows "failed" for a successful update.
+    vTaskDelay(pdMS_TO_TICKS(1500));
     esp_restart();
     return ESP_OK;
 }

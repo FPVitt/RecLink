@@ -178,11 +178,11 @@ static esp_err_t gp_tick_1s(void)
     //   get-all-STATUS   (0x13, small: encoding/battery/SD/busy) every ~2 s
     //   get-all-SETTINGS  (0x12, res/fps/lens)                   every ~5 s
     uint32_t t = now_ms();
-    if (t - last_status_poll_ms > 2000) {
+    if (t - last_status_poll_ms > 1000) {
         last_status_poll_ms = t;
         uint8_t g[1] = { 0x13 }; wr(h_qry, g, 1);
     }
-    if (t - last_getall_ms > 5000) {
+    if (t - last_getall_ms > 3000) {
         last_getall_ms = t;
         uint8_t g[1] = { 0x12 }; wr(h_qry, g, 1);
     }
@@ -290,8 +290,15 @@ static uint32_t be(const uint8_t *p, uint8_t n)
 // Mutates the scratch in place; the caller (walk_tuples) commits once at the end.
 static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n)
 {
-    ESP_LOGD(TAG, "status %u len %u = %02x%02x%02x%02x", id, n,
-             n > 0 ? v[0] : 0, n > 1 ? v[1] : 0, n > 2 ? v[2] : 0, n > 3 ? v[3] : 0);
+    // Temporary: log the candidate mode/preset statuses (raw) so the right one
+    // can be identified from a capture while switching Photo<->Video.
+    switch (id) {
+    case 19: case 89: case 90: case 93: case 96: case 97: case 98: case 99:
+        ESP_LOGI(TAG, "status %3u len %u = %02x %02x %02x %02x", id, n,
+                 n > 0 ? v[0] : 0, n > 1 ? v[1] : 0, n > 2 ? v[2] : 0, n > 3 ? v[3] : 0);
+        break;
+    default: break;
+    }
     switch (id) {
     case ST_ENCODING: {
         tribool_t was = s->recording;
