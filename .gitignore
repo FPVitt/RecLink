@@ -1,0 +1,20 @@
+# ESP-IDF build output
+/build/
+/build_*/
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+
+# IDF component manager
+/managed_components/
+dependencies.lock
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Portal asset build intermediates
+components/portal/www/*.gz
+components/portal/www/*.h

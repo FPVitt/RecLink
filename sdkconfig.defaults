@@ -1,0 +1,71 @@
+# Common defaults for both targets. Target-specific overrides live in
+# sdkconfig.defaults.esp32c3 / sdkconfig.defaults.esp32s3 and are applied on top
+# by idf.py based on the selected target.
+
+# --- Partition table ---------------------------------------------------------
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# --- App / OTA -------------------------------------------------------------
+CONFIG_APP_PROJECT_VER_FROM_CONFIG=n
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+CONFIG_APP_ANTI_ROLLBACK=n
+
+# --- FreeRTOS: deterministic memory (spec 1.2.6 / 12.1) --------------------
+CONFIG_FREERTOS_USE_STATIC_ALLOCATION=y
+CONFIG_FREERTOS_SUPPORT_STATIC_ALLOCATION=y
+CONFIG_FREERTOS_HZ=1000
+
+# --- Task Watchdog (spec 3.5): 4 s, panic on timeout ----------------------
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=4
+CONFIG_ESP_TASK_WDT_PANIC=y
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+# --- Brown-out detector (spec 2.2): enabled, default trip, reset ----------
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y
+
+# --- Bluetooth: NimBLE, central role, persistent bonds (spec 3.1 / 11.0) --
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=1
+CONFIG_BT_NIMBLE_MAX_CCCDS=8
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_SM_SC=y
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=4096
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+
+# --- Wi-Fi: AP only, minimal footprint -----------------------------------
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
+
+# --- HTTP server --------------------------------------------------------
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=256
+
+# --- NVS -------------------------------------------------------------------
+CONFIG_NVS_ASSERT_ERROR_CHECK=n
+
+# --- Logging: ring-buffer friendly, no colour ---------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_COLORS=n
+CONFIG_LOG_TIMESTAMP_SOURCE_RTOS=y
+
+# --- Coexistence (bench only; disabled in flight by esp_wifi_stop) -------
+CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
+
+# --- Panic behaviour: reboot, keep a summary in RTC for /api/status -----
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+CONFIG_ESP_DEBUG_STUBS_ENABLE=n
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_COMPILER_WARN_WRITE_STRINGS=y

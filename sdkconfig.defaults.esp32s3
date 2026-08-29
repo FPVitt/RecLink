@@ -1,0 +1,18 @@
+# ESP32-S3 -- development target. Dual-core: pin the NimBLE host to core 1 so the
+# BLE stack cannot stall msp_task / ctrl_task / osd_task on core 0 (spec 2.1, 3.3).
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_FREERTOS_UNICORE=n
+CONFIG_ESP_MAIN_TASK_AFFINITY_CPU0=y
+
+# USB-Serial-JTAG console; USB-OTG left free.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# BLE host + controller on core 1; app tasks stay on core 0.
+CONFIG_BT_NIMBLE_PINNED_TO_CORE_1=y
+CONFIG_BT_CONTROLLER_PINNED_TO_CORE_1=y
+
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_OCT_SDM_FLASH=n

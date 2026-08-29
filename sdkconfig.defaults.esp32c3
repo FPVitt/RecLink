@@ -1,0 +1,19 @@
+# ESP32-C3 -- production target. Single RISC-V core; all tasks share core 0 and
+# rely on the priority scheme in spec 3.3. 400 KB SRAM: keep the memory budget
+# honest here (this is the config a bare `idf.py build` compiles).
+CONFIG_IDF_TARGET="esp32c3"
+CONFIG_FREERTOS_UNICORE=y
+CONFIG_ESP_MAIN_TASK_AFFINITY_CPU0=y
+
+# Single USB-Serial-JTAG for flash + console + debug.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# NimBLE host runs on core 0 (only core). Lower stack watermark headroom, so
+# keep the stack as configured and measure.
+CONFIG_BT_NIMBLE_PINNED_TO_CORE_0=y
+
+# C3 flash is commonly 4 MB, 80 MHz QIO.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y

@@ -1,0 +1,48 @@
+menu "FC-Cam Bridge board"
+
+    config BRIDGE_UART_PORT
+        int "FC MSP UART port number"
+        default 1
+        range 0 2
+        help
+            UART peripheral wired to the flight controller's MSP port.
+            Must be a non-inverted UART (spec 1.3). On the C3, UART1.
+
+    config BRIDGE_UART_TX_GPIO
+        int "FC MSP UART TX GPIO (ESP -> FC RX)"
+        default 5
+
+    config BRIDGE_UART_RX_GPIO
+        int "FC MSP UART RX GPIO (FC TX -> ESP)"
+        default 4
+
+    config BRIDGE_BUTTON_GPIO
+        int "Button GPIO (BOOT/GPIO0 acceptable)"
+        default 9
+        help
+            Short press = identify. Long press (>=3 s) at power-up = force portal.
+            Held 10 s at power-up = factory reset (spec 2.3 / 11.0).
+
+    config BRIDGE_BUTTON_ACTIVE_LOW
+        bool "Button is active-low"
+        default y
+
+    choice BRIDGE_LED_KIND
+        prompt "Status LED type"
+        default BRIDGE_LED_WS2812
+        config BRIDGE_LED_WS2812
+            bool "Addressable WS2812 (single pixel)"
+        config BRIDGE_LED_GPIO
+            bool "Plain GPIO LED"
+    endchoice
+
+    config BRIDGE_LED_GPIO_NUM
+        int "Status LED GPIO"
+        default 8
+
+    config BRIDGE_LED_ACTIVE_LOW
+        bool "Plain LED is active-low"
+        depends on BRIDGE_LED_GPIO
+        default y
+
+endmenu
