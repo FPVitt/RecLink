@@ -48,7 +48,8 @@ static const ble_uuid128_t U_QRY_RSP    = GP_UUID(0x77);
 enum { ST_BATT_BARS = 2, ST_HOT = 6, ST_BUSY = 8, ST_ENCODING = 10,
        ST_SD_STATUS = 33, ST_REMAIN_VIDEO_S = 35, ST_SD_REMAIN_KB = 54, ST_BATT_PCT = 70,
        ST_PRESET_GROUP = 96 };   // 1000 VIDEO / 1001 PHOTO / 1002 TIMELAPSE
-enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_LENS = 121 };
+enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_ASPECT = 108, SET_LENS = 121,
+       SET_BIT_DEPTH = 183, SET_PROFILE = 184 };
 
 // ---- driver state ---------------------------------------------------
 static const camera_cbs_t *CB;
@@ -258,7 +259,8 @@ static void gp_pull_all(void)
     static const uint8_t reg_st[]  = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
                                        ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S,
                                        ST_SD_STATUS, ST_PRESET_GROUP };
-    static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_LENS };
+    static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_ASPECT,
+                                       SET_LENS, SET_BIT_DEPTH, SET_PROFILE };
     for (unsigned i = 0; i < sizeof(reg_st); i++)  { uint8_t b[2] = { 0x53, reg_st[i] };  wr(h_qry, b, 2); }
     for (unsigned i = 0; i < sizeof(reg_set); i++) { uint8_t b[2] = { 0x52, reg_set[i] }; wr(h_qry, b, 2); }
     uint8_t g13[1] = { 0x13 }; wr(h_qry, g13, 1);
@@ -374,7 +376,14 @@ static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t 
     case SET_RESOLUTION:
         val_str_set(&s->resolution, gopro_resolution_str(v[0]));
         if (!*s->resolution.v) { s->resolution.valid = false; }
-        val_str_set(&s->aspect, gopro_aspect_str(v[0]));
+        // fallback aspect from the resolution code; setting 108 overrides below
+        if (!s->aspect.valid) {
+            val_str_set(&s->aspect, gopro_aspect_str(v[0]));
+            if (!*s->aspect.v) { s->aspect.valid = false; }
+        }
+        break;
+    case SET_ASPECT:
+        val_str_set(&s->aspect, gopro_aspect108_str(v[0]));
         if (!*s->aspect.v) { s->aspect.valid = false; }
         break;
     case SET_FPS:
@@ -384,6 +393,14 @@ static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t 
     case SET_LENS:
         val_str_set(&s->lens, gopro_lens_str(v[0]));
         if (!*s->lens.v) { s->lens.valid = false; }
+        break;
+    case SET_PROFILE:
+        val_str_set(&s->profile, gopro_profile_str(v[0]));
+        if (!*s->profile.v) { s->profile.valid = false; }
+        break;
+    case SET_BIT_DEPTH:
+        s->bit_depth.valid = true;
+        s->bit_depth.v = (v[0] == 2) ? 10 : 8;
         break;
     default:
         break;

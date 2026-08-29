@@ -157,8 +157,11 @@ static esp_err_t h_status(httpd_req_t *r)
       cJSON_AddStringToObject(o, "v", cam.framerate.v); cJSON_AddBoolToObject(o, "valid", cam.framerate.valid); }
     { cJSON *o = cJSON_AddObjectToObject(cs, "aspect");
       cJSON_AddStringToObject(o, "v", cam.aspect.v); cJSON_AddBoolToObject(o, "valid", cam.aspect.valid); }
+    { cJSON *o = cJSON_AddObjectToObject(cs, "profile");
+      cJSON_AddStringToObject(o, "v", cam.profile.v); cJSON_AddBoolToObject(o, "valid", cam.profile.valid); }
     { cJSON *o = cJSON_AddObjectToObject(cs, "mode");
       cJSON_AddStringToObject(o, "v", cam.mode_name.v); cJSON_AddBoolToObject(o, "valid", cam.mode_name.valid); }
+    VU("bit_depth", bit_depth);
     cJSON_AddBoolToObject(cs, "sd_missing", cam.sd_missing);
     cJSON_AddBoolToObject(cs, "sd_full", cam.sd_full);
     cJSON_AddBoolToObject(cs, "hot", cam.hot);

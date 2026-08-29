@@ -105,3 +105,30 @@ const char *gopro_lens_str(uint8_t v)
     default:  return "";
     }
 }
+
+// setting 184 PROFILES (verified @ OpenGoPro settings.py 0f963572):
+// 0 STANDARD / 1 HDR / 2 LOG / 101 HLG_HDR.
+const char *gopro_profile_str(uint8_t v)
+{
+    switch (v) {
+    case 0:   return "STD";
+    case 1:   return "HDR";
+    case 2:   return "LOG";
+    case 101: return "HLG";
+    default:  return "";
+    }
+}
+
+// setting 108 VIDEO_ASPECT_RATIO: 0 4:3 / 1 16:9 / 3 8:7 / 4 9:16 / 5 21:9 / 6 1:1.
+const char *gopro_aspect108_str(uint8_t v)
+{
+    switch (v) {
+    case 0:  return "4:3";
+    case 1:  return "16:9";
+    case 3:  return "8:7";
+    case 4:  return "9:16";
+    case 5:  return "21:9";
+    case 6:  return "1:1";
+    default: return "";
+    }
+}

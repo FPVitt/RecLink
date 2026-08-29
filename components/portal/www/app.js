@@ -123,6 +123,8 @@ $('#otago').onclick = () => {
 
 // ---- live status ----
 function row(k, v) { return `<div>${k}</div><div>${v}</div>`; }
+function fmtT(s) { s = s|0; return s >= 3600 ? (s/3600|0)+'h'+((s%3600/60)|0)+'m'
+                                             : (s/60|0)+':'+String(s%60).padStart(2,'0'); }
 async function poll() {
   try {
     const s = await fetch('/api/status').then(r => r.json());
@@ -133,13 +135,18 @@ async function poll() {
       row('Canvas', m.canvas) +
       row('GPS', `${m.gps.present?'yes':'no'} fix ${m.gps.fix} sats ${m.gps.sats}${m.gps.good?' good':''}`) +
       row('Camera', `${c.brand||'-'} ${c.link} ${c.name||''} ${c.rssi||''}dBm`) +
-      row('Recording', cs.recording + (cs.elapsed_s!=null?' '+cs.elapsed_s+'s':'')) +
+      row('Recording', cs.recording + (cs.elapsed_s!=null?' '+fmtT(cs.elapsed_s):'')
+            + (cs.hot ? '  ⚠ HOT' : '')) +
+      row('Time left', cs.rec_remaining_s.valid ? fmtT(cs.rec_remaining_s.v) : '--') +
       row('Battery', cs.battery_pct.valid ? cs.battery_pct.v + '%' : '--') +
       row('SD', cs.sd_remaining_kb.valid ? (cs.sd_remaining_kb.v/1024/1024).toFixed(1)+' GB'
                 : (cs.sd_missing ? 'NO CARD' : cs.sd_full ? 'FULL' : '--')) +
       row('Mode', cs.mode.valid ? cs.mode.v : '--') +
       row('Res', cs.resolution.valid
             ? `${cs.resolution.v}${cs.fps.v||''}${cs.aspect.valid?' '+cs.aspect.v:''}`
+            : '--') +
+      row('Profile', cs.profile.valid
+            ? cs.profile.v + (cs.bit_depth.valid ? ' '+cs.bit_depth.v+'bit' : '')
             : '--');
     $('#aux').textContent = (m.aux||[]).map((v,i)=>`ch${i}:${v}`).join('  ');
     $('#flags').innerHTML = (s.flags||[]).map(f => `<span>${f}</span>`).join('');

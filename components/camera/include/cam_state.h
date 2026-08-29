@@ -25,6 +25,8 @@ typedef struct {
     val_str_t framerate;
     val_str_t aspect;          // "16:9" / "4:3" / "8:7" / "9:16"
     val_str_t lens;
+    val_str_t profile;         // "STD" / "HDR" / "LOG" / "HLG"  (GoPro setting 184)
+    val_u8_t  bit_depth;       // 8 or 10  (GoPro setting 183)
     val_u8_t  mode;             // brand enum value
     val_str_t mode_name;        // mapped string for OSD ("VID"/"PHOTO"/...)
     bool      sd_missing;       // status 33 / DJI capacity==0 -> "NO SD"
