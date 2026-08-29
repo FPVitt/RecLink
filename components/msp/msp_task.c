@@ -280,9 +280,18 @@ static void msp_task(void *arg)
                 uint8_t p[2 + MSP_TEXT_MAX];
                 uint8_t n = (uint8_t)strnlen(s.text, MSP_TEXT_MAX);
                 p[0] = MSP2TEXT_CUSTOM_MSG_0 + s.slot;
-                p[1] = n;
-                memcpy(&p[2], s.text, n);
-                uart_write_frame(MSP2_SET_TEXT, p, 2 + n);
+                if (n == 0) {
+                    // A zero-length custom message makes Betaflight fall back to
+                    // rendering the element name ("CUSTOM_MESSAGE0"...). Send a
+                    // single space so the slot shows blank instead.
+                    p[1] = 1;
+                    p[2] = ' ';
+                    uart_write_frame(MSP2_SET_TEXT, p, 3);
+                } else {
+                    p[1] = n;
+                    memcpy(&p[2], s.text, n);
+                    uart_write_frame(MSP2_SET_TEXT, p, 2 + n);
+                }
             }
         } else {
             // drain so stale strings don't burst out on recovery
