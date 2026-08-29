@@ -12,7 +12,7 @@
 // (spec 6.2). We only ever *send* short packets; we must *reassemble* on RX.
 
 typedef struct {
-    uint8_t  buf[512];
+    uint8_t  buf[1024];  // get-all-statuses can exceed 512 B
     uint16_t have;       // bytes accumulated
     uint16_t need;       // total expected (0 = idle)
 } gopro_reasm_t;

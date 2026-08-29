@@ -41,8 +41,13 @@ typedef struct {
     };
 } iq_item_t;
 
+// s_iq carries BLE events + adverts + portal cmds + inbound GATT notifications.
+// Deep enough to absorb the GoPro get-all-statuses / get-all-settings burst
+// (many MTU-sized notifications back to back) before cam_task drains it -- a
+// shallow queue silently loses the resolution/fps/SD-total fields (review H14).
+#define IQ_DEPTH 24
 static StaticQueue_t s_iq_s, s_cmdq_s, s_evq_s;
-static uint8_t s_iq_buf[8 * sizeof(iq_item_t)];
+static uint8_t s_iq_buf[IQ_DEPTH * sizeof(iq_item_t)];
 static uint8_t s_cmdq_buf[16 * sizeof(cam_cmd_t)];
 static uint8_t s_evq_buf[16 * sizeof(cam_event_t)];
 static QueueHandle_t s_iq, s_cmdq, s_evq;
@@ -135,13 +140,16 @@ static void h_evt(ble_central_evt_t ev, int status)
     iq_item_t it = { .kind = IQ_BLE_EVT, .ble = { .ev = ev, .status = status } };
     xQueueSend(s_iq, &it, 0);
 }
+static volatile uint32_t s_notify_drops;
 static void h_notify(uint16_t handle, const uint8_t *data, uint16_t len)
 {
     iq_item_t it = { .kind = IQ_NOTIFY };
     it.notify.handle = handle;
     it.notify.len = len > sizeof(it.notify.data) ? sizeof(it.notify.data) : len;
     memcpy(it.notify.data, data, it.notify.len);
-    xQueueSend(s_iq, &it, 0);
+    if (xQueueSend(s_iq, &it, 0) != pdTRUE) {
+        s_notify_drops++;   // surfaced in the 1 Hz tick log
+    }
 }
 
 // ---- public submit API ------------------------------------------
@@ -430,6 +438,12 @@ static void cam_task(void *arg)
                 }
             }
 
+            if (s_notify_drops) {
+                ESP_LOGW(TAG, "dropped %lu BLE notifications (queue full)",
+                         (unsigned long)s_notify_drops);
+                s_notify_drops = 0;
+            }
+
             // Re-arm scanning while in SCAN: covers ble_central_scan() having
             // been rejected because the host wasn't synced yet (review M10),
             // and NimBLE dropping discovery on its own.
@@ -473,7 +487,7 @@ static void cam_task(void *arg)
 void cam_start(void)
 {
     cam_state_init();
-    s_iq   = xQueueCreateStatic(8, sizeof(iq_item_t), s_iq_buf, &s_iq_s);
+    s_iq   = xQueueCreateStatic(IQ_DEPTH, sizeof(iq_item_t), s_iq_buf, &s_iq_s);
     s_cmdq = xQueueCreateStatic(16, sizeof(cam_cmd_t), s_cmdq_buf, &s_cmdq_s);
     s_evq  = xQueueCreateStatic(16, sizeof(cam_event_t), s_evq_buf, &s_evq_s);
     cam_registry_set_cbs(&k_cbs);

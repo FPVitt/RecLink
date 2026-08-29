@@ -157,6 +157,10 @@ static esp_err_t gp_hilight(void)
     return ESP_OK;
 }
 
+static uint8_t  getall_retry;      // re-poll get-all until we actually have the
+static uint32_t last_getall_ms;    // slow-changing fields (they only arrive in
+                                   // the big initial burst, which can be lost)
+
 static esp_err_t gp_tick_1s(void)
 {
     // keepalive every 3 s (spec 6.4: must be < 10 s).
@@ -165,6 +169,20 @@ static esp_err_t gp_tick_1s(void)
         uint8_t b[3] = { 0x5B, 0x01, 0x42 };
         wr(h_set, b, 3);
     }
+
+    // Re-request get-all-statuses / get-all-settings if resolution or SD-total
+    // are still missing (up to ~6 tries at 4 s spacing).
+    cam_state_t *cs0 = cam_scratch();
+    bool have_core = cs0->resolution.valid && cs0->framerate.valid &&
+                     cs0->sd_remaining_kb.valid;
+    if (!have_core && getall_retry < 6 && (now_ms() - last_getall_ms) > 4000) {
+        last_getall_ms = now_ms();
+        getall_retry++;
+        uint8_t g1[1] = { 0x13 }; wr(h_qry, g1, 1);
+        uint8_t g2[1] = { 0x12 }; wr(h_qry, g2, 1);
+        applog_note("gopro: re-poll get-all (%u)", getall_retry);
+    }
+
     // local elapsed counter (spec 6.5)
     cam_state_t *s = cam_scratch();
     if (s->recording == TRIBOOL_TRUE) {
@@ -205,6 +223,8 @@ static esp_err_t gp_link_up(bool first_pair)
     gopro_reasm_reset(&rz_set);
     gopro_reasm_reset(&rz_qry);
     keepalive_div = 0;
+    getall_retry = 0;
+    last_getall_ms = now_ms();
 
     // Register async status + setting updates, then pull initial values.
     uint8_t regs[] = { 0x53, ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
@@ -364,6 +384,7 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
         if (gopro_reasm_feed(&rz_cmd, data, len, &pl, &pll)) { parse_cmd_rsp(pl, pll); }
     } else if (handle == vh_set_rsp) {
         if (gopro_reasm_feed(&rz_set, data, len, &pl, &pll) && pll >= 2) {
+            ESP_LOGI(TAG, "setting rsp id=%02x st=%02x len=%u", pl[0], pl[1], pll);
             walk_tuples(pl + 2, pll - 2, false);
         }
     } else if (handle == vh_qry_rsp) {
@@ -371,8 +392,12 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
             uint8_t qid = pl[0];
             // 0x12 get-all-settings / 0x52 setting push -> settings; else statuses
             bool is_status = !(qid == 0x12 || qid == 0x52 || qid == 0x92);
+            ESP_LOGI(TAG, "query rsp id=%02x st=%02x len=%u (%s)",
+                     qid, pl[1], pll, is_status ? "status" : "setting");
             walk_tuples(pl + 2, pll - 2, is_status);
         }
+    } else {
+        ESP_LOGD(TAG, "notify on unknown handle %u len %u", handle, len);
     }
 }
 
