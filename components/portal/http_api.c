@@ -343,7 +343,8 @@ static esp_err_t h_ota(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
     int total = r->content_len;
-    ESP_LOGW("api", "OTA POST: content-len %d", total);
+    ESP_LOGW("api", "OTA POST: content-len %d, free heap %u", total,
+             (unsigned)esp_get_free_heap_size());
     if (total < 65536) {
         httpd_resp_set_status(r, "400 Bad Request");
         httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"too small -- upload build/fc_cam_bridge.bin\"}");
@@ -361,9 +362,10 @@ static esp_err_t h_ota(httpd_req_t *r)
     // shot. This keeps httpd_req_recv() being called back-to-back so the socket
     // is drained and the TCP window stays open, instead of stalling for the
     // duration of every tiny flash write (which collapsed the transfer at ~58%).
-    #define OTA_BUF 32768
-    uint8_t *buf = malloc(OTA_BUF);
-    if (!buf) { OTA_FAIL("500 Internal Server Error", "oom"); }
+    // Static, not malloc'd: heap is tight during the portal and this must not
+    // fail. 16 KB .bss, only meaningful on a build with the portal.
+    #define OTA_BUF 16384
+    static uint8_t buf[OTA_BUF];
 
     int  remaining = total;
     bool started = false;
@@ -377,10 +379,10 @@ static esp_err_t h_ota(httpd_req_t *r)
             if (want > remaining) { want = remaining; }
             int n = httpd_req_recv(r, (char *)buf + fill, want);
             if (n == HTTPD_SOCK_ERR_TIMEOUT) {
-                if (++timeouts > 15) { free(buf); ESP_LOGE("api", "OTA recv stalled at %u B", (unsigned)written); OTA_FAIL("408 Request Timeout", "upload stalled"); }
+                if (++timeouts > 15) { ESP_LOGE("api", "OTA recv stalled at %u B", (unsigned)written); OTA_FAIL("408 Request Timeout", "upload stalled"); }
                 break;                       // flush what we have, then retry
             }
-            if (n <= 0) { free(buf); ESP_LOGE("api", "OTA recv=%d at %u B", n, (unsigned)written); OTA_FAIL("400 Bad Request", "recv"); }
+            if (n <= 0) { ESP_LOGE("api", "OTA recv=%d at %u B", n, (unsigned)written); OTA_FAIL("400 Bad Request", "recv"); }
             timeouts = 0;
             fill += n;
             remaining -= n;
@@ -395,7 +397,7 @@ static esp_err_t h_ota(httpd_req_t *r)
             m -= (size_t)(e9 - buf);
             p = e9;
         }
-        if (m && ota_stream_write(p, m) != ESP_OK) { free(buf); OTA_FAIL("500 Internal Server Error", "flash write"); }
+        if (m && ota_stream_write(p, m) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "flash write"); }
         written += m;
         fill = 0;
 
@@ -404,7 +406,6 @@ static esp_err_t h_ota(httpd_req_t *r)
             ESP_LOGI("api", "OTA %u / %d B (%d%%)", (unsigned)written, total, (int)(100LL * written / total));
         }
     }
-    free(buf);
     ESP_LOGW("api", "OTA received %u B, finalising", (unsigned)written);
     if (!started || written < 65536) { OTA_FAIL("400 Bad Request", "no valid image found"); }
 
