@@ -1,0 +1,391 @@
+// http_api.c -- REST surface (spec 10.4). All POSTs require !armed (409).
+// No auth beyond WPA2 -- documented bench-only limitation (spec 10.4).
+#include "portal_internal.h"
+#include "portal.h"
+
+#include <string.h>
+#include <stdlib.h>
+
+#include "cfg.h"
+#include "fc_state.h"
+#include "cam_state.h"
+#include "camera.h"
+#include "control.h"
+#include "msp.h"
+#include "platform.h"
+#include "applog.h"
+#include "monoclock.h"
+
+#include "esp_log.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "esp_app_desc.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+static const char *TAG = "api";
+
+// embedded gzip assets
+extern const uint8_t idx_start[] asm("_binary_index_html_gz_start");
+extern const uint8_t idx_end[]   asm("_binary_index_html_gz_end");
+extern const uint8_t js_start[]  asm("_binary_app_js_gz_start");
+extern const uint8_t js_end[]    asm("_binary_app_js_gz_end");
+extern const uint8_t css_start[] asm("_binary_style_css_gz_start");
+extern const uint8_t css_end[]   asm("_binary_style_css_gz_end");
+
+// ---- helpers ------------------------------------------------------
+static bool fc_armed(void)
+{
+    fc_state_t s; fc_state_get(&s);
+    return s.armed;
+}
+
+static esp_err_t send_json(httpd_req_t *r, cJSON *j, const char *status)
+{
+    portal_note_client_activity();
+    char *s = cJSON_PrintUnformatted(j);
+    cJSON_Delete(j);
+    httpd_resp_set_type(r, "application/json");
+    if (status) { httpd_resp_set_status(r, status); }
+    esp_err_t e = httpd_resp_sendstr(r, s ? s : "{}");
+    free(s);
+    return e;
+}
+
+static esp_err_t reject_if_armed(httpd_req_t *r)
+{
+    if (fc_armed()) {
+        httpd_resp_set_status(r, "409 Conflict");
+        httpd_resp_set_type(r, "application/json");
+        httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"armed\"}");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+static char *read_body(httpd_req_t *r, size_t max)
+{
+    size_t len = r->content_len;
+    if (len == 0 || len > max) { return NULL; }
+    char *buf = malloc(len + 1);
+    if (!buf) { return NULL; }
+    size_t got = 0;
+    while (got < len) {
+        int n = httpd_req_recv(r, buf + got, len - got);
+        if (n <= 0) { free(buf); return NULL; }
+        got += n;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+// ---- GET /api/status --------------------------------------------
+static esp_err_t h_status(httpd_req_t *r)
+{
+    fc_state_t fc;   fc_state_get(&fc);
+    cam_state_t cam; cam_state_get(&cam);
+    const cfg_t *cfg = cfg_get();
+
+    cJSON *j = cJSON_CreateObject();
+    const esp_app_desc_t *ad = esp_app_get_description();
+    cJSON_AddStringToObject(j, "fw", ad->version);
+    cJSON_AddNumberToObject(j, "uptime_s", now_ms() / 1000);
+
+    cJSON *flags = cJSON_AddArrayToObject(j, "flags");
+    uint32_t fl = bridge_flags_all();
+    const char *names[] = { "CFG_RESET","REPAIR_NEEDED","OSD_UNSUPPORTED","FC_OFFLINE","CLOCK_SYNC_FAIL","WDT_RECOVERED" };
+    for (int i = 0; i < 6; i++) { if (fl & (1u << i)) { cJSON_AddItemToArray(flags, cJSON_CreateString(names[i])); } }
+
+    cJSON *m = cJSON_AddObjectToObject(j, "msp");
+    cJSON_AddBoolToObject(m, "connected", fc.link_up);
+    char api[8]; snprintf(api, sizeof(api), "%u.%u", fc.api_major, fc.api_minor);
+    cJSON_AddStringToObject(m, "api", api);
+    cJSON_AddStringToObject(m, "variant", fc.fc_variant);
+    cJSON_AddBoolToObject(m, "armed", fc.armed);
+    char canv[12]; snprintf(canv, sizeof(canv), "%ux%u", fc.osd_cols, fc.osd_rows);
+    cJSON_AddStringToObject(m, "canvas", canv);
+    cJSON *aux = cJSON_AddArrayToObject(m, "aux");
+    for (int i = 0; i < fc.rc_channel_count; i++) { cJSON_AddItemToArray(aux, cJSON_CreateNumber(fc.rc[i])); }
+    cJSON *gps = cJSON_AddObjectToObject(m, "gps");
+    cJSON_AddBoolToObject(gps, "present", fc.gps_present);
+    cJSON_AddNumberToObject(gps, "fix", fc.gps.fix);
+    cJSON_AddNumberToObject(gps, "sats", fc.gps.sats);
+    cJSON_AddBoolToObject(gps, "good", fc.gps_good);
+    int64_t fc_utc = 0; fc_now_utc_ms(&fc_utc, 0);
+    cJSON_AddNumberToObject(m, "fc_utc", (double)(fc_utc / 1000));
+    cJSON_AddNumberToObject(m, "last_rx_ms", (double)(now_ms() - fc.last_rx_ms));
+
+    cJSON *clk = cJSON_AddObjectToObject(j, "clock");
+    bool readable, last_ok, ever; int32_t delta_ms; uint32_t last_res;
+    ctrl_clock_status(&readable, &delta_ms, &last_ok, &last_res, &ever);
+    if (strcmp(cfg->camera.brand, "dji") == 0) { readable = false; }
+    cJSON_AddBoolToObject(clk, "enabled", cfg->clock.enabled);
+    cJSON_AddBoolToObject(clk, "readable", readable);
+    if (cam.cam_utc_ms.valid) { cJSON_AddNumberToObject(clk, "cam_utc", (double)(cam.cam_utc_ms.v / 1000)); }
+    cJSON_AddNumberToObject(clk, "delta_s", delta_ms / 1000);
+    if (ever) {
+        cJSON *ls = cJSON_AddObjectToObject(clk, "last_sync");
+        cJSON_AddNumberToObject(ls, "age_s", (now_ms() - last_res) / 1000);
+        cJSON_AddStringToObject(ls, "result", last_ok ? "OK" : "FAILED");
+    }
+
+    cJSON *c = cJSON_AddObjectToObject(j, "camera");
+    cJSON_AddStringToObject(c, "brand", cfg->camera.brand);
+    const char *ls_names[] = { "IDLE","SCAN","CONNECTING","BONDING","SYNCING","READY","LOST" };
+    cJSON_AddStringToObject(c, "link", ls_names[cam.link <= CAM_LINK_LOST ? cam.link : 0]);
+    cJSON_AddStringToObject(c, "name", cam.name);
+    char maddr[20]; snprintf(maddr, sizeof(maddr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                             cam.addr[0],cam.addr[1],cam.addr[2],cam.addr[3],cam.addr[4],cam.addr[5]);
+    cJSON_AddStringToObject(c, "addr", maddr);
+    cJSON_AddNumberToObject(c, "rssi", cam.rssi);
+    cJSON_AddBoolToObject(c, "bonded", cfg->camera.bonded);
+    cJSON_AddNumberToObject(c, "last_rx_ms", (double)(now_ms() - cam.last_rx_ms));
+
+    cJSON *cs = cJSON_AddObjectToObject(j, "cam_state");
+    #define VU(name, field) do { cJSON *o = cJSON_AddObjectToObject(cs, name); \
+        cJSON_AddNumberToObject(o, "v", cam.field.v); cJSON_AddBoolToObject(o, "valid", cam.field.valid); } while (0)
+    cJSON_AddStringToObject(cs, "recording",
+        cam.recording == TRIBOOL_TRUE ? "true" : cam.recording == TRIBOOL_FALSE ? "false" : "unknown");
+    if (cam.rec_elapsed_s.valid) { cJSON_AddNumberToObject(cs, "elapsed_s", cam.rec_elapsed_s.v); }
+    VU("battery_pct", battery_pct);
+    VU("sd_remaining_kb", sd_remaining_kb);
+    VU("rec_remaining_s", rec_remaining_s);
+    { cJSON *o = cJSON_AddObjectToObject(cs, "resolution");
+      cJSON_AddStringToObject(o, "v", cam.resolution.v); cJSON_AddBoolToObject(o, "valid", cam.resolution.valid); }
+    { cJSON *o = cJSON_AddObjectToObject(cs, "fps");
+      cJSON_AddStringToObject(o, "v", cam.framerate.v); cJSON_AddBoolToObject(o, "valid", cam.framerate.valid); }
+    { cJSON *o = cJSON_AddObjectToObject(cs, "mode");
+      cJSON_AddStringToObject(o, "v", cam.mode_name.v); cJSON_AddBoolToObject(o, "valid", cam.mode_name.valid); }
+    #undef VU
+
+    cJSON *wifi = cJSON_AddObjectToObject(j, "wifi");
+    cJSON_AddBoolToObject(wifi, "portal", portal_active());
+
+    cJSON *errs = cJSON_AddArrayToObject(j, "errors");
+    cfg_stats_t st; cfg_stats_load(&st);
+    char eb[48];
+    snprintf(eb, sizeof(eb), "reconnects:%lu", (unsigned long)st.reconnects);
+    cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
+    snprintf(eb, sizeof(eb), "msp_crc:%lu", (unsigned long)st.msp_crc_errors);
+    cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
+    crash_stats_t cr = rtcnv_get();
+    snprintf(eb, sizeof(eb), "wdt_recov:%lu", (unsigned long)cr.wdt_recoveries);
+    cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
+    if (cr.last_disconnect[0]) { cJSON_AddItemToArray(errs, cJSON_CreateString(cr.last_disconnect)); }
+
+    return send_json(r, j, NULL);
+}
+
+// ---- GET/POST /api/config --------------------------------------
+static esp_err_t h_config_get(httpd_req_t *r)
+{
+    return send_json(r, cfg_to_json(cfg_get()), NULL);
+}
+
+static esp_err_t h_config_post(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+
+    char q[32] = {0};
+    if (httpd_req_get_url_query_str(r, q, sizeof(q)) == ESP_OK && strstr(q, "factory=1")) {
+        cfg_factory_erase();
+        cam_erase_all_bonds();
+        httpd_resp_sendstr(r, "{\"ok\":true,\"rebooting\":true}");
+        vTaskDelay(pdMS_TO_TICKS(200));
+        esp_restart();
+        return ESP_OK;
+    }
+
+    char *body = read_body(r, 8192);
+    if (!body) { httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false}"); return ESP_OK; }
+    cJSON *j = cJSON_Parse(body);
+    free(body);
+    if (!j) { httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"bad json\"}"); return ESP_OK; }
+
+    cfg_t cand; cfg_snapshot(&cand);
+    char err[80];
+    json_merge_cfg(j, &cand, err, sizeof(err));
+    cJSON_Delete(j);
+
+    esp_err_t e = cfg_validate(&cand, err, sizeof(err));
+    if (e != ESP_OK) {
+        cJSON *resp = cJSON_CreateObject();
+        cJSON_AddBoolToObject(resp, "ok", false);
+        cJSON *ea = cJSON_AddArrayToObject(resp, "errors");
+        cJSON_AddItemToArray(ea, cJSON_CreateString(err));
+        return send_json(r, resp, "400 Bad Request");
+    }
+    e = cfg_commit(&cand);      // synchronous NVS commit (spec 11.0)
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
+    cJSON_AddBoolToObject(resp, "applied", e == ESP_OK);
+    return send_json(r, resp, e == ESP_OK ? NULL : "500 Internal Server Error");
+}
+
+// ---- camera ---------------------------------------------------
+static esp_err_t h_cam_pair(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    char *body = read_body(r, 256);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *br = j ? cJSON_GetObjectItem(j, "brand") : NULL;
+    esp_err_t e = ESP_ERR_INVALID_ARG;
+    if (cJSON_IsString(br)) { e = cam_pair_begin(br->valuestring); }
+    cJSON_Delete(j);
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
+    return send_json(r, resp, e == ESP_OK ? NULL : "400 Bad Request");
+}
+
+static esp_err_t h_cam_forget(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    esp_err_t e = cam_forget();
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
+    return send_json(r, resp, NULL);
+}
+
+static void test_stop_cb(void *arg) { (void)arg; cam_submit(CAM_OP_RECORD_STOP, 0); }
+static esp_err_t h_cam_test(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    cam_submit(CAM_OP_RECORD_START, 0);
+    const esp_timer_create_args_t ta = { .callback = test_stop_cb, .name = "camtest" };
+    esp_timer_handle_t th;
+    if (esp_timer_create(&ta, &th) == ESP_OK) { esp_timer_start_once(th, 3000000); }
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    return send_json(r, resp, NULL);
+}
+
+// ---- clock sync ---------------------------------------------
+static esp_err_t h_clock_sync(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    cam_state_t cam; cam_state_get(&cam);
+    if (cam.recording == TRIBOOL_TRUE) {
+        httpd_resp_set_status(r, "409 Conflict");
+        httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"recording\"}");
+        return ESP_OK;
+    }
+    char reason[64];
+    ctrl_clock_force(reason, sizeof(reason));
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    cJSON_AddStringToObject(resp, "action", "queued");
+    return send_json(r, resp, NULL);
+}
+
+// ---- misc ---------------------------------------------------
+static esp_err_t h_identify(httpd_req_t *r)
+{
+    led_identify(3000);
+    httpd_resp_sendstr(r, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+static esp_err_t h_reboot(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    httpd_resp_sendstr(r, "{\"ok\":true}");
+    vTaskDelay(pdMS_TO_TICKS(150));
+    esp_restart();
+    return ESP_OK;
+}
+
+static esp_err_t h_logs(httpd_req_t *r)
+{
+    portal_note_client_activity();
+    static char buf[APPLOG_RING_BYTES + 1];
+    size_t n = applog_dump(buf, sizeof(buf));
+    httpd_resp_set_type(r, "text/plain");
+    return httpd_resp_send(r, buf, n);
+}
+
+static esp_err_t h_msp_scan(httpd_req_t *r)
+{
+    fc_state_t fc; fc_state_get(&fc);
+    cJSON *j = cJSON_CreateObject();
+    cJSON *aux = cJSON_AddArrayToObject(j, "aux");
+    for (int i = 4; i < fc.rc_channel_count; i++) {
+        cJSON *e = cJSON_CreateObject();
+        cJSON_AddNumberToObject(e, "aux", i - 3);
+        cJSON_AddNumberToObject(e, "us", fc.rc[i]);
+        cJSON_AddItemToArray(aux, e);
+    }
+    return send_json(r, j, NULL);
+}
+
+static esp_err_t h_ota(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    if (ota_stream_begin() != ESP_OK) {
+        httpd_resp_set_status(r, "500 Internal Server Error");
+        httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"ota_begin\"}");
+        return ESP_OK;
+    }
+    char chunk[1024];
+    int remaining = r->content_len;
+    // NOTE: expects a raw firmware body (not multipart) for simplicity; the
+    // portal JS strips the multipart wrapper client-side. VERIFY.md PORTAL-OTA.
+    while (remaining > 0) {
+        int n = httpd_req_recv(r, chunk, sizeof(chunk) < (size_t)remaining ? sizeof(chunk) : (size_t)remaining);
+        if (n <= 0) { ota_stream_finish(); httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false}"); return ESP_OK; }
+        if (ota_stream_write(chunk, n) != ESP_OK) {
+            httpd_resp_set_status(r, "500 Internal Server Error");
+            httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"write\"}");
+            return ESP_OK;
+        }
+        remaining -= n;
+    }
+    esp_err_t e = ota_stream_finish();
+    httpd_resp_sendstr(r, e == ESP_OK ? "{\"ok\":true,\"rebooting\":true}" : "{\"ok\":false}");
+    if (e == ESP_OK) { vTaskDelay(pdMS_TO_TICKS(400)); esp_restart(); }
+    return ESP_OK;
+}
+
+// ---- static assets + captive fallback -----------------------
+static esp_err_t serve_gz(httpd_req_t *r, const uint8_t *s, const uint8_t *e, const char *ct)
+{
+    httpd_resp_set_type(r, ct);
+    httpd_resp_set_hdr(r, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(r, "Cache-Control", "max-age=600");
+    return httpd_resp_send(r, (const char *)s, e - s);
+}
+
+static esp_err_t h_root(httpd_req_t *r)
+{
+    portal_note_client_activity();
+    const char *u = r->uri;
+    if (strcmp(u, "/app.js") == 0)    { return serve_gz(r, js_start, js_end, "application/javascript"); }
+    if (strcmp(u, "/style.css") == 0) { return serve_gz(r, css_start, css_end, "text/css"); }
+    // Everything else (incl. OS captive probes) -> the page.
+    return serve_gz(r, idx_start, idx_end, "text/html");
+}
+
+// ---- registration -----------------------------------------
+void http_api_register(httpd_handle_t s)
+{
+    const httpd_uri_t routes[] = {
+        { "/api/status",        HTTP_GET,  h_status,      NULL },
+        { "/api/config",        HTTP_GET,  h_config_get,  NULL },
+        { "/api/config",        HTTP_POST, h_config_post, NULL },
+        { "/api/camera/pair",   HTTP_POST, h_cam_pair,    NULL },
+        { "/api/camera/forget", HTTP_POST, h_cam_forget,  NULL },
+        { "/api/camera/test",   HTTP_POST, h_cam_test,    NULL },
+        { "/api/clock/sync",    HTTP_POST, h_clock_sync,  NULL },
+        { "/api/identify",      HTTP_POST, h_identify,    NULL },
+        { "/api/reboot",        HTTP_POST, h_reboot,      NULL },
+        { "/api/ota",           HTTP_POST, h_ota,         NULL },
+        { "/api/logs",          HTTP_GET,  h_logs,        NULL },
+        { "/api/msp/scan",      HTTP_GET,  h_msp_scan,    NULL },
+        { "/*",                 HTTP_GET,  h_root,        NULL },
+    };
+    for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
+        httpd_register_uri_handler(s, &routes[i]);
+    }
+    ESP_LOGI(TAG, "%d routes registered", (int)(sizeof(routes)/sizeof(routes[0])));
+}

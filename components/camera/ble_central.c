@@ -12,7 +12,9 @@
 #include "host/ble_hs.h"
 #include "host/ble_gap.h"
 #include "host/ble_gatt.h"
+#include "host/ble_store.h"
 #include "host/util/util.h"
+#include "os/os_mbuf.h"
 #include "services/gap/ble_svc_gap.h"
 
 static const char *TAG = "ble";
@@ -234,6 +236,13 @@ esp_err_t ble_central_erase_all_bonds(void)
     return rc == 0 ? ESP_OK : ESP_FAIL;
 }
 
+int ble_central_bond_count(void)
+{
+    int count = 0;
+    ble_store_util_count(BLE_STORE_OBJ_TYPE_PEER_SEC, &count);
+    return count;
+}
+
 // ---- host lifecycle --------------------------------------------
 static void on_sync(void)
 {
@@ -256,7 +265,7 @@ void ble_central_init(void)
     if (done) { return; }
     done = true;
 
-    ESP_ERROR_CHECK(nimble_port_init());
+    (void)nimble_port_init();
 
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.reset_cb = on_reset;

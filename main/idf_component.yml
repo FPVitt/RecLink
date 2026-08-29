@@ -3,5 +3,3 @@ dependencies:
   idf: ">=5.1"
   # Addressable status LED (WS2812 single pixel).
   espressif/led_strip: "^3.0.0"
-  # Gzipped portal assets partition (spec 3.1 / 10.3).
-  joltwallet/littlefs: "^1.14.0"

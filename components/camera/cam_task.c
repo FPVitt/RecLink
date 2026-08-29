@@ -192,6 +192,29 @@ esp_err_t cam_forget(void)
 }
 QueueHandle_t cam_events(void) { return s_evq; }
 
+void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
+
+// Boot-time reconcile of cfg.camera vs the NimBLE bond store (spec 11.0 /
+// 3.6 step 1). Returns true if FLAG_REPAIR_NEEDED should be raised.
+bool cam_reconcile_bonds(bool erase_orphan_bond)
+{
+    if (erase_orphan_bond) {
+        ble_central_erase_all_bonds();
+        return false;
+    }
+    const cfg_t *c = cfg_get();
+    int bonds = ble_central_bond_count();
+    if (c->camera.bonded && bonds == 0) {
+        applog_note("cfg says bonded but no BLE bond -> REPAIR_NEEDED");
+        return true;                          // caller sets flag; cam stays IDLE-ish
+    }
+    if (!c->camera.bonded && bonds > 0) {
+        applog_note("orphan BLE bond, no cfg camera -> erasing");
+        ble_central_erase_all_bonds();
+    }
+    return false;
+}
+
 // ---- command execution ----------------------------------------
 static void exec_cmd(const cam_cmd_t *c)
 {
@@ -295,7 +318,10 @@ static void cam_task(void *arg)
     ble_central_set_cbs(h_scan, h_evt, h_notify);
 
     const cfg_t *cfg = cfg_get();
-    if (cfg && cfg->camera.bonded && cfg->camera.brand[0]) {
+    if (bridge_flag_get(FLAG_REPAIR_NEEDED)) {
+        ESP_LOGW(TAG, "REPAIR_NEEDED: staying IDLE until re-pair");
+        set_link(CAM_LINK_IDLE);
+    } else if (cfg && cfg->camera.bonded && cfg->camera.brand[0]) {
         s_drv = camera_by_name(cfg->camera.brand);
         if (s_drv) {
             memcpy(s_target_addr, cfg->camera.addr, 6);

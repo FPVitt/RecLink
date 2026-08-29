@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FC-Cam Bridge</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>FC&nbsp;&#8644;&nbsp;Cam Bridge</h1>
+  <span id="fw" class="muted"></span>
+</header>
+
+<nav id="tabs">
+  <button data-t="status" class="on">Status</button>
+  <button data-t="recording">Recording</button>
+  <button data-t="preset">Preset</button>
+  <button data-t="osd">OSD</button>
+  <button data-t="clock">Clock</button>
+  <button data-t="camera">Camera</button>
+  <button data-t="network">Network</button>
+  <button data-t="system">System</button>
+</nav>
+
+<main>
+<section id="status" class="tab on">
+  <div class="grid" id="statgrid"></div>
+  <h3>AUX channels</h3>
+  <div id="aux" class="muted mono"></div>
+  <div id="flags" class="flags"></div>
+</section>
+
+<section id="recording" class="tab">
+  <label>Mode
+    <select name="record.mode">
+      <option value="0">Off</option><option value="1">On arm</option>
+      <option value="2">On switch</option><option value="3">Arm + switch</option>
+    </select></label>
+  <label>Arm delay (ms) <input type="number" name="record.arm_delay_ms"></label>
+  <label>Stop delay (ms) <input type="number" name="record.stop_delay_ms"></label>
+  <label>Verify timeout (ms) <input type="number" name="record.verify_timeout_ms"></label>
+  <label>Retry count <input type="number" name="record.retry_count"></label>
+  <fieldset><legend>Switch</legend>
+    <label>AUX channel (0=none) <input type="number" name="record.switch.channel"></label>
+    <label>Threshold (us) <input type="number" name="record.switch.threshold_us"></label>
+    <label>Debounce (ms) <input type="number" name="record.switch.debounce_ms"></label>
+  </fieldset>
+</section>
+
+<section id="preset" class="tab">
+  <label><input type="checkbox" name="preset.enabled"> Enabled</label>
+  <label>AUX channel <input type="number" name="preset.channel"></label>
+  <label>Dwell (ms) <input type="number" name="preset.dwell_ms"></label>
+  <label><input type="checkbox" name="preset.allow_during_record"> Allow while recording</label>
+  <div id="bands"></div>
+</section>
+
+<section id="osd" class="tab">
+  <label>Refresh (Hz) <input type="number" name="osd.refresh_hz" min="1" max="10"></label>
+  <label>Line 0 <input name="osd.lines.0" maxlength="23"></label>
+  <label>Line 1 <input name="osd.lines.1" maxlength="23"></label>
+  <label>Line 2 <input name="osd.lines.2" maxlength="23"></label>
+  <label>Line 3 <input name="osd.lines.3" maxlength="23"></label>
+  <div id="tokens" class="muted"></div>
+  <fieldset><legend>Warnings</legend>
+    <label>Low batt % <input type="number" name="osd.warn.batt_pct"></label>
+    <label>SD low (min) <input type="number" name="osd.warn.sd_low_min"></label>
+    <label><input type="checkbox" name="osd.warn.blink"> Blink</label>
+    <label><input type="checkbox" name="osd.warn.show_on_lost"> Show warning when cam lost</label>
+  </fieldset>
+</section>
+
+<section id="clock" class="tab">
+  <label><input type="checkbox" name="clock.enabled"> Enabled</label>
+  <label><input type="checkbox" name="clock.require_gps"> Require GPS</label>
+  <label>Min sats <input type="number" name="clock.min_sats"></label>
+  <label>Threshold (s) <input type="number" name="clock.threshold_s" min="2"></label>
+  <label>UTC offset (min) <input type="number" name="clock.utc_offset_min"></label>
+  <label><input type="checkbox" name="clock.dst"> DST</label>
+  <label>Check period (min, GoPro) <input type="number" name="clock.check_period_min"></label>
+  <label>Resync period (min, DJI) <input type="number" name="clock.resync_period_min"></label>
+  <label>Verify retries <input type="number" name="clock.retry_count"></label>
+  <div id="clocklive" class="muted mono"></div>
+  <button id="syncnow" type="button">Sync now</button>
+</section>
+
+<section id="camera" class="tab">
+  <div id="camlive" class="muted mono"></div>
+  <button type="button" data-pair="gopro">Pair GoPro</button>
+  <button type="button" data-pair="dji">Pair DJI</button>
+  <button type="button" id="camtest">3s test record</button>
+  <button type="button" id="camforget" class="danger">Forget camera</button>
+</section>
+
+<section id="network" class="tab">
+  <label>SSID (blank = auto) <input name="wifi.ssid" maxlength="19"></label>
+  <label>Password (blank = keep) <input name="wifi.password" type="password" maxlength="31"></label>
+  <label>Channel (0 = auto) <input type="number" name="wifi.channel"></label>
+  <label>Portal trigger
+    <select name="wifi.portal_trigger"><option value="0">Button</option><option value="1">Always (disarmed)</option></select></label>
+  <label>Portal timeout (min) <input type="number" name="wifi.portal_timeout_min"></label>
+  <label>MSP baud
+    <select name="msp.baud"><option>115200</option><option>230400</option><option>250000</option><option>460800</option></select></label>
+</section>
+
+<section id="system" class="tab">
+  <label><input type="checkbox" name="interlock.enabled"> Arming interlock</label>
+  <label>Interlock requires
+    <select name="interlock.require"><option value="0">Camera connected</option><option value="1">Recording</option></select></label>
+  <label><input type="checkbox" name="gps_push.enabled"> DJI GPS position push</label>
+  <label>GPS push rate (Hz) <input type="number" name="gps_push.rate_hz" min="1" max="2"></label>
+  <label>LED brightness <input type="number" name="led_brightness" min="0" max="255"></label>
+  <div class="row">
+    <button type="button" id="identify">Identify</button>
+    <button type="button" id="reboot">Reboot</button>
+    <button type="button" id="factory" class="danger">Factory reset</button>
+  </div>
+  <h3>Firmware update</h3>
+  <input type="file" id="otafile" accept=".bin">
+  <button type="button" id="otago">Upload &amp; flash</button>
+  <h3>Log</h3>
+  <pre id="log" class="mono"></pre>
+</section>
+</main>
+
+<footer>
+  <button id="save">Save all settings</button>
+  <span id="msg" class="muted"></span>
+</footer>
+<script src="/app.js"></script>
+</body>
+</html>

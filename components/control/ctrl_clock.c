@@ -5,6 +5,7 @@
 #include "applog.h"
 #include "osd.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "esp_log.h"

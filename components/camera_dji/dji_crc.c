@@ -1,4 +1,5 @@
 #include "dji_crc.h"
+#include <stdbool.h>
 
 // Tables computed once at first use from the reflected polynomials, so there is
 // no risk of a mis-transcribed 256-entry literal.

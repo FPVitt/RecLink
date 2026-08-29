@@ -11,6 +11,7 @@
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "host/ble_uuid.h"        // ble_uuid_t for brand_gatt_t
 #include "bridge_types.h"
 #include "cam_state.h"
 
@@ -89,6 +90,8 @@ esp_err_t cam_submit_gps(const gps_fix_t *fix, int64_t utc_ms);
 // Portal actions.
 esp_err_t cam_pair_begin(const char *brand);   // scan-and-bond
 esp_err_t cam_forget(void);                    // delete bond + cfg + go IDLE
+void      cam_erase_all_bonds(void);           // factory reset path (spec 11.0)
+bool      cam_reconcile_bonds(bool erase_orphan_bond);  // boot; -> FLAG_REPAIR_NEEDED
 
 // ---- cam_events: to ctrl_task + osd_task -------------------------
 typedef enum {

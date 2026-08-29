@@ -87,7 +87,7 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
             p++;
             if (!field_on(cfg, OSD_TOK_BB) || !cam->battery_pct.valid) { continue; }
             int bars = (cam->battery_pct.v + 12) / 25; if (bars > 4) bars = 4;
-            for (int i = 0; i < 4; i++) { tmp[i] = i < bars ? '\xFE' : '\xFA'; }
+            for (int i = 0; i < 4; i++) { tmp[i] = (char)(i < bars ? 0xFE : 0xFA); }
             tmp[4] = '\0';
             len = app(out, out_cap, len, tmp);
         } else if (TOK2('r','s')) {                // resolution

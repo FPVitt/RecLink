@@ -1,11 +1,11 @@
 # Name,     Type, SubType,  Offset,   Size,    Flags
-# 4 MB flash. Dual-OTA so /api/ota can roll back. The `nvs` partition is
-# deliberately outside ota_0/ota_1 so cfg + NimBLE bond survive a firmware flash
-# (spec 11.0). nvs sized well above the 24 KB floor (cfg blob + nimble_bond +
-# stats + wear-levelling headroom).
+# 4 MB flash. Dual-OTA so /api/ota can roll back (spec 10.4 / 12.5). The `nvs`
+# partition is deliberately outside ota_0/ota_1 so cfg + the NimBLE bond survive
+# a firmware flash (spec 11.0). nvs sized well above the 24 KB floor.
+# Portal web assets are gzip-embedded in the app image (spec 10.3), so no
+# separate data partition is needed.
 nvs,        data, nvs,      0x9000,   0x8000,
 otadata,    data, ota,      0x11000,  0x2000,
 phy_init,   data, phy,      0x13000,  0x1000,
-ota_0,      app,  ota_0,    0x20000,  0x1B0000,
-ota_1,      app,  ota_1,    0x1D0000, 0x1B0000,
-storage,    data, littlefs, 0x380000, 0x70000,
+ota_0,      app,  ota_0,    0x20000,  0x1E0000,
+ota_1,      app,  ota_1,    0x200000, 0x1E0000,
