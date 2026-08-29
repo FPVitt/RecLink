@@ -17,6 +17,8 @@
 #include "os/os_mbuf.h"
 #include "services/gap/ble_svc_gap.h"
 
+void ble_store_config_init(void);   // esp-nimble store/config; no public header
+
 static const char *TAG = "ble";
 
 static ble_scan_cb_t   s_scan_cb;
@@ -159,11 +161,16 @@ uint16_t ble_central_val_handle(const ble_uuid_t *u)
 esp_err_t ble_central_scan(bool enable)
 {
     if (!s_host_synced) { return ESP_ERR_INVALID_STATE; }
-    if (!enable) { return ble_gap_disc_cancel() == 0 ? ESP_OK : ESP_OK; }
+    if (!enable) { ble_gap_disc_cancel(); return ESP_OK; }
+    if (ble_gap_disc_active()) { return ESP_OK; }
 
     uint8_t own = BLE_OWN_ADDR_PUBLIC;
     ble_hs_id_infer_auto(0, &own);
-    struct ble_gap_disc_params p = { .itvl = 0x0060, .window = 0x0030, .passive = 0, .filter_duplicates = 1 };
+    // Active scan (to get GoPro's name from the scan response) and NO duplicate
+    // filtering -- some controllers suppress scan responses when it's on.
+    struct ble_gap_disc_params p = {
+        .itvl = 0x0060, .window = 0x0050, .passive = 0, .filter_duplicates = 0,
+    };
     int rc = ble_gap_disc(own, BLE_HS_FOREVER, &p, gap_event, NULL);
     return (rc == 0 || rc == BLE_HS_EALREADY) ? ESP_OK : ESP_FAIL;
 }
@@ -283,6 +290,11 @@ void ble_central_init(void)
 
     ble_svc_gap_init();
     ble_svc_gap_device_name_set("CamBridge");
+
+    // Wire up the NVS-backed bond-key store (CONFIG_BT_NIMBLE_NVS_PERSIST). The
+    // IDF NimBLE port does NOT call this for you -- without it sm_bonding has
+    // nowhere to persist keys and pairing fails (matches the blecent example).
+    ble_store_config_init();
 
     nimble_port_freertos_init(host_task);
 }

@@ -353,10 +353,23 @@ static void cam_task(void *arg)
             switch (it.kind) {
             case IQ_ADV: {
                 if (s_cs.link != CAM_LINK_SCAN || !s_drv) { break; }
+                static uint32_t adv_seen, adv_log_ms;
+                adv_seen++;
+                if (now_ms() - adv_log_ms > 3000) {
+                    adv_log_ms = now_ms();
+                    ESP_LOGI(TAG, "scanning (%s): %lu adverts seen; last %02x:%02x:%02x:%02x:%02x:%02x '%s' svc=%04x mfg[0..1]=%02x%02x",
+                             s_drv->name, (unsigned long)adv_seen,
+                             it.adv.addr[5], it.adv.addr[4], it.adv.addr[3],
+                             it.adv.addr[2], it.adv.addr[1], it.adv.addr[0],
+                             it.adv.name, it.adv.svc_uuid16,
+                             it.adv.mfg_len ? it.adv.mfg[0] : 0,
+                             it.adv.mfg_len > 1 ? it.adv.mfg[1] : 0);
+                }
                 bool want = s_first_pair
                     ? (s_drv->adv_match && s_drv->adv_match(&it.adv))
                     : (memcmp(it.adv.addr, s_target_addr, 6) == 0);
                 if (!want) { break; }
+                ESP_LOGI(TAG, "match: %s '%s' -> connecting", s_drv->name, it.adv.name);
                 memcpy(s_target_addr, it.adv.addr, 6);
                 s_target_addr_type = it.adv.addr_type;
                 memcpy(s_cs.addr, it.adv.addr, 6);
@@ -417,10 +430,14 @@ static void cam_task(void *arg)
                 }
             }
 
-            // local elapsed-time counter for GoPro (spec 6.5)
-            if (s_cs.recording == TRIBOOL_TRUE && s_cs.rec_elapsed_s.valid) {
-                // driver increments if it owns it; nothing here.
+            // Re-arm scanning while in SCAN: covers ble_central_scan() having
+            // been rejected because the host wasn't synced yet (review M10),
+            // and NimBLE dropping discovery on its own.
+            if (s_cs.link == CAM_LINK_SCAN && s_drv) {
+                esp_err_t sr = ble_central_scan(true);
+                if (sr != ESP_OK) { ESP_LOGW(TAG, "scan re-arm: %s", esp_err_to_name(sr)); }
             }
+
             publish_dirty();
         }
 
