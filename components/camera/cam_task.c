@@ -204,6 +204,8 @@ void cam_ble_suspend(void)
     iq_item_t it = { .kind = IQ_CMD_SUSPEND };
     xQueueSend(s_iq, &it, pdMS_TO_TICKS(100));
 }
+static volatile bool s_throttle;
+void cam_throttle(bool on) { s_throttle = on; }
 QueueHandle_t cam_events(void) { return s_evq; }
 
 void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
@@ -448,8 +450,8 @@ static void cam_task(void *arg)
 
         uint32_t now = now_ms();
 
-        // ---- periodic 1 Hz ---------------------------------------
-        if (now - last_tick >= TICK_PERIOD_MS) {
+        // ---- periodic tick (1 Hz, or 4 s while throttled for the portal) ----
+        if (now - last_tick >= (s_throttle ? 4000 : TICK_PERIOD_MS)) {
             last_tick = now;
             if (s_cs.link == CAM_LINK_READY) {
                 if (s_drv && s_drv->tick_1s) { s_drv->tick_1s(); }

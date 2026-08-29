@@ -7,6 +7,7 @@
 #include "portal.h"
 #include "cfg.h"
 #include "platform.h"
+#include "camera.h"
 #include "applog.h"
 #include "monoclock.h"
 
@@ -15,6 +16,7 @@
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_mac.h"
+#include "esp_coexist.h"
 #include "esp_event.h"
 #include "esp_http_server.h"
 #include "freertos/FreeRTOS.h"
@@ -59,6 +61,13 @@ static void wifi_ap_up(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wc));
     ESP_ERROR_CHECK(esp_wifi_start());
+    // Portal is bench-only and short-lived: keep the radio fully awake and
+    // bias BT/Wi-Fi coexistence toward Wi-Fi so association isn't stalled by
+    // the camera BLE link.
+    esp_wifi_set_ps(WIFI_PS_NONE);
+#if CONFIG_ESP_COEX_SW_COEXIST_ENABLE
+    esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+#endif
     applog_note("portal AP '%s' up", wc.ap.ssid);
 }
 
@@ -88,6 +97,9 @@ static void portal_teardown(void)
 {
     captive_dns_stop();
     if (s_httpd) { httpd_stop(s_httpd); s_httpd = NULL; }
+#if CONFIG_ESP_COEX_SW_COEXIST_ENABLE
+    esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);   // give BLE its slots back
+#endif
     esp_wifi_stop();                 // spec 12.3: radio fully off
     esp_wifi_deinit();
     if (s_ap_netif) { esp_netif_destroy_default_wifi(s_ap_netif); s_ap_netif = NULL; }
@@ -98,6 +110,7 @@ static void portal_task(void *arg)
 {
     (void)arg;
     ESP_LOGI(TAG, "portal task: bringing up AP + HTTP");
+    cam_throttle(true);              // ease BLE airtime while the AP is up
     portal_bringup();
 
     s_opened_ms = now_ms();
@@ -121,6 +134,7 @@ static void portal_task(void *arg)
     }
 
     portal_teardown();
+    cam_throttle(false);
     s_running = false;
     s_task = NULL;
     vTaskDelete(NULL);

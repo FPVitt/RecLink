@@ -2,7 +2,7 @@ idf_component_register(
     SRCS "portal_task.c" "http_api.c" "captive_dns.c" "ota.c" "json_cfg.c"
     INCLUDE_DIRS "include"
     REQUIRES common cfg msp camera control osd platform
-             esp_wifi esp_http_server esp_netif app_update json lwip freertos
+             esp_wifi esp_coex esp_http_server esp_netif app_update json lwip freertos
              esp_hw_support esp_system esp_app_format esp_timer
 )
 

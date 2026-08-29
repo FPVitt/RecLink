@@ -460,13 +460,42 @@ static esp_err_t serve_gz(httpd_req_t *r, const uint8_t *s, const uint8_t *e, co
     return httpd_resp_send(r, (const char *)s, e - s);
 }
 
+// OS connectivity-check probes. Answer them with what each OS expects so it
+// concludes "internet is fine" and does NOT force the captive-portal login
+// sheet. The user opens 192.168.4.1 themselves when they want the config page.
+static bool answer_captive_probe(httpd_req_t *r, const char *u)
+{
+    char host[40] = {0};
+    httpd_req_get_hdr_value_str(r, "Host", host, sizeof(host));
+
+    if (strstr(u, "generate_204") || strstr(u, "gen_204")) {          // Android
+        httpd_resp_set_status(r, "204 No Content");
+        httpd_resp_send(r, NULL, 0);
+        return true;
+    }
+    if (strstr(u, "connecttest.txt") || strstr(u, "ncsi.txt")) {      // Windows
+        httpd_resp_set_type(r, "text/plain");
+        httpd_resp_sendstr(r, "Microsoft Connect Test");
+        return true;
+    }
+    if (strstr(host, "captive.apple.com") || strstr(u, "hotspot-detect") ||
+        strstr(u, "/success") || strstr(u, "library/test")) {         // Apple
+        httpd_resp_set_type(r, "text/html");
+        httpd_resp_sendstr(r,
+            "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
+        return true;
+    }
+    return false;
+}
+
 static esp_err_t h_root(httpd_req_t *r)
 {
     portal_note_client_activity();
     const char *u = r->uri;
     if (strcmp(u, "/app.js") == 0)    { return serve_gz(r, js_start, js_end, "application/javascript"); }
     if (strcmp(u, "/style.css") == 0) { return serve_gz(r, css_start, css_end, "text/css"); }
-    // Everything else (incl. OS captive probes) -> the page.
+    if (answer_captive_probe(r, u))   { return ESP_OK; }
+    // A real request for the UI (or any other path) -> the page.
     return serve_gz(r, idx_start, idx_end, "text/html");
 }
 
