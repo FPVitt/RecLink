@@ -57,8 +57,9 @@ static uint16_t vh_cmd_rsp, vh_set_rsp, vh_qry_rsp;
 static gopro_reasm_t rz_cmd, rz_set, rz_qry;
 static uint8_t  keepalive_div;
 static uint32_t rec_start_ms;
-static uint8_t  getall_retry;    // re-poll get-all until slow-changing fields
-static uint32_t last_getall_ms;  // (resolution/fps/SD-total/preset) are populated
+static uint8_t  getall_retry;
+static uint32_t last_getall_ms;      // get-all-settings poll
+static uint32_t last_status_poll_ms; // get-all-status poll
 static bool     want_record_ack;
 static bool     want_record_target;
 
@@ -169,20 +170,21 @@ static esp_err_t gp_tick_1s(void)
         wr(h_set, b, 3);
     }
 
-    // Re-request get-all if the slow-changing fields are still missing (up to
-    // ~6 tries at 4 s). In a non-video mode resolution/fps are intentionally
-    // blank, so only require them when mode says video.
-    cam_state_t *cs0 = cam_scratch();
-    bool video = !cs0->mode.valid || cs0->mode.v == 0;
-    bool have_core = cs0->sd_remaining_kb.valid && cs0->mode.valid &&
-                     (!video || (cs0->resolution.valid && cs0->framerate.valid));
-    if (!have_core && getall_retry < 6 && (now_ms() - last_getall_ms) > 4000) {
-        last_getall_ms = now_ms();
-        getall_retry++;
-        uint8_t g1[1] = { 0x13 }; wr(h_qry, g1, 1);
-        uint8_t g2[1] = { 0x12 }; wr(h_qry, g2, 1);
-        applog_note("gopro: re-poll get-all (%u)", getall_retry);
+    // Polling fallback -- this firmware does not appear to honour our async-push
+    // registration (0x52/0x53), so nothing the user changes ON the camera
+    // (record, resolution, mode) ever pushes to us. Poll instead:
+    //   get-all-STATUS   (0x13, small: encoding/battery/SD/busy) every ~2 s
+    //   get-all-SETTINGS  (0x12, res/fps/lens)                   every ~5 s
+    uint32_t t = now_ms();
+    if (t - last_status_poll_ms > 2000) {
+        last_status_poll_ms = t;
+        uint8_t g[1] = { 0x13 }; wr(h_qry, g, 1);
     }
+    if (t - last_getall_ms > 5000) {
+        last_getall_ms = t;
+        uint8_t g[1] = { 0x12 }; wr(h_qry, g, 1);
+    }
+    (void)getall_retry;
 
     // local elapsed counter (spec 6.5)
     cam_state_t *s = cam_scratch();
@@ -226,18 +228,20 @@ static esp_err_t gp_link_up(bool first_pair)
     keepalive_div = 0;
     getall_retry = 0;
     last_getall_ms = now_ms();
+    last_status_poll_ms = now_ms();
 
-    // Register async status + setting updates, then pull initial values.
-    uint8_t regs[] = { 0x53, ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
-                       ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S, ST_SD_STATUS,
-                       ST_ACTIVE_PRESET };
-    wr(h_qry, regs, sizeof(regs));
-    uint8_t regset[] = { 0x52, SET_RESOLUTION, SET_FPS, SET_LENS };
-    wr(h_qry, regset, sizeof(regset));
-    uint8_t getall_st[] = { 0x13 };
-    wr(h_qry, getall_st, 1);
-    uint8_t getall_set[] = { 0x12 };
-    wr(h_qry, getall_set, 1);
+    // Register for async updates -- one ID per request (the proven tutorial form;
+    // multi-ID register is not documented). If the camera honours these we get
+    // instant pushes; if not, the poll in gp_tick_1s covers it (~2-5 s).
+    static const uint8_t reg_st[]  = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
+                                       ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S,
+                                       ST_SD_STATUS, ST_ACTIVE_PRESET };
+    static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_LENS };
+    for (unsigned i = 0; i < sizeof(reg_st); i++)  { uint8_t b[2] = { 0x53, reg_st[i] };  wr(h_qry, b, 2); }
+    for (unsigned i = 0; i < sizeof(reg_set); i++) { uint8_t b[2] = { 0x52, reg_set[i] }; wr(h_qry, b, 2); }
+
+    uint8_t getall_st[1]  = { 0x13 }; wr(h_qry, getall_st, 1);
+    uint8_t getall_set[1] = { 0x12 }; wr(h_qry, getall_set, 1);
 
     applog_note("gopro link up%s", first_pair ? " (first pair)" : "");
     if (first_pair && CB->on_paired) {
@@ -277,6 +281,9 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
     case ST_ENCODING: {
         tribool_t was = s->recording;
         s->recording = v[0] ? TRIBOOL_TRUE : TRIBOOL_FALSE;
+        if (was != s->recording) {
+            ESP_LOGI(TAG, "encoding -> %s", v[0] ? "REC" : "idle");
+        }
         if (s->recording == TRIBOOL_TRUE && was != TRIBOOL_TRUE) {
             rec_start_ms = now_ms();
             s->rec_elapsed_s.valid = true; s->rec_elapsed_s.v = 0;
@@ -424,21 +431,19 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
         // to consume (we never write settings we care about).
         (void)gopro_reasm_feed(&rz_set, data, len, &pl, &pll);
     } else if (handle == vh_qry_rsp) {
+        char hx[52]; int hn = 0;
+        for (int i = 0; i < len && i < 16; i++) hn += snprintf(hx + hn, sizeof(hx) - hn, "%02x ", data[i]);
+        ESP_LOGI(TAG, "QRY raw len=%u: %s", len, hx);
         if (gopro_reasm_feed(&rz_qry, data, len, &pl, &pll) && pll >= 2) {
             uint8_t qid = pl[0];
-            // Query IDs (Open GoPro): 0x12 get-all-settings, 0x13 get-all-status,
-            // 0x52/0x53 register (response echoes current values), 0x92/0x93
-            // async push on change. Settings: 0x12 / 0x52 / 0x92; else statuses.
+            // Every TLV query response -- get-all (0x12/0x13), register echo
+            // (0x52/0x53) AND async push (0x92/0x93) -- is [id][status][tlvs...]
+            // (verified: OpenGoPro tutorial_modules TlvResponse.parse @ 0f963572).
+            // Settings live under 0x12/0x52/0x92; statuses under 0x13/0x53/0x93.
             bool is_setting = (qid == 0x12 || qid == 0x52 || qid == 0x92);
-            // Responses to 0x12/0x13/0x52/0x53 carry a status byte after the id;
-            // async pushes (0x92/0x93) do NOT -- skipping 2 there misaligned
-            // every live change into garbage (mode/res never updated).
-            bool has_status = (qid == 0x12 || qid == 0x13 || qid == 0x52 || qid == 0x53);
-            uint16_t off = has_status ? 2 : 1;
-            ESP_LOGI(TAG, "query id=%02x len=%u (%s%s)",
-                     qid, pll, is_setting ? "setting" : "status",
-                     has_status ? "" : ", async");
-            if (pll > off) { walk_tuples(pl + off, pll - off, !is_setting); }
+            ESP_LOGI(TAG, "query id=%02x st=%02x len=%u (%s)",
+                     qid, pl[1], pll, is_setting ? "setting" : "status");
+            if (pll > 2) { walk_tuples(pl + 2, pll - 2, !is_setting); }
         }
     } else {
         ESP_LOGD(TAG, "notify on unknown handle %u len %u", handle, len);
