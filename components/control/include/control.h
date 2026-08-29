@@ -36,6 +36,10 @@ void ctrl_clock_reset(void);
 void ctrl_clock_tick(const ctrl_ctx_t *c);
 // portal "sync now": queues a forced attempt (gate still re-evaluated in tick).
 int  ctrl_clock_force(char *reason, size_t rlen);
+// portal /api/clock/sync: true if the F6 gate is currently satisfied, else
+// false with a human reason in `why`.
+bool ctrl_clock_gate_check(char *why, size_t wl);
+int32_t ctrl_clock_last_delta_ms(void);
 // portal status snapshot for the Clock tab.
 void ctrl_clock_status(bool *readable, int32_t *delta_ms, bool *last_ok,
                        uint32_t *last_result_uptime_ms, bool *ever_synced);

@@ -15,6 +15,7 @@
 #include "platform.h"
 
 #include "esp_log.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -59,6 +60,13 @@ static uint8_t  s_target_addr[6];
 static uint8_t  s_target_addr_type;
 static int      s_backoff_idx;
 static uint32_t s_state_since_ms;
+// spec 3.5 / FMEA 12.5: a camera stack-hang looks like connect-then-silent,
+// repeating. Count relink failures that follow a READY; 3 in a row without an
+// intervening healthy link => reboot (fast, clears any partial state). A camera
+// simply powered off never reaches READY, so it sits in SCAN and never trips
+// this (F5 acceptance: no reboot).
+static int      s_relink_fails;
+static bool     s_was_ready;
 // The one shared camera-state scratch (spec 3.4). cam_task + the driver
 // callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
 #define s_cs (*cam_scratch())
@@ -69,6 +77,7 @@ static void set_link(cam_link_state_t st)
     if (s_cs.link == st) { return; }
     s_cs.link = st;
     s_state_since_ms = now_ms();
+    if (st == CAM_LINK_READY) { s_relink_fails = 0; s_was_ready = true; }
     cam_state_commit();
     cam_event_t e = { .type = CAM_EV_LINK, .value = (int32_t)st };
     xQueueSend(s_evq, &e, 0);
@@ -85,6 +94,7 @@ static void publish_dirty(void)
 static void invalidate_cam_values(void)   // spec 8.5 step 1
 {
     s_cs.recording = TRIBOOL_UNKNOWN;
+    s_cs.pre_record = TRIBOOL_UNKNOWN;
     s_cs.busy = TRIBOOL_UNKNOWN;
     s_cs.battery_pct.valid = false;
     s_cs.sd_remaining_kb.valid = false;
@@ -144,6 +154,8 @@ static void h_evt(ble_central_evt_t ev, int status)
     xQueueSend(s_iq, &it, 0);
 }
 static volatile uint32_t s_notify_drops;
+static volatile uint32_t s_notify_drops_total;
+uint32_t cam_notify_drops(void) { return s_notify_drops_total; }
 static void h_notify(uint16_t handle, const uint8_t *data, uint16_t len)
 {
     iq_item_t it = { .kind = IQ_NOTIFY };
@@ -151,7 +163,8 @@ static void h_notify(uint16_t handle, const uint8_t *data, uint16_t len)
     it.notify.len = len > sizeof(it.notify.data) ? sizeof(it.notify.data) : len;
     memcpy(it.notify.data, data, it.notify.len);
     if (xQueueSend(s_iq, &it, 0) != pdTRUE) {
-        s_notify_drops++;   // surfaced in the 1 Hz tick log
+        s_notify_drops++;          // surfaced in the 1 Hz tick log
+        s_notify_drops_total++;    // monotonic, surfaced in /api/status
     }
 }
 
@@ -288,6 +301,16 @@ static void go_lost(const char *why)
     cam_cmd_t drop;
     while (xQueueReceive(s_cmdq, &drop, 0) == pdTRUE) { }
     cfg_stats_bump_reconnect();
+
+    // spec 3.5 / FMEA: only failures of a link that had reached READY count.
+    if (s_was_ready) {
+        s_was_ready = false;
+        if (++s_relink_fails >= 3) {
+            applog_note("cam relink failed x%d -> reboot", s_relink_fails);
+            vTaskDelay(pdMS_TO_TICKS(50));   // let the log flush
+            esp_restart();
+        }
+    }
 }
 
 static void handle_ble_evt(int ev, int status)

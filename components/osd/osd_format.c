@@ -64,6 +64,7 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
             if (!field_on(cfg, OSD_TOK_ST)) { continue; }
             const char *s = "----";
             if (cam->link != CAM_LINK_READY) { s = ""; }        // %wr carries CAM LOST
+            else if (cam->pre_record == TRIBOOL_TRUE) { s = "PRE"; }
             else if (cam->recording == TRIBOOL_TRUE)  { s = "REC"; }
             else if (cam->recording == TRIBOOL_FALSE) { s = "IDLE"; }
             else { s = ""; }                                     // unknown -> blank
@@ -159,6 +160,18 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
             if (!field_on(cfg, OSD_TOK_FB)) { continue; }
             static const char *bs[] = { "OK", "LOW", "CRIT", "" };
             len = app(out, out_cap, len, bs[fc->batt_state & 3]);
+        } else if (TOK2('s','p')) {                // ground speed (FC GPS), unit per cfg.osd.units
+            p++;
+            if (!field_on(cfg, OSD_TOK_SP) || !fc->gps_present || fc->gps.fix < 2) { continue; }
+            // cfg.osd.units: 0 = metric (km/h), 1 = imperial (mph)
+            if (cfg->osd.units) {
+                snprintf(tmp, sizeof(tmp), "%luMPH",
+                         (unsigned long)((fc->gps.spd_cm_s * 224u + 5000u) / 10000u));
+            } else {
+                snprintf(tmp, sizeof(tmp), "%luKMH",
+                         (unsigned long)((fc->gps.spd_cm_s * 36u + 500u) / 1000u));
+            }
+            len = app(out, out_cap, len, tmp);
         } else {
             // unknown token: emit literally
             if (len + 2 < out_cap) { out[len++] = '%'; out[len++] = a; out[len] = '\0'; }

@@ -16,6 +16,7 @@ typedef struct {
     uint8_t  addr[6];
 
     tribool_t recording;
+    tribool_t pre_record;      // camera armed but not yet capturing (DJI pre-rec); UNKNOWN elsewhere
     tribool_t busy;
     val_u8_t  battery_pct;
     val_u32_t sd_remaining_kb;

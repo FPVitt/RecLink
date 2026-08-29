@@ -5,6 +5,7 @@
 #include "led_internal.h"
 
 #include "monoclock.h"
+#include "cfg.h"
 #include "sdkconfig.h"
 
 #include "driver/gpio.h"
@@ -105,5 +106,17 @@ void led_service(void)
     default:                v = 0; break;
     }
     if (v) { rr = gg = bb = v; }
+
+#if CONFIG_BRIDGE_LED_WS2812
+    // cfg.led_brightness scales the WS2812 output (a plain GPIO LED is on/off
+    // only and cannot dim, so it is left untouched there).
+    const cfg_t *cfg = cfg_get();
+    uint8_t scale = cfg ? cfg->led_brightness : 128;
+    if (scale != 255) {
+        rr = (uint16_t)rr * scale / 255;
+        gg = (uint16_t)gg * scale / 255;
+        bb = (uint16_t)bb * scale / 255;
+    }
+#endif
     led_write(rr, gg, bb);
 }

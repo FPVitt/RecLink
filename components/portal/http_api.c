@@ -180,6 +180,12 @@ static esp_err_t h_status(httpd_req_t *r)
     crash_stats_t cr = rtcnv_get();
     snprintf(eb, sizeof(eb), "wdt_recov:%lu", (unsigned long)cr.wdt_recoveries);
     cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
+    snprintf(eb, sizeof(eb), "ble_notify_drops:%lu", (unsigned long)cam_notify_drops());
+    cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
+    snprintf(eb, sizeof(eb), "heap_free:%lu", (unsigned long)esp_get_free_heap_size());
+    cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
+    snprintf(eb, sizeof(eb), "heap_min:%lu", (unsigned long)esp_get_minimum_free_heap_size());
+    cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
     if (cr.last_disconnect[0]) { cJSON_AddItemToArray(errs, cJSON_CreateString(cr.last_disconnect)); }
 
     return send_json(r, j, NULL);
@@ -309,10 +315,19 @@ static esp_err_t h_clock_sync(httpd_req_t *r)
         httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"recording\"}");
         return ESP_OK;
     }
+    char why[64];
+    if (!ctrl_clock_gate_check(why, sizeof(why))) {
+        httpd_resp_set_status(r, "412 Precondition Failed");
+        cJSON *e = cJSON_CreateObject();
+        cJSON_AddBoolToObject(e, "ok", false);
+        cJSON_AddStringToObject(e, "error", why);
+        return send_json(r, e, NULL);
+    }
     char reason[64];
     ctrl_clock_force(reason, sizeof(reason));
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", true);
+    cJSON_AddNumberToObject(resp, "delta_ms", ctrl_clock_last_delta_ms());
     cJSON_AddStringToObject(resp, "action", "queued");
     return send_json(r, resp, NULL);
 }
@@ -321,6 +336,15 @@ static esp_err_t h_clock_sync(httpd_req_t *r)
 static esp_err_t h_identify(httpd_req_t *r)
 {
     led_identify(3000);
+    httpd_resp_sendstr(r, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+// Acknowledge the WDT_RECOVERED sticky flag (spec 3.4 flag table).
+static esp_err_t h_flags_ack(httpd_req_t *r)
+{
+    rtcnv_note_wdt_recovered_ack();
+    bridge_flag_clear(FLAG_WDT_RECOVERED);
     httpd_resp_sendstr(r, "{\"ok\":true}");
     return ESP_OK;
 }
@@ -512,6 +536,7 @@ void http_api_register(httpd_handle_t s)
         { "/api/camera/preset", HTTP_POST, h_cam_preset,  NULL },
         { "/api/camera/test",   HTTP_POST, h_cam_test,    NULL },
         { "/api/clock/sync",    HTTP_POST, h_clock_sync,  NULL },
+        { "/api/flags/ack",     HTTP_POST, h_flags_ack,   NULL },
         { "/api/identify",      HTTP_POST, h_identify,    NULL },
         { "/api/reboot",        HTTP_POST, h_reboot,      NULL },
         { "/api/ota",           HTTP_POST, h_ota,         NULL },

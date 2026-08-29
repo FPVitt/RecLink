@@ -11,14 +11,46 @@
 #include "portal.h"
 
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 static const char *TAG = "hk";
 
+// spec 12.1: after 60 s uptime the system is in steady state -- no code path
+// outside the vendor stacks should still be allocating. Latch the heap
+// low-water mark at that point and warn if it keeps sinking (a slow leak).
+static void heap_watch(void)
+{
+    static uint32_t baseline_lwm;      // 0 until latched at 60 s
+    static uint32_t warned_at;
+    static uint32_t last_log_ms;
+
+    uint32_t up = now_ms();
+    uint32_t lwm = (uint32_t)heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
+
+    if (!baseline_lwm) {
+        if (up >= 60000) {
+            baseline_lwm = warned_at = lwm;
+            ESP_LOGI(TAG, "steady-state heap low-water baseline: %lu B", (unsigned long)lwm);
+        }
+        return;
+    }
+    // Report each fresh 4 KB of regression, at most once every 10 s.
+    if (lwm + 4096 < warned_at && up - last_log_ms > 10000) {
+        last_log_ms = up;
+        warned_at = lwm;
+        ESP_LOGW(TAG, "heap low-water regressed: %lu B (baseline %lu) -- possible post-init alloc/leak",
+                 (unsigned long)lwm, (unsigned long)baseline_lwm);
+    }
+}
+
 static led_pattern_t pick_led(const fc_state_t *fc, const cam_state_t *cam)
 {
     if (portal_active())               { return LED_PORTAL; }
+    // Surface a watchdog-recovery reboot on the LED for the first few seconds
+    // after boot; the sticky flag itself stays until acked in the portal.
+    if (bridge_flag_get(FLAG_WDT_RECOVERED) && now_ms() < 8000) { return LED_FAULT; }
     if (cam->recording == TRIBOOL_TRUE) { return LED_RECORDING; }
     if (!fc->link_up)                  { return LED_FC_DOWN; }
     switch (cam->link) {
@@ -67,6 +99,9 @@ static void hk_task(void *arg)
 
         // --- stats flush (<= 1 / 30 s) --------------------
         cfg_stats_flush();
+
+        // --- heap low-water watch (spec 12.1) ---------------
+        heap_watch();
 
         twdt_feed(WDT_HOUSEKEEPING);
         // 10 Hz: keeps the armed-edge -> portal_stop() latency ~100 ms

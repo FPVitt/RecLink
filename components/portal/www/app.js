@@ -157,7 +157,11 @@ async function poll() {
             ? cs.profile.v + (cs.bit_depth.valid ? ' '+cs.bit_depth.v+'bit' : '')
             : '--');
     $('#aux').textContent = (m.aux||[]).map((v,i)=>`ch${i}:${v}`).join('  ');
-    $('#flags').innerHTML = (s.flags||[]).map(f => `<span>${f}</span>`).join('');
+    $('#flags').innerHTML = (s.flags||[]).map(f =>
+      f === 'WDT_RECOVERED' ? `<span class="ackflag" title="click to acknowledge">${f} ✕</span>` : `<span>${f}</span>`
+    ).join('');
+    const af = $('#flags').querySelector('.ackflag');
+    if (af) af.onclick = async () => { await post('/api/flags/ack'); poll(); };
     if (s.clock) {
       const ls = s.clock.last_sync;
       $('#clocklive').textContent =

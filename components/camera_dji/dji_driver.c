@@ -59,12 +59,22 @@ static duml_reasm_t rz;
 #define DJI_CMD_NO_RESPONSE   0x00
 #define DJI_CMD_RESPONSE_OPT  0x01
 #define DJI_CMD_WAIT_RESULT   0x02
+#define DJI_ACK_NO_RESPONSE   0x20   // response frame, no reply expected
 
 static void tx(uint8_t cmd_type, uint8_t cmd_set, uint8_t cmd_id, const uint8_t *pl, uint16_t n)
 {
     if (!h_write) { return; }
     uint8_t frame[DUML_MAX_FRAME];
     size_t len = duml_build(frame, sizeof(frame), cmd_type, s_seq++, cmd_set, cmd_id, pl, n);
+    if (len) { ble_central_write(h_write, frame, len, false); }
+}
+
+// ACK a camera-initiated command frame -- must echo the camera's SEQ.
+static void tx_ack(uint16_t seq, uint8_t cmd_set, uint8_t cmd_id, const uint8_t *pl, uint16_t n)
+{
+    if (!h_write) { return; }
+    uint8_t frame[DUML_MAX_FRAME];
+    size_t len = duml_build(frame, sizeof(frame), DJI_ACK_NO_RESPONSE, seq, cmd_set, cmd_id, pl, n);
     if (len) { ble_central_write(h_write, frame, len, false); }
 }
 
@@ -116,14 +126,41 @@ static void send_subscribe(void)
 }
 
 // ---- ops ---------------------------------------------------
+// §7.4 record fallback: some Osmo firmware ignores the 1D03 record-control cmd
+// in certain modes. If the same record request is re-issued while still
+// unconfirmed (ctrl_task retry), also press the physical Record key.
+static bool     s_rec_want;
+static bool     s_rec_confirmed;
+static uint32_t s_rec_sent_ms;
+
+static void dji_key_report_record(void)
+{
+    // verified: key_report_command_frame + enums_logic.h KEY_CODE (Osmo Record
+    // hard-key = 0x01), mode 0x01 report-event, key_value 0x00 short-press
+    // @ 92fe23e5. Record key is a toggle -- no start/stop param.
+    uint8_t p[4] = { 0x01, 0x01, 0x00, 0x00 };
+    tx(DJI_CMD_RESPONSE_OPT, CS_COMMON, ID_KEY_REPORT, p, sizeof(p));
+    applog_note("dji record via key-report fallback");
+}
+
 static esp_err_t dji_record(bool start)
 {
+    uint32_t now = now_ms();
+    bool retry = (s_rec_want == start) && !s_rec_confirmed &&
+                 s_rec_sent_ms && (now - s_rec_sent_ms < 4000);
+
     uint8_t p[9]; memset(p, 0, sizeof(p));
     put_u32(p, s_device_id);
     p[4] = start ? 0 : 1;             // record_ctrl: 0 start, 1 stop
     // verified: record_control_command_frame (device_id u32 | record_ctrl u8 |
     // reserved u8[4]) @ 92fe23e5; cmd_type CMD_RESPONSE_OR_NOT (command_logic.c).
     tx(DJI_CMD_RESPONSE_OPT, CS_CAMERA, ID_REC, p, sizeof(p));
+
+    if (retry) { dji_key_report_record(); }   // §7.4 fallback on unconfirmed retry
+
+    s_rec_want = start;
+    s_rec_confirmed = false;
+    s_rec_sent_ms = now ? now : 1;
     return ESP_OK;
 }
 
@@ -252,6 +289,8 @@ static void dji_link_down(void)
 {
     h_write = vh_notify = 0;
     s_handshaked = false;
+    s_rec_sent_ms = 0;
+    s_rec_confirmed = false;
 }
 
 // ---- status push parsing (spec 7.5) --------------------
@@ -301,6 +340,7 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
     tribool_t rec = (camera_status == 3 && is_video) ? TRIBOOL_TRUE :
                     (camera_status == 5 ? TRIBOOL_TRUE : TRIBOOL_FALSE);
     s->recording = rec;
+    s->pre_record = (camera_status == 5) ? TRIBOOL_TRUE : TRIBOOL_FALSE;   // spec 7.5 / %st PRE
 
     s->rec_elapsed_s.valid = true; s->rec_elapsed_s.v = record_time;
     s->rec_remaining_s.valid = true; s->rec_remaining_s.v = remain_time;
@@ -318,29 +358,63 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
     if (CB->on_state_dirty) { CB->on_state_dirty(); }   // commits + wakes osd_task
 }
 
+static void dji_go_ready(void)
+{
+    s_handshaked = true;
+    send_subscribe();
+    if (s_first_pair && CB->on_paired) {
+        const cam_state_t *s = cam_scratch();
+        CB->on_paired(s->addr, s->name[0] ? s->name : "DJI Osmo", s_device_id);
+        s_first_pair = false;
+    }
+    if (CB->on_link_state) { CB->on_link_state(CAM_LINK_READY); }
+}
+
 static void handle_msg(const duml_msg_t *m)
 {
     if (m->cmd_set == CS_COMMON && m->cmd_id == ID_CONNECT) {
-        // resp: device_id u32, ret_code u8
-        uint8_t ret = (m->payload_len >= 5) ? m->payload[4] : 0xFF;
-        ESP_LOGI(TAG, "connect resp ret=%u", ret);
-        if (ret == 0) {
-            s_handshaked = true;
-            send_subscribe();
-            if (s_first_pair && CB->on_paired) {
-                const cam_state_t *s = cam_scratch();
-                CB->on_paired(s->addr, s->name[0] ? s->name : "DJI Osmo", s_device_id);
-                s_first_pair = false;
-            }
-            if (CB->on_link_state) { CB->on_link_state(CAM_LINK_READY); }
+        bool is_response = (m->cmd_type & 0x20) != 0;
+
+        if (is_response) {
+            // [device_id u32][ret_code u8]. On first pair this only means the
+            // camera accepted our request -- the camera then sends its own
+            // COMMAND frame once the user confirms on-screen (verify_mode 2).
+            uint8_t ret = (m->payload_len >= 5) ? m->payload[4] : 0xFF;
+            ESP_LOGI(TAG, "connect resp ret=%u (first_pair=%d)", ret, s_first_pair);
+            if (ret != 0) { applog_note("dji connect rejected ret=%u", ret); return; }
+            if (!s_first_pair) { dji_go_ready(); }
+            // first pair: wait for the camera's verify command frame below
+            return;
+        }
+
+        // Camera-initiated COMMAND frame: connection_request_command_frame.
+        // verify_mode @ 26 (must be 2 = result), verify_data u16 LE @ 27
+        // (0 = user confirmed), reserved[0] @ 29. Verified: connect_logic.c
+        // @ 92fe23e5.
+        if (m->payload_len < 30) { applog_note("dji: short verify frame"); return; }
+        uint8_t  verify_mode = m->payload[26];
+        uint16_t verify_data = m->payload[27] | ((uint16_t)m->payload[28] << 8);
+        uint8_t  cam_reserved = m->payload[29];
+        ESP_LOGI(TAG, "dji verify: mode=%u data=%u", verify_mode, verify_data);
+
+        if (verify_mode == 2 && verify_data == 0) {
+            uint8_t rsp[9] = {0};
+            rsp[0] = s_device_id; rsp[1] = s_device_id >> 8;
+            rsp[2] = s_device_id >> 16; rsp[3] = s_device_id >> 24;
+            rsp[4] = 0;                          // ret_code OK
+            rsp[5] = cam_reserved;               // echo reserved[0]
+            tx_ack(m->seq, CS_COMMON, ID_CONNECT, rsp, sizeof(rsp));
+            applog_note("dji pairing confirmed");
+            dji_go_ready();
         } else {
-            applog_note("dji handshake rejected ret=%u", ret);
-            // stay SYNCING -> cam_task CONNECT_TIMEOUT_MS will rescan
+            applog_note("dji pairing NOT confirmed (mode=%u data=%u)", verify_mode, verify_data);
+            // stay SYNCING -> cam_task rescans on CONNECT_TIMEOUT_MS
         }
     } else if (m->cmd_set == CS_CAMERA && m->cmd_id == ID_STATUS_PUSH) {
         parse_status_push(m->payload, m->payload_len);
     } else if (m->cmd_set == CS_CAMERA && (m->cmd_id == ID_REC || m->cmd_id == ID_MODE)) {
         uint8_t ret = m->payload_len ? m->payload[0] : 0xFF;
+        if (m->cmd_id == ID_REC && ret == 0) { s_rec_confirmed = true; }
         if (CB->on_ack) {
             CB->on_ack(m->cmd_id == ID_REC ? CAM_OP_RECORD_START : CAM_OP_SELECT_PRESET, ret == 0);
         }

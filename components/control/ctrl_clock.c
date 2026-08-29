@@ -4,6 +4,7 @@
 #include "camera.h"
 #include "applog.h"
 #include "osd.h"
+#include "monoclock.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,6 +75,19 @@ int ctrl_clock_force(char *reason, size_t rlen)
     if (reason) { snprintf(reason, rlen, "queued"); }
     return 0;
 }
+
+// Portal /api/clock/sync 412 support: evaluate the gate now, off the ctrl_task
+// tick, from a freshly sampled context. Best-effort -- the authoritative gate
+// still re-runs in ctrl_clock_tick().
+bool ctrl_clock_gate_check(char *why, size_t wl)
+{
+    ctrl_ctx_t c = { .cfg = cfg_get(), .now_ms = now_ms() };
+    fc_state_get(&c.fc);
+    cam_state_get(&c.cam);
+    return gate_ok(&c, true, why, wl);
+}
+
+int32_t ctrl_clock_last_delta_ms(void) { return S.last_delta_ms; }
 
 static bool is_dji(const ctrl_ctx_t *c) { return strcmp(c->cfg->camera.brand, "dji") == 0; }
 
