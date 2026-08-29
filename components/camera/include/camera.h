@@ -65,6 +65,7 @@ typedef struct {
     esp_err_t (*hilight)(void);
 
     esp_err_t (*tick_1s)(void);
+    esp_err_t (*refresh)(void);                 // re-pull all state (optional)
 
     // GATT notification fan-in (cam_task routes every notify here).
     void (*on_notify)(uint16_t attr_handle, const uint8_t *data, uint16_t len);
@@ -90,6 +91,7 @@ esp_err_t cam_submit_gps(const gps_fix_t *fix, int64_t utc_ms);
 // Portal actions.
 esp_err_t cam_pair_begin(const char *brand);   // scan-and-bond
 esp_err_t cam_forget(void);                    // delete bond + cfg + go IDLE
+esp_err_t cam_refresh(void);                    // portal: re-pull all camera state
 void      cam_erase_all_bonds(void);           // factory reset path (spec 11.0)
 bool      cam_reconcile_bonds(bool erase_orphan_bond);  // boot; -> FLAG_REPAIR_NEEDED
 

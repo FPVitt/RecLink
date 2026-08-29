@@ -60,6 +60,8 @@ static uint32_t rec_start_ms;
 static uint8_t  getall_retry;
 static uint32_t last_getall_ms;      // get-all-settings poll
 static uint32_t last_status_poll_ms; // get-all-status poll
+
+static void gp_pull_all(void);
 static bool     want_record_ack;
 static bool     want_record_target;
 
@@ -230,18 +232,7 @@ static esp_err_t gp_link_up(bool first_pair)
     last_getall_ms = now_ms();
     last_status_poll_ms = now_ms();
 
-    // Register for async updates -- one ID per request (the proven tutorial form;
-    // multi-ID register is not documented). If the camera honours these we get
-    // instant pushes; if not, the poll in gp_tick_1s covers it (~2-5 s).
-    static const uint8_t reg_st[]  = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
-                                       ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S,
-                                       ST_SD_STATUS, ST_ACTIVE_PRESET };
-    static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_LENS };
-    for (unsigned i = 0; i < sizeof(reg_st); i++)  { uint8_t b[2] = { 0x53, reg_st[i] };  wr(h_qry, b, 2); }
-    for (unsigned i = 0; i < sizeof(reg_set); i++) { uint8_t b[2] = { 0x52, reg_set[i] }; wr(h_qry, b, 2); }
-
-    uint8_t getall_st[1]  = { 0x13 }; wr(h_qry, getall_st, 1);
-    uint8_t getall_set[1] = { 0x12 }; wr(h_qry, getall_set, 1);
+    gp_pull_all();
 
     applog_note("gopro link up%s", first_pair ? " (first pair)" : "");
     if (first_pair && CB->on_paired) {
@@ -258,6 +249,30 @@ static void gp_link_down(void)
 {
     h_cmd = h_set = h_qry = 0;
     want_record_ack = false;
+}
+
+// Register for async updates (one ID per request -- the documented form) and
+// pull every value now. Shared by link-up and the portal "refresh" button.
+static void gp_pull_all(void)
+{
+    static const uint8_t reg_st[]  = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
+                                       ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S,
+                                       ST_SD_STATUS, ST_ACTIVE_PRESET };
+    static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_LENS };
+    for (unsigned i = 0; i < sizeof(reg_st); i++)  { uint8_t b[2] = { 0x53, reg_st[i] };  wr(h_qry, b, 2); }
+    for (unsigned i = 0; i < sizeof(reg_set); i++) { uint8_t b[2] = { 0x52, reg_set[i] }; wr(h_qry, b, 2); }
+    uint8_t g13[1] = { 0x13 }; wr(h_qry, g13, 1);
+    uint8_t g12[1] = { 0x12 }; wr(h_qry, g12, 1);
+}
+
+static esp_err_t gp_refresh(void)
+{
+    if (!h_qry) { return ESP_ERR_INVALID_STATE; }
+    applog_note("gopro: manual refresh");
+    gopro_reasm_reset(&rz_qry);
+    last_getall_ms = last_status_poll_ms = now_ms();
+    gp_pull_all();
+    return ESP_OK;
 }
 
 // ---- notification parsing -----------------------------------
@@ -473,6 +488,7 @@ const camera_driver_t *gopro_driver(void)
         .push_gps = gp_push_gps,
         .hilight = gp_hilight,
         .tick_1s = gp_tick_1s,
+        .refresh = gp_refresh,
         .on_notify = gp_on_notify,
     };
     return &d;

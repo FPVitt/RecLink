@@ -196,6 +196,7 @@ esp_err_t cam_forget(void)
     iq_item_t it = { .kind = IQ_CMD_FORGET };
     return xQueueSend(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE ? ESP_OK : ESP_FAIL;
 }
+esp_err_t cam_refresh(void) { return cam_submit(CAM_OP_REFRESH, 0); }
 QueueHandle_t cam_events(void) { return s_evq; }
 
 void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
@@ -252,6 +253,9 @@ static void exec_cmd(const cam_cmd_t *c)
         s_drv->push_gps(&s_gps_for_push, c->arg64);
         break;
     case CAM_OP_HILIGHT: s_drv->hilight(); break;
+    case CAM_OP_REFRESH:
+        if (s_drv->refresh) { s_drv->refresh(); }
+        break;
     }
 }
 

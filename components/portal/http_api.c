@@ -253,6 +253,14 @@ static esp_err_t h_cam_forget(httpd_req_t *r)
     return send_json(r, resp, NULL);
 }
 
+static esp_err_t h_cam_refresh(httpd_req_t *r)
+{
+    cam_refresh();
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    return send_json(r, resp, NULL);
+}
+
 static void test_stop_cb(void *arg) { (void)arg; cam_submit(CAM_OP_RECORD_STOP, 0); }
 static esp_err_t h_cam_test(httpd_req_t *r)
 {
@@ -410,6 +418,7 @@ void http_api_register(httpd_handle_t s)
         { "/api/config",        HTTP_POST, h_config_post, NULL },
         { "/api/camera/pair",   HTTP_POST, h_cam_pair,    NULL },
         { "/api/camera/forget", HTTP_POST, h_cam_forget,  NULL },
+        { "/api/camera/refresh", HTTP_POST, h_cam_refresh, NULL },
         { "/api/camera/test",   HTTP_POST, h_cam_test,    NULL },
         { "/api/clock/sync",    HTTP_POST, h_clock_sync,  NULL },
         { "/api/identify",      HTTP_POST, h_identify,    NULL },

@@ -73,4 +73,5 @@ typedef enum {
     CAM_OP_GET_DATETIME,
     CAM_OP_PUSH_GPS,
     CAM_OP_HILIGHT,
+    CAM_OP_REFRESH,        // re-pull all camera state (portal "refresh" button)
 } cam_op_t;
