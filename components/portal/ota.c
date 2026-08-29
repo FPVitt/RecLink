@@ -36,3 +36,23 @@ esp_err_t ota_stream_finish(void)
     if (e == ESP_OK) { ESP_LOGW(TAG, "ota complete -- reboot to apply"); }
     return e;
 }
+
+void ota_stream_abort(void)
+{
+    if (!s_active) { return; }
+    s_active = false;
+    esp_ota_abort(s_handle);
+    ESP_LOGW(TAG, "ota aborted");
+}
+
+// Called once from app_main after a clean boot: confirms the running image is
+// good so the bootloader won't roll it back (CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE).
+void portal_ota_mark_valid(void)
+{
+    const esp_partition_t *run = esp_ota_get_running_partition();
+    esp_ota_img_states_t st;
+    if (esp_ota_get_state_partition(run, &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(TAG, "running image marked valid (%s)", run->label);
+    }
+}

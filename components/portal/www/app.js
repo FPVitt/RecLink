@@ -118,8 +118,12 @@ async function poll() {
       row('Camera', `${c.brand||'-'} ${c.link} ${c.name||''} ${c.rssi||''}dBm`) +
       row('Recording', cs.recording + (cs.elapsed_s!=null?' '+cs.elapsed_s+'s':'')) +
       row('Battery', cs.battery_pct.valid ? cs.battery_pct.v + '%' : '--') +
-      row('SD', cs.sd_remaining_kb.valid ? (cs.sd_remaining_kb.v/1024/1024).toFixed(1)+' GB' : '--') +
-      row('Mode/Res', `${cs.mode.v||''} ${cs.resolution.v||''}${cs.fps.v||''}`);
+      row('SD', cs.sd_remaining_kb.valid ? (cs.sd_remaining_kb.v/1024/1024).toFixed(1)+' GB'
+                : (cs.sd_missing ? 'NO CARD' : cs.sd_full ? 'FULL' : '--')) +
+      row('Mode', cs.mode.valid ? cs.mode.v : '--') +
+      row('Res', cs.resolution.valid
+            ? `${cs.resolution.v}${cs.fps.v||''}${cs.aspect.valid?' '+cs.aspect.v:''}`
+            : '--');
     $('#aux').textContent = (m.aux||[]).map((v,i)=>`ch${i}:${v}`).join('  ');
     $('#flags').innerHTML = (s.flags||[]).map(f => `<span>${f}</span>`).join('');
     if (s.clock) {

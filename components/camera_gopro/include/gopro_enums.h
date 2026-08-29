@@ -5,5 +5,6 @@
 #include <stdint.h>
 
 const char *gopro_resolution_str(uint8_t v);   // setting 2
+const char *gopro_aspect_str(uint8_t v);       // setting 2 -> "16:9"/"4:3"/"8:7"/"9:16"
 const char *gopro_fps_str(uint8_t v);          // setting 3
 const char *gopro_lens_str(uint8_t v);         // setting 121

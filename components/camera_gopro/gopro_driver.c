@@ -46,7 +46,8 @@ static const ble_uuid128_t U_QRY_RSP    = GP_UUID(0x77);
 //   70 INTERNAL_BATTERY_PERCENTAGE
 //   setting 2 VIDEO_RESOLUTION  3 FRAMES_PER_SECOND  121 VIDEO_LENS
 enum { ST_BATT_BARS = 2, ST_HOT = 6, ST_BUSY = 8, ST_ENCODING = 10,
-       ST_SD_STATUS = 33, ST_REMAIN_VIDEO_S = 35, ST_SD_REMAIN_KB = 54, ST_BATT_PCT = 70 };
+       ST_SD_STATUS = 33, ST_REMAIN_VIDEO_S = 35, ST_SD_REMAIN_KB = 54, ST_BATT_PCT = 70,
+       ST_ACTIVE_PRESET = 89 };   // Current Preset ID (VERIFY.md GOPRO-STATUS-89)
 enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_LENS = 121 };
 
 // ---- driver state ---------------------------------------------------
@@ -56,6 +57,8 @@ static uint16_t vh_cmd_rsp, vh_set_rsp, vh_qry_rsp;
 static gopro_reasm_t rz_cmd, rz_set, rz_qry;
 static uint8_t  keepalive_div;
 static uint32_t rec_start_ms;
+static uint8_t  getall_retry;    // re-poll get-all until slow-changing fields
+static uint32_t last_getall_ms;  // (resolution/fps/SD-total/preset) are populated
 static bool     want_record_ack;
 static bool     want_record_target;
 
@@ -157,10 +160,6 @@ static esp_err_t gp_hilight(void)
     return ESP_OK;
 }
 
-static uint8_t  getall_retry;      // re-poll get-all until we actually have the
-static uint32_t last_getall_ms;    // slow-changing fields (they only arrive in
-                                   // the big initial burst, which can be lost)
-
 static esp_err_t gp_tick_1s(void)
 {
     // keepalive every 3 s (spec 6.4: must be < 10 s).
@@ -170,11 +169,13 @@ static esp_err_t gp_tick_1s(void)
         wr(h_set, b, 3);
     }
 
-    // Re-request get-all-statuses / get-all-settings if resolution or SD-total
-    // are still missing (up to ~6 tries at 4 s spacing).
+    // Re-request get-all if the slow-changing fields are still missing (up to
+    // ~6 tries at 4 s). In a non-video mode resolution/fps are intentionally
+    // blank, so only require them when mode says video.
     cam_state_t *cs0 = cam_scratch();
-    bool have_core = cs0->resolution.valid && cs0->framerate.valid &&
-                     cs0->sd_remaining_kb.valid;
+    bool video = !cs0->mode.valid || cs0->mode.v == 0;
+    bool have_core = cs0->sd_remaining_kb.valid && cs0->mode.valid &&
+                     (!video || (cs0->resolution.valid && cs0->framerate.valid));
     if (!have_core && getall_retry < 6 && (now_ms() - last_getall_ms) > 4000) {
         last_getall_ms = now_ms();
         getall_retry++;
@@ -228,7 +229,8 @@ static esp_err_t gp_link_up(bool first_pair)
 
     // Register async status + setting updates, then pull initial values.
     uint8_t regs[] = { 0x53, ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
-                       ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S, ST_SD_STATUS };
+                       ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S, ST_SD_STATUS,
+                       ST_ACTIVE_PRESET };
     wr(h_qry, regs, sizeof(regs));
     uint8_t regset[] = { 0x52, SET_RESOLUTION, SET_FPS, SET_LENS };
     wr(h_qry, regset, sizeof(regset));
@@ -310,6 +312,29 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
         s->sd_missing = (v[0] == 2);
         s->sd_full    = (v[0] == 1);
         break;
+    case ST_ACTIVE_PRESET: {
+        // Preset ID high bits = group: 0x0000xxxx video, 0x0001xxxx photo,
+        // 0x0002xxxx timelapse (VERIFY.md GOPRO-STATUS-89). GoPro "mode" only
+        // exists as the preset group -- switching to Photo does not change the
+        // video-resolution setting, so blank res/fps when not in a video mode.
+        uint32_t pid = be(v, n);
+        uint8_t grp = (pid >> 16) & 0xFF;
+        if (s->mode.valid && s->mode.v != grp) {
+            getall_retry = 0;           // re-poll settings for the new mode
+            last_getall_ms = now_ms();
+        }
+        s->mode.valid = true; s->mode.v = grp;
+        const char *mn = grp == 0 ? "VID" : grp == 1 ? "PHOTO" : grp == 2 ? "TLAPSE" : "";
+        val_str_set(&s->mode_name, mn);
+        if (!*mn) { s->mode_name.valid = false; }
+        if (grp != 0) {
+            s->resolution.valid = false;
+            s->framerate.valid = false;
+            s->aspect.valid = false;
+        }
+        ESP_LOGI(TAG, "active preset 0x%08lx -> %s", (unsigned long)pid, mn);
+        break;
+    }
     default: break;
     }
 }
@@ -321,6 +346,8 @@ static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t 
     case SET_RESOLUTION:
         val_str_set(&s->resolution, gopro_resolution_str(v[0]));
         if (!*s->resolution.v) { s->resolution.valid = false; }
+        val_str_set(&s->aspect, gopro_aspect_str(v[0]));
+        if (!*s->aspect.v) { s->aspect.valid = false; }
         break;
     case SET_FPS:
         val_str_set(&s->framerate, gopro_fps_str(v[0]));
@@ -393,18 +420,25 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
     if (handle == vh_cmd_rsp) {
         if (gopro_reasm_feed(&rz_cmd, data, len, &pl, &pll)) { parse_cmd_rsp(pl, pll); }
     } else if (handle == vh_set_rsp) {
-        if (gopro_reasm_feed(&rz_set, data, len, &pl, &pll) && pll >= 2) {
-            ESP_LOGI(TAG, "setting rsp id=%02x st=%02x len=%u", pl[0], pl[1], pll);
-            walk_tuples(pl + 2, pll - 2, false);
-        }
+        // Response to our keepalive / any setting write: [id][status]. Nothing
+        // to consume (we never write settings we care about).
+        (void)gopro_reasm_feed(&rz_set, data, len, &pl, &pll);
     } else if (handle == vh_qry_rsp) {
         if (gopro_reasm_feed(&rz_qry, data, len, &pl, &pll) && pll >= 2) {
             uint8_t qid = pl[0];
-            // 0x12 get-all-settings / 0x52 setting push -> settings; else statuses
-            bool is_status = !(qid == 0x12 || qid == 0x52 || qid == 0x92);
-            ESP_LOGI(TAG, "query rsp id=%02x st=%02x len=%u (%s)",
-                     qid, pl[1], pll, is_status ? "status" : "setting");
-            walk_tuples(pl + 2, pll - 2, is_status);
+            // Query IDs (Open GoPro): 0x12 get-all-settings, 0x13 get-all-status,
+            // 0x52/0x53 register (response echoes current values), 0x92/0x93
+            // async push on change. Settings: 0x12 / 0x52 / 0x92; else statuses.
+            bool is_setting = (qid == 0x12 || qid == 0x52 || qid == 0x92);
+            // Responses to 0x12/0x13/0x52/0x53 carry a status byte after the id;
+            // async pushes (0x92/0x93) do NOT -- skipping 2 there misaligned
+            // every live change into garbage (mode/res never updated).
+            bool has_status = (qid == 0x12 || qid == 0x13 || qid == 0x52 || qid == 0x53);
+            uint16_t off = has_status ? 2 : 1;
+            ESP_LOGI(TAG, "query id=%02x len=%u (%s%s)",
+                     qid, pll, is_setting ? "setting" : "status",
+                     has_status ? "" : ", async");
+            if (pll > off) { walk_tuples(pl + off, pll - off, !is_setting); }
         }
     } else {
         ESP_LOGD(TAG, "notify on unknown handle %u len %u", handle, len);

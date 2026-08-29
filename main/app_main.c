@@ -87,5 +87,9 @@ void app_main(void)
                        (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED && !fc.armed);
     if (want_portal && !fc.armed) { portal_start(); }
 
+    // init got this far cleanly -> tell the bootloader this image is good, so an
+    // OTA-installed build isn't rolled back on the next reboot.
+    portal_ota_mark_valid();
+
     ESP_LOGI(TAG, "init complete (%lu ms)", (unsigned long)now_ms());
 }

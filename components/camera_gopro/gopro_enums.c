@@ -44,6 +44,28 @@ const char *gopro_resolution_str(uint8_t v)
     }
 }
 
+// Aspect ratio implied by the resolution code (from the enum names above).
+const char *gopro_aspect_str(uint8_t v)
+{
+    switch (v) {
+    case 6: case 18: case 25: case 27: case 111: case 112: case 113:
+        return "4:3";
+    case 26: case 28: case 107: case 108:
+        return "8:7";
+    case 109: case 110:
+        return "9:16";
+    case 35: case 36:
+        return "21:9";
+    case 37:
+        return "1:1";
+    case 1: case 4: case 7: case 9: case 12: case 21: case 24: case 31:
+    case 38: case 100:
+        return "16:9";
+    default:
+        return "";
+    }
+}
+
 const char *gopro_fps_str(uint8_t v)
 {
     switch (v) {

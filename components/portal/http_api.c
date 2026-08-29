@@ -154,8 +154,13 @@ static esp_err_t h_status(httpd_req_t *r)
       cJSON_AddStringToObject(o, "v", cam.resolution.v); cJSON_AddBoolToObject(o, "valid", cam.resolution.valid); }
     { cJSON *o = cJSON_AddObjectToObject(cs, "fps");
       cJSON_AddStringToObject(o, "v", cam.framerate.v); cJSON_AddBoolToObject(o, "valid", cam.framerate.valid); }
+    { cJSON *o = cJSON_AddObjectToObject(cs, "aspect");
+      cJSON_AddStringToObject(o, "v", cam.aspect.v); cJSON_AddBoolToObject(o, "valid", cam.aspect.valid); }
     { cJSON *o = cJSON_AddObjectToObject(cs, "mode");
       cJSON_AddStringToObject(o, "v", cam.mode_name.v); cJSON_AddBoolToObject(o, "valid", cam.mode_name.valid); }
+    cJSON_AddBoolToObject(cs, "sd_missing", cam.sd_missing);
+    cJSON_AddBoolToObject(cs, "sd_full", cam.sd_full);
+    cJSON_AddBoolToObject(cs, "hot", cam.hot);
     #undef VU
 
     cJSON *wifi = cJSON_AddObjectToObject(j, "wifi");
@@ -319,31 +324,61 @@ static esp_err_t h_msp_scan(httpd_req_t *r)
     return send_json(r, j, NULL);
 }
 
+#define OTA_FAIL(code, msg) do { \
+        ota_stream_abort(); \
+        httpd_resp_set_status(r, code); \
+        httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"" msg "\"}"); \
+        return ESP_OK; } while (0)
+
 static esp_err_t h_ota(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
-    if (ota_stream_begin() != ESP_OK) {
-        httpd_resp_set_status(r, "500 Internal Server Error");
-        httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"ota_begin\"}");
+    if (r->content_len < 65536) {
+        httpd_resp_set_status(r, "400 Bad Request");
+        httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"too small -- upload build/fc_cam_bridge.bin\"}");
         return ESP_OK;
     }
+    if (ota_stream_begin() != ESP_OK) { OTA_FAIL("500 Internal Server Error", "ota_begin"); }
+
     char chunk[1024];
-    int remaining = r->content_len;
-    // NOTE: expects a raw firmware body (not multipart) for simplicity; the
-    // portal JS strips the multipart wrapper client-side. VERIFY.md PORTAL-OTA.
+    int  remaining = r->content_len;
+    bool started = false;          // seen the ESP image magic 0xE9 yet
+    size_t written = 0;
+
     while (remaining > 0) {
-        int n = httpd_req_recv(r, chunk, sizeof(chunk) < (size_t)remaining ? sizeof(chunk) : (size_t)remaining);
-        if (n <= 0) { ota_stream_finish(); httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false}"); return ESP_OK; }
-        if (ota_stream_write(chunk, n) != ESP_OK) {
-            httpd_resp_set_status(r, "500 Internal Server Error");
-            httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"write\"}");
-            return ESP_OK;
-        }
+        int want = sizeof(chunk) < (size_t)remaining ? (int)sizeof(chunk) : remaining;
+        int n = httpd_req_recv(r, chunk, want);
+        if (n == HTTPD_SOCK_ERR_TIMEOUT) { continue; }
+        if (n <= 0) { OTA_FAIL("400 Bad Request", "recv"); }
         remaining -= n;
+
+        const char *p = chunk;
+        int m = n;
+        if (!started) {
+            // Tolerate a multipart/form-data wrapper: skip to the image magic.
+            const char *e9 = memchr(chunk, 0xE9, n);
+            if (!e9) { continue; }          // still in the wrapper header
+            started = true;
+            m = n - (int)(e9 - chunk);
+            p = e9;
+        }
+        if (ota_stream_write(p, m) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "write"); }
+        written += m;
     }
+    if (!started || written < 65536) { OTA_FAIL("400 Bad Request", "no valid image found"); }
+
     esp_err_t e = ota_stream_finish();
-    httpd_resp_sendstr(r, e == ESP_OK ? "{\"ok\":true,\"rebooting\":true}" : "{\"ok\":false}");
-    if (e == ESP_OK) { vTaskDelay(pdMS_TO_TICKS(400)); esp_restart(); }
+    if (e != ESP_OK) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "{\"ok\":false,\"error\":\"%s\"}", esp_err_to_name(e));
+        httpd_resp_set_status(r, "500 Internal Server Error");
+        httpd_resp_sendstr(r, msg);
+        return ESP_OK;
+    }
+    ESP_LOGW("api", "OTA ok (%u bytes) -- rebooting", (unsigned)written);
+    httpd_resp_sendstr(r, "{\"ok\":true,\"rebooting\":true}");
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
     return ESP_OK;
 }
 

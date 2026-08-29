@@ -92,6 +92,7 @@ static void invalidate_cam_values(void)   // spec 8.5 step 1
     s_cs.rec_remaining_s.valid = false;
     s_cs.resolution.valid = false;
     s_cs.framerate.valid = false;
+    s_cs.aspect.valid = false;
     s_cs.lens.valid = false;
     s_cs.mode.valid = false;
     s_cs.mode_name.valid = false;
