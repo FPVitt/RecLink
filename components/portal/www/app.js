@@ -92,6 +92,10 @@ const post = (u, body) => fetch(u, body ? {method:'POST',headers:{'Content-Type'
                                         : {method:'POST'}).then(r => r.json()).catch(()=>({ok:false}));
 $$('[data-pair]').forEach(b => b.onclick = async () => { msg(await post('/api/camera/pair',{brand:b.dataset.pair}).then(r=>r.ok?'pairing... put camera in pairing mode':'failed')); });
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera...' : 'failed');
+$$('[data-preset]').forEach(b => b.onclick = async () => {
+  const r = await post('/api/camera/preset', {slot: +b.dataset.preset});
+  msg(r.ok ? ('applied band ' + b.dataset.preset) : ('failed: ' + (r.error||'')));
+});
 $('#camtest').onclick = async () => msg((await post('/api/camera/test')).ok ? 'recording 3s' : 'failed');
 $('#camforget').onclick = async () => { if (confirm('Forget the paired camera?')) msg((await post('/api/camera/forget')).ok ? 'forgotten' : 'failed'); };
 $('#syncnow').onclick = async () => { const r = await post('/api/clock/sync'); msg(r.ok ? 'sync queued' : ('sync: ' + (r.error||'failed'))); };

@@ -262,6 +262,27 @@ static esp_err_t h_cam_refresh(httpd_req_t *r)
     return send_json(r, resp, NULL);
 }
 
+static esp_err_t h_cam_preset(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    char *body = read_body(r, 128);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *s = j ? cJSON_GetObjectItem(j, "slot") : NULL;
+    int slot = cJSON_IsNumber(s) ? (int)s->valuedouble : -1;
+    cJSON_Delete(j);
+
+    cJSON *resp = cJSON_CreateObject();
+    if (slot < 0 || slot > 2) {
+        cJSON_AddBoolToObject(resp, "ok", false);
+        cJSON_AddStringToObject(resp, "error", "slot must be 0..2");
+        return send_json(r, resp, "400 Bad Request");
+    }
+    cam_submit(CAM_OP_SELECT_PRESET, slot);
+    cJSON_AddBoolToObject(resp, "ok", true);
+    return send_json(r, resp, NULL);
+}
+
 static void test_stop_cb(void *arg) { (void)arg; cam_submit(CAM_OP_RECORD_STOP, 0); }
 static esp_err_t h_cam_test(httpd_req_t *r)
 {
@@ -456,6 +477,7 @@ void http_api_register(httpd_handle_t s)
         { "/api/camera/pair",   HTTP_POST, h_cam_pair,    NULL },
         { "/api/camera/forget", HTTP_POST, h_cam_forget,  NULL },
         { "/api/camera/refresh", HTTP_POST, h_cam_refresh, NULL },
+        { "/api/camera/preset", HTTP_POST, h_cam_preset,  NULL },
         { "/api/camera/test",   HTTP_POST, h_cam_test,    NULL },
         { "/api/clock/sync",    HTTP_POST, h_clock_sync,  NULL },
         { "/api/identify",      HTTP_POST, h_identify,    NULL },
