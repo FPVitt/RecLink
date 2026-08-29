@@ -1,4 +1,9 @@
 // portal_task.c -- SoftAP + HTTP + captive DNS lifecycle (spec 10.1).
+//
+// The Wi-Fi / esp_netif / httpd init chain needs ~6 KB of stack, so it MUST run
+// on portal_task's own stack -- never on the caller's (housekeeping's 2.5 KB
+// stack overflowed doing this). portal_start()/portal_stop() are now cheap:
+// they only create the task / signal it to tear down.
 #include "portal.h"
 #include "cfg.h"
 #include "platform.h"
@@ -17,23 +22,28 @@
 
 static const char *TAG = "portal";
 
-static bool          s_active;
+static TaskHandle_t   s_task;
+static volatile bool  s_want_stop;
+static volatile bool  s_running;         // AP + HTTP actually up
 static httpd_handle_t s_httpd;
 static esp_netif_t   *s_ap_netif;
 static uint32_t       s_opened_ms;
-static uint32_t       s_last_client_ms;
-static bool           s_long_prev;
+static volatile uint32_t s_last_client_ms;
+
+static StaticTask_t s_tcb;
+static StackType_t  s_stack[6144 / sizeof(StackType_t)];
 
 void http_api_register(httpd_handle_t server);   // http_api.c
 void captive_dns_start(void);
 void captive_dns_stop(void);
 void portal_note_client_activity(void) { s_last_client_ms = now_ms(); }
 
-static void wifi_ap_start(void)
+// ---- heavy bring-up, portal_task context only --------------------------
+static void wifi_ap_up(void)
 {
     const cfg_t *c = cfg_get();
-
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP);
+
     wifi_config_t wc = { 0 };
     if (c->wifi.ssid[0]) {
         strlcpy((char *)wc.ap.ssid, c->wifi.ssid, sizeof(wc.ap.ssid));
@@ -52,17 +62,14 @@ static void wifi_ap_start(void)
     applog_note("portal AP '%s' up", wc.ap.ssid);
 }
 
-void portal_start(void)
+static void portal_bringup(void)
 {
-    if (s_active) { return; }
-    ESP_LOGI(TAG, "opening portal");
-
     s_ap_netif = esp_netif_create_default_wifi_ap();
     wifi_init_config_t ic = WIFI_INIT_CONFIG_DEFAULT();
     esp_err_t e = esp_wifi_init(&ic);
     if (e != ESP_OK && e != ESP_ERR_WIFI_INIT_STATE) { ESP_LOGE(TAG, "wifi_init %s", esp_err_to_name(e)); }
 
-    wifi_ap_start();
+    wifi_ap_up();
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.max_uri_handlers = 24;
@@ -73,53 +80,88 @@ void portal_start(void)
         http_api_register(s_httpd);
     }
     captive_dns_start();
-
-    s_opened_ms = now_ms();
-    s_last_client_ms = s_opened_ms;
-    s_active = true;
-    led_request(LED_PORTAL);
 }
 
-void portal_stop(void)
+static void portal_teardown(void)
 {
-    if (!s_active) { return; }
-    ESP_LOGI(TAG, "closing portal");
     captive_dns_stop();
     if (s_httpd) { httpd_stop(s_httpd); s_httpd = NULL; }
     esp_wifi_stop();                 // spec 12.3: radio fully off
     esp_wifi_deinit();
     if (s_ap_netif) { esp_netif_destroy_default_wifi(s_ap_netif); s_ap_netif = NULL; }
-    s_active = false;
     applog_note("portal down");
 }
 
-bool portal_active(void) { return s_active; }
+static void portal_task(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(TAG, "portal task: bringing up AP + HTTP");
+    portal_bringup();
 
+    s_opened_ms = now_ms();
+    s_last_client_ms = s_opened_ms;
+    s_running = true;
+    led_request(LED_PORTAL);
+
+    while (!s_want_stop) {
+        // Woken immediately by portal_stop(); otherwise poll for the timeout.
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
+        if (s_want_stop) { break; }
+
+        const cfg_t *c = cfg_get();
+        uint32_t timeout_ms = (uint32_t)c->wifi.portal_timeout_min * 60u * 1000u;
+        uint32_t up   = now_ms() - s_opened_ms;
+        uint32_t idle = now_ms() - s_last_client_ms;
+        if (up > timeout_ms && idle > 60000) {
+            applog_note("portal idle timeout");
+            break;
+        }
+    }
+
+    portal_teardown();
+    s_running = false;
+    s_task = NULL;
+    vTaskDelete(NULL);
+}
+
+// ---- cheap public API (any task) ------------------------------------
+void portal_start(void)
+{
+    if (s_task) { return; }          // already running / starting
+    s_want_stop = false;
+    s_task = xTaskCreateStatic(portal_task, "portal_task",
+                               sizeof(s_stack) / sizeof(s_stack[0]),
+                               NULL, 5, s_stack, &s_tcb);
+}
+
+void portal_stop(void)
+{
+    TaskHandle_t t = s_task;
+    if (!t) { return; }
+    s_want_stop = true;
+    xTaskNotifyGive(t);              // wake it now -> fast teardown
+}
+
+bool portal_active(void) { return s_running || s_task != NULL; }
+
+// ---- supervision, called from housekeeping at ~10 Hz ------------------
 void portal_supervise(bool armed, bool trigger_open, bool button_long)
 {
+    static bool long_prev;
+
     // Hard rule (spec 13.3): never run the AP while armed.
     if (armed) {
-        if (s_active) { portal_stop(); }
-        s_long_prev = button_long;
+        if (s_task) { portal_stop(); }
+        long_prev = button_long;
         return;
     }
 
-    bool long_edge = button_long && !s_long_prev;
-    s_long_prev = button_long;
+    bool long_edge = button_long && !long_prev;
+    long_prev = button_long;
 
-    if (!s_active) {
+    if (!s_task) {
         if (trigger_open || long_edge) { portal_start(); }
-        return;
-    }
-
-    // long-press again = close early
-    if (long_edge) { portal_stop(); return; }
-
-    // auto-close after timeout unless a client was recently active (spec 10.1)
-    const cfg_t *c = cfg_get();
-    uint32_t timeout_ms = (uint32_t)c->wifi.portal_timeout_min * 60u * 1000u;
-    uint32_t idle = now_ms() - s_last_client_ms;
-    if ((now_ms() - s_opened_ms) > timeout_ms && idle > 60000 && !trigger_open) {
-        portal_stop();
+    } else if (long_edge) {
+        portal_stop();               // long-press again = close early
     }
 }

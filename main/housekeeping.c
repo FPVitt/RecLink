@@ -69,7 +69,9 @@ static void hk_task(void *arg)
         cfg_stats_flush();
 
         twdt_feed(WDT_HOUSEKEEPING);
-        vTaskDelay(pdMS_TO_TICKS(200));      // 5 Hz
+        // 10 Hz: keeps the armed-edge -> portal_stop() latency ~100 ms
+        // (spec 12.4). portal_stop() only signals; portal_task tears down.
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
