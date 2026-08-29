@@ -74,7 +74,9 @@ static void portal_bringup(void)
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
     hc.max_uri_handlers = 24;
     hc.lru_purge_enable = true;
-    hc.stack_size = 6144;
+    hc.stack_size = 8192;                 // OTA handler buffers + flash calls
+    hc.recv_wait_timeout = 20;            // slow SoftAP + flash-stalled receiver
+    hc.send_wait_timeout = 20;
     hc.uri_match_fn = httpd_uri_match_wildcard;
     if (httpd_start(&s_httpd, &hc) == ESP_OK) {
         http_api_register(s_httpd);

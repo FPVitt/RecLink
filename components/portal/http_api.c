@@ -357,41 +357,54 @@ static esp_err_t h_ota(httpd_req_t *r)
 
     if (ota_stream_begin((size_t)total) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "ota_begin"); }
 
-    char chunk[1460];
+    // Accumulate many small socket reads into a big buffer and flash it in one
+    // shot. This keeps httpd_req_recv() being called back-to-back so the socket
+    // is drained and the TCP window stays open, instead of stalling for the
+    // duration of every tiny flash write (which collapsed the transfer at ~58%).
+    #define OTA_BUF 32768
+    uint8_t *buf = malloc(OTA_BUF);
+    if (!buf) { OTA_FAIL("500 Internal Server Error", "oom"); }
+
     int  remaining = total;
-    bool started = false;          // seen the ESP image magic 0xE9 yet
-    size_t written = 0;
+    bool started = false;
+    size_t written = 0, fill = 0;
     int  timeouts = 0;
     uint32_t last_log = 0;
 
-    while (remaining > 0) {
-        int want = sizeof(chunk) < (size_t)remaining ? (int)sizeof(chunk) : remaining;
-        int n = httpd_req_recv(r, chunk, want);
-        if (n == HTTPD_SOCK_ERR_TIMEOUT) {
-            if (++timeouts > 20) { ESP_LOGE("api", "OTA recv stalled"); OTA_FAIL("408 Request Timeout", "upload stalled"); }
-            continue;
+    while (remaining > 0 || fill > 0) {
+        while (fill < OTA_BUF && remaining > 0) {
+            int want = (int)(OTA_BUF - fill);
+            if (want > remaining) { want = remaining; }
+            int n = httpd_req_recv(r, (char *)buf + fill, want);
+            if (n == HTTPD_SOCK_ERR_TIMEOUT) {
+                if (++timeouts > 15) { free(buf); ESP_LOGE("api", "OTA recv stalled at %u B", (unsigned)written); OTA_FAIL("408 Request Timeout", "upload stalled"); }
+                break;                       // flush what we have, then retry
+            }
+            if (n <= 0) { free(buf); ESP_LOGE("api", "OTA recv=%d at %u B", n, (unsigned)written); OTA_FAIL("400 Bad Request", "recv"); }
+            timeouts = 0;
+            fill += n;
+            remaining -= n;
         }
-        if (n <= 0) { ESP_LOGE("api", "OTA recv=%d after %u B", n, (unsigned)written); OTA_FAIL("400 Bad Request", "recv"); }
-        timeouts = 0;
-        remaining -= n;
 
-        const char *p = chunk;
-        int m = n;
-        if (!started) {
-            const void *e9 = memchr(chunk, 0xE9, n);   // skip a multipart wrapper
-            if (!e9) { continue; }
+        uint8_t *p = buf;
+        size_t   m = fill;
+        if (!started && m) {
+            uint8_t *e9 = memchr(buf, 0xE9, m);   // skip a multipart wrapper
+            if (!e9) { fill = 0; continue; }
             started = true;
-            m = n - (int)((const char *)e9 - chunk);
+            m -= (size_t)(e9 - buf);
             p = e9;
         }
-        if (ota_stream_write(p, m) != ESP_OK) { OTA_FAIL("500 Internal Server Error", "flash write"); }
+        if (m && ota_stream_write(p, m) != ESP_OK) { free(buf); OTA_FAIL("500 Internal Server Error", "flash write"); }
         written += m;
-        taskYIELD();                     // let the Wi-Fi task run between writes
+        fill = 0;
+
         if (now_ms() - last_log > 1000) {
             last_log = now_ms();
             ESP_LOGI("api", "OTA %u / %d B (%d%%)", (unsigned)written, total, (int)(100LL * written / total));
         }
     }
+    free(buf);
     ESP_LOGW("api", "OTA received %u B, finalising", (unsigned)written);
     if (!started || written < 65536) { OTA_FAIL("400 Bad Request", "no valid image found"); }
 
