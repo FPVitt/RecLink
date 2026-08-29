@@ -16,15 +16,24 @@ bool gopro_reasm_feed(gopro_reasm_t *r, const uint8_t *pkt, uint16_t len,
             // unexpected continuation with no start; drop
             return false;
         }
+        // verified: Open GoPro spec 2.0 "Packet Headers" (docs/ble/protocol/
+        // data_protocol) @ gopro/OpenGoPro gh-pages 616bfb80 (2026-06-08).
+        // byte0 bit7 = Start(0)/Continuation(1); bits[6:5] header type:
+        //   00 General   -> bits[4:0] = 5-bit length
+        //   01 Extended13 -> bits[4:0]<<8 | byte1 = 13-bit length
+        //   10 Extended16 -> bits[4:0] reserved; byte1<<8 | byte2 = 16-bit length
+        //   11 unused
+        // (was checking 0x02/0x03 -- would drop every >20-byte response, e.g.
+        //  get-all-statuses 0x13 and multi-status pushes.)
         uint8_t typ = (b0 >> 5) & 0x03;
         if (typ == 0x00) {                 // general, 5-bit
             r->need = b0 & 0x1F;
             i = 1;
-        } else if (typ == 0x02) {          // extended 13-bit
+        } else if (typ == 0x01) {          // extended 13-bit
             if (len < 2) { return false; }
             r->need = ((uint16_t)(b0 & 0x1F) << 8) | pkt[1];
             i = 2;
-        } else if (typ == 0x03) {          // extended 16-bit
+        } else if (typ == 0x02) {          // extended 16-bit
             if (len < 3) { return false; }
             r->need = ((uint16_t)pkt[1] << 8) | pkt[2];
             i = 3;

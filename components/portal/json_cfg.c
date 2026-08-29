@@ -95,6 +95,8 @@ cJSON *cfg_to_json(const cfg_t *c)
 
 // ---- merge helpers ------------------------------------------------
 #define J_OBJ(parent, key)  cJSON_GetObjectItemCaseSensitive((parent), (key))
+// dst may point at a packed (unaligned) cfg_t member -- always memcpy, never
+// dereference a typed pointer into the blob (misaligned store -> panic on Xtensa).
 static void mnum_u(const cJSON *o, const char *k, void *dst, size_t sz)
 {
     const cJSON *it = J_OBJ(o, k);
@@ -102,15 +104,17 @@ static void mnum_u(const cJSON *o, const char *k, void *dst, size_t sz)
     double v = it->valuedouble;
     if (v < 0) { v = 0; }
     switch (sz) {
-    case 1: *(uint8_t  *)dst = (uint8_t)v; break;
-    case 2: *(uint16_t *)dst = (uint16_t)v; break;
-    case 4: *(uint32_t *)dst = (uint32_t)v; break;
+    case 1: { uint8_t  t = (uint8_t)v;  memcpy(dst, &t, 1); break; }
+    case 2: { uint16_t t = (v > 65535.0) ? 0xFFFF : (uint16_t)v; memcpy(dst, &t, 2); break; }
+    case 4: { uint32_t t = (v > 4294967295.0) ? 0xFFFFFFFFu : (uint32_t)v; memcpy(dst, &t, 4); break; }
     }
 }
-static void mnum_i16(const cJSON *o, const char *k, int16_t *dst)
+static void mnum_i16(const cJSON *o, const char *k, void *dst)
 {
     const cJSON *it = J_OBJ(o, k);
-    if (cJSON_IsNumber(it)) { *dst = (int16_t)it->valuedouble; }
+    if (!cJSON_IsNumber(it)) { return; }
+    int16_t t = (int16_t)it->valuedouble;
+    memcpy(dst, &t, sizeof(t));
 }
 static void mbool(const cJSON *o, const char *k, uint8_t *dst)
 {

@@ -5,8 +5,6 @@
 #include <string.h>
 #include "esp_log.h"
 
-static const char *TAG = "ctrl.pre";
-
 static struct {
     int      current_band;   // -1 = unset
     int      cand_band;

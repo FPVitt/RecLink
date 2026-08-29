@@ -19,6 +19,13 @@
 static const char *TAG = "gopro";
 
 // ---- GATT (spec 6.2). Base b5f9XXXX-aa8d-11e3-9046-0002a5d5c51b -----------
+// verified: Open GoPro BLE spec 2.0, gopro/OpenGoPro
+//   models/constants/uuids.py @ main 0f963572 (2026-04-15) and
+//   docs/ble/protocol/data_protocol @ gh-pages 616bfb80 (2026-06-08):
+//   GOPRO_BASE_UUID = "b5f9{}-aa8d-11e3-9046-0002a5d5c51b"
+//   S_CONTROL_QUERY 0000fea6-...  CQ_COMMAND 0072 / _RESP 0073
+//   CQ_SETTINGS 0074 / _RESP 0075   CQ_QUERY 0076 / _RESP 0077
+//   (NimBLE 128-bit UUID literals are little-endian byte order.)
 #define GP_UUID(yy) BLE_UUID128_INIT(0x1b,0xc5,0xd5,0xa5,0x02,0x00,0x46,0x90, \
                                      0xe3,0x11,0x8d,0xaa,(yy),0x00,0xf9,0xb5)
 static const ble_uuid128_t U_CMD_REQ    = GP_UUID(0x72);
@@ -31,7 +38,13 @@ static const ble_uuid128_t U_QRY_RSP    = GP_UUID(0x77);
 // GoPro Control & Query service 0xFEA6.
 #define GP_SVC_UUID16 0xFEA6
 
-// ---- status / setting IDs (spec 16.B; VERIFY.md GOPRO-STATUS-*) ----------
+// ---- status / setting IDs -----------------------------------------------
+// verified: Open GoPro spec 2.0 -- models/constants/statuses.py (StatusId) +
+// settings.py (SettingId) @ gopro/OpenGoPro main 0f963572 (2026-04-15):
+//   2 INTERNAL_BATTERY_BARS  6 OVERHEATING  8 BUSY  10 ENCODING
+//   33 PRIMARY_STORAGE  35 REMAINING_VIDEO_TIME  54 SD_CARD_REMAINING (KB)
+//   70 INTERNAL_BATTERY_PERCENTAGE
+//   setting 2 VIDEO_RESOLUTION  3 FRAMES_PER_SECOND  121 VIDEO_LENS
 enum { ST_BATT_BARS = 2, ST_HOT = 6, ST_BUSY = 8, ST_ENCODING = 10,
        ST_SD_STATUS = 33, ST_REMAIN_VIDEO_S = 35, ST_SD_REMAIN_KB = 54, ST_BATT_PCT = 70 };
 enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_LENS = 121 };
@@ -69,6 +82,13 @@ static void wr(uint16_t handle, const uint8_t *body, uint8_t n)
 }
 
 // ---- driver ops -------------------------------------------------
+// verified @ gopro/OpenGoPro 0f963572 / gh-pages 616bfb80 (Open GoPro spec 2.0):
+//   CmdId.SET_SHUTTER=0x01 (param u8 0/1), TAG_HILIGHT=0x18 (no param),
+//   LOAD_PRESET=0x40 (param u32 BIG-ENDIAN), LOAD_PRESET_GROUP=0x3E (u16 BE),
+//   query 0x53 register statuses / 0x52 register settings (uint8 ID array),
+//   0x13 get-all statuses / 0x12 get-all settings, push notif IDs 0x93/0x92.
+//   Keep-alive = write SettingId.LED(91)=value 66 to CQ_SETTINGS: 5B 01 42
+//   (gopro_pack prepends the 03 length byte). SDK default interval 3 s (<10 s).
 static esp_err_t gp_record(bool start)
 {
     uint8_t b[3] = { 0x01, 0x01, start ? 0x01 : 0x00 };
@@ -94,8 +114,13 @@ static esp_err_t gp_set_datetime(int64_t utc_ms, int16_t off_min, bool dst)
     struct tm tm;
     gmtime_r(&local, &tm);
     int y = tm.tm_year + 1900;
-    // spec 6.4: cmd 0x0F -- [yr u16 BE][mon][day][hr][min][sec][off i16 min][dst]
-    // VERIFY.md GOPRO-CMD-DATETIME: 0x0F vs 0x0D per firmware.
+    // verified: Open GoPro spec 2.0 "Set Local Date Time" + SDK CmdId.SET_DATE_TIME_DST
+    // @ gopro/OpenGoPro 0f963572 / gh-pages 616bfb80:
+    //   cmd 0x0F, TLV len 0x0A, then 10-byte value:
+    //   [year u16 BIG-ENDIAN][month][day][hour][minute][second]
+    //   [utc_offset int16 BIG-ENDIAN minutes][is_dst u8]
+    //   spec example "2023-01-31 03:04:05 (utc-02:00) dst:on" => 07E7 01 1F 03 04 05 FF88 01
+    //   (0x0D = SET_DATE_TIME, the 7-byte no-tz variant, for older firmware.)
     uint8_t b[12] = {
         0x0F, 0x0A,
         (uint8_t)(y >> 8), (uint8_t)y,
@@ -112,7 +137,9 @@ static esp_err_t gp_set_datetime(int64_t utc_ms, int16_t off_min, bool dst)
 
 static esp_err_t gp_get_datetime(void)
 {
-    uint8_t b[1] = { 0x0E };
+    // verified: SDK CmdId.GET_DATE_TIME_DST = 0x10 (0x0E = GET_DATE_TIME, no tz).
+    // We set with the DST variant (0x0F) so we must read back tz+dst too -> 0x10.
+    uint8_t b[1] = { 0x10 };
     wr(h_cmd, b, 1);
     return ESP_OK;
 }
@@ -246,8 +273,12 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
     case ST_REMAIN_VIDEO_S:
         s->rec_remaining_s.valid = true; s->rec_remaining_s.v = be(v, n); break;
     case ST_SD_STATUS:
-        // VERIFY.md GOPRO-STATUS-33: 0 OK, 1 full, 2 removed, 3 format error...
-        s->sd_missing = (v[0] == 2 || v[0] == 4);
+        // verified: Open GoPro spec 2.0 PrimaryStorage enum @ statuses.py 0f963572:
+        //   -1(0xFF) UNKNOWN, 0 OK, 1 SD_CARD_FULL, 2 SD_CARD_REMOVED,
+        //   3 SD_CARD_FORMAT_ERROR, 4 SD_CARD_BUSY, 8 SD_CARD_SWAPPED.
+        // 4 (BUSY) is a present card, NOT missing -- was wrongly flagged before.
+        // FIXME(perf-coherence): decide if 3 (FORMAT_ERROR) should block recording.
+        s->sd_missing = (v[0] == 2);
         s->sd_full    = (v[0] == 1);
         break;
     default: dirty = false; break;
@@ -259,13 +290,20 @@ static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t 
 {
     (void)n;
     switch (id) {
-    case SET_RESOLUTION: val_str_set(&s->resolution, gopro_resolution_str(v[0]));
-                         if (!*s->resolution.v) s->resolution.valid = false; break;
-    case SET_FPS: val_str_set(&s->framerate, gopro_fps_str(v[0]));
-                  if (!*s->framerate.v) s->framerate.valid = false; break;
-    case SET_LENS: val_str_set(&s->lens, gopro_lens_str(v[0]));
-                   if (!*s->lens.v) s->lens.valid = false; break;
-    default: return;
+    case SET_RESOLUTION:
+        val_str_set(&s->resolution, gopro_resolution_str(v[0]));
+        if (!*s->resolution.v) { s->resolution.valid = false; }
+        break;
+    case SET_FPS:
+        val_str_set(&s->framerate, gopro_fps_str(v[0]));
+        if (!*s->framerate.v) { s->framerate.valid = false; }
+        break;
+    case SET_LENS:
+        val_str_set(&s->lens, gopro_lens_str(v[0]));
+        if (!*s->lens.v) { s->lens.valid = false; }
+        break;
+    default:
+        return;
     }
     if (CB->on_state_dirty) { CB->on_state_dirty(); }
 }
@@ -292,8 +330,15 @@ static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
     if (len < 2) { return; }
     uint8_t cmd_id = p[0];
     uint8_t status = p[1];
-    if (cmd_id == 0x0E && status == 0 && len >= 12) {
-        // get datetime: [0x0E][st][yr hi][yr lo][mon][day][hr][min][sec][off hi][off lo][dst]
+    if (cmd_id == 0x10 && status == 0 && len >= 12) {
+        // GET_DATE_TIME_DST (0x10) response.
+        // FIXME(protocol-verifier): UNRESOLVED -- the exact response framing is
+        // not documented in a machine-readable form. The Open GoPro Python SDK
+        // parser (DateTimeByteParserBuilder.parse) skips ONE leading byte
+        // (data[1:]) before the year, implying a payload length/count byte after
+        // [cmd_id][status]. If so, every field below is off by one and 'off'
+        // reads garbage. Needs a real HERO 11/12/13 BLE capture to confirm.
+        // Assumed here (no length byte): [id][st][yr hi][yr lo][mon][day][hr][min][sec][off hi][off lo][dst]
         int y = (p[2] << 8) | p[3];
         int mon = p[4], day = p[5], hh = p[6], mm = p[7], ss = p[8];
         int16_t off = (int16_t)((p[9] << 8) | p[10]);

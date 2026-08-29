@@ -42,7 +42,8 @@ static void osd_task(void *arg)
     // it is low-priority and may be merged into msp_task later.
     const cfg_t *cfg = cfg_get();
     uint8_t hz = cfg ? cfg->osd.refresh_hz : 4;
-    if (hz < 1) hz = 1; if (hz > 10) hz = 10;
+    if (hz < 1) { hz = 1; }
+    if (hz > 10) { hz = 10; }
     TickType_t period = pdMS_TO_TICKS(1000 / hz);
     TickType_t last = xTaskGetTickCount();
 

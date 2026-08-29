@@ -16,21 +16,29 @@ static const char *TAG = "cfg.mig";
 
 typedef void (*migrate_fn)(cfg_t *);
 
-static const migrate_fn k_chain[] = {
-    // index 0 -> migrate v1 to v2, etc. Empty today (CFG_VERSION == 1).
-};
+// index 0 -> migrate v1 to v2, etc. Empty today (CFG_VERSION == 1); add an entry
+// (and bump CFG_VERSION) for each schema change.
+#define N_MIGRATIONS 0
+#if N_MIGRATIONS > 0
+static const migrate_fn k_chain[N_MIGRATIONS] = { NULL };
+#endif
 
 // Returns true if the blob is now at CFG_VERSION; false if no path exists.
 bool cfg_migrate_chain(cfg_t *c)
 {
     while (c->version < CFG_VERSION) {
+#if N_MIGRATIONS > 0
         unsigned step = c->version - 1u;
-        if (step >= sizeof(k_chain) / sizeof(k_chain[0]) || !k_chain[step]) {
+        if (step >= N_MIGRATIONS || !k_chain[step]) {
             ESP_LOGE(TAG, "no migration from v%u", c->version);
             return false;
         }
         ESP_LOGW(TAG, "migrating cfg v%u -> v%u", c->version, c->version + 1);
         k_chain[step](c);
+#else
+        ESP_LOGE(TAG, "no migration path from cfg v%u", c->version);
+        return false;
+#endif
     }
     if (c->version > CFG_VERSION) {
         ESP_LOGE(TAG, "cfg v%u newer than firmware v%u -- refusing", c->version, CFG_VERSION);
