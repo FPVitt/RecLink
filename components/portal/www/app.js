@@ -224,8 +224,8 @@ $$('.rangebar').forEach(buildBar);
 const TOKLIST = [
   ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bb','batt bar'],
   ['rs','resolution'],['fp','fps'],['ar','aspect'],['ln','lens'],['pr','profile'],['bd','bit depth'],
-  ['sd','SD left'],['md','mode'],['cr','cam RSSI'],['gs','GPS sats'],['gf','GPS fix'],['fb','FC batt'],
-  ['sp','speed'],['cn','craft name'],['wr','warning']
+  ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],['gs','GPS sats'],['gf','GPS fix'],
+  ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
 
@@ -357,6 +357,8 @@ function tokVal(pair, d) {
     case 'sd': if (d.sd_missing) return 'NO SD'; if (d.sd_full) return 'FULL';
       if (d.rec_remaining.valid) return remainStr(d.rec_remaining.v);
       if (d.sd_remaining_kb.valid) return Math.floor(d.sd_remaining_kb.v / (1024 * 1024)) + 'G'; return '';
+    case 'sg': return d.sd_remaining_kb.valid
+      ? (d.sd_remaining_kb.v / 1024 / 1024).toFixed(1) + 'G' : '';
     case 'md': return d.mode.valid ? d.mode.v : '';
     case 'cn': return d.craft_name || '';
     case 'wr': { const w = activeWarning(d); return (w && !(d.warn_blink && d.blinkOn)) ? w : ''; }

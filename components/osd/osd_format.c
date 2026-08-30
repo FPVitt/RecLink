@@ -115,6 +115,13 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
                 snprintf(tmp, sizeof(tmp), "%luG", (unsigned long)(cam->sd_remaining_kb.v / (1024 * 1024)));
                 len = app(out, out_cap, len, tmp);
             }
+        } else if (TOK2('s','g')) {                // SD space remaining, GB (always)
+            p++;
+            if (!field_on(cfg, OSD_TOK_SG) || !cam->sd_remaining_kb.valid) { continue; }
+            uint32_t gx10 = (cam->sd_remaining_kb.v / 1024u) * 10u / 1024u;   // KB -> GB x10
+            snprintf(tmp, sizeof(tmp), "%lu.%luG",
+                     (unsigned long)(gx10 / 10), (unsigned long)(gx10 % 10));
+            len = app(out, out_cap, len, tmp);
         } else if (TOK2('m','d')) {                // mode name
             p++;
             if (!field_on(cfg, OSD_TOK_MD) || !cam->mode_name.valid) { continue; }
