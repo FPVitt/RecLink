@@ -1,5 +1,5 @@
 // captive_dns.c -- ~60-line UDP DNS responder (spec 3.1 / 10.2). Answers every
-// A query with 192.168.4.1 so OS captive-portal detection opens the page.
+// A query with 10.0.0.1 so OS captive-portal detection opens the page.
 #include <string.h>
 #include "lwip/sockets.h"
 #include "esp_log.h"
@@ -49,7 +49,7 @@ static void dns_task(void *arg)
         a[4] = 0x00; a[5] = 0x01;       // CLASS IN
         a[6] = 0; a[7] = 0; a[8] = 0; a[9] = 60;   // TTL 60
         a[10] = 0x00; a[11] = 0x04;     // RDLENGTH 4
-        a[12] = 192; a[13] = 168; a[14] = 4; a[15] = 1;
+        a[12] = 10; a[13] = 0; a[14] = 0; a[15] = 1;   // portal IP
 
         sendto(s_sock, buf, qend + 16, 0, (struct sockaddr *)&from, fl);
     }

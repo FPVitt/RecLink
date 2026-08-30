@@ -505,7 +505,7 @@ static esp_err_t serve_gz(httpd_req_t *r, const uint8_t *s, const uint8_t *e, co
 
 // OS connectivity-check probes. Answer them with what each OS expects so it
 // concludes "internet is fine" and does NOT force the captive-portal login
-// sheet. The user opens 192.168.4.1 themselves when they want the config page.
+// sheet. The user opens 10.0.0.1 themselves when they want the config page.
 static bool answer_captive_probe(httpd_req_t *r, const char *u)
 {
     char host[40] = {0};

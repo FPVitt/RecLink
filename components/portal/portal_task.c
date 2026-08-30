@@ -74,6 +74,17 @@ static void wifi_ap_up(void)
 static void portal_bringup(void)
 {
     s_ap_netif = esp_netif_create_default_wifi_ap();
+    // Portal address: 10.0.0.1 (gateway + DHCP server). Must be set before the
+    // DHCP server hands out leases.
+    {
+        esp_netif_ip_info_t ip = {0};
+        esp_netif_str_to_ip4("10.0.0.1",   &ip.ip);
+        esp_netif_str_to_ip4("10.0.0.1",   &ip.gw);
+        esp_netif_str_to_ip4("255.255.255.0", &ip.netmask);
+        esp_netif_dhcps_stop(s_ap_netif);
+        ESP_ERROR_CHECK(esp_netif_set_ip_info(s_ap_netif, &ip));
+        ESP_ERROR_CHECK(esp_netif_dhcps_start(s_ap_netif));
+    }
     wifi_init_config_t ic = WIFI_INIT_CONFIG_DEFAULT();
     esp_err_t e = esp_wifi_init(&ic);
     if (e != ESP_OK && e != ESP_ERR_WIFI_INIT_STATE) { ESP_LOGE(TAG, "wifi_init %s", esp_err_to_name(e)); }
