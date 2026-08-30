@@ -113,7 +113,7 @@ typedef struct __attribute__((packed)) {
     // was `interlock` -- removed (passenger-only, spec 1.2.1). One byte reclaimed
     // for msp.swap_pins; layout/offsets unchanged so old blobs stay CRC-valid.
     uint8_t  msp_swap_pins;      // 1 = feed TX_GPIO as RX and RX_GPIO as TX
-    uint8_t  _rsvd[1];
+    uint8_t  ui_advanced;        // portal: show advanced/diagnostic controls (device-persisted)
 
     struct {
         uint32_t baud;

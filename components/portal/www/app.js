@@ -11,7 +11,9 @@ function showTab(name) {
 }
 $$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
 
-// ---- advanced mode (browser-local; gates .adv-only elements) ----
+// ---- advanced mode (gates .adv-only elements) ----
+// Persisted on the DEVICE (cfg.ui_advanced) so it survives the captive-portal
+// webview clearing localStorage; localStorage is just a fast local cache.
 const advmode = $('#advmode');
 function applyAdv(on) {
   document.body.classList.toggle('adv', on);
@@ -19,12 +21,17 @@ function applyAdv(on) {
   const cur = $('#tabs button.on');
   if (cur && cur.classList.contains('adv-only') && !on) showTab('status');
 }
-advmode.checked = localStorage.getItem('advmode') === '1';
-applyAdv(advmode.checked);
-advmode.onchange = () => {
-  localStorage.setItem('advmode', advmode.checked ? '1' : '0');
-  applyAdv(advmode.checked);
-};
+function setAdv(on, persist) {
+  advmode.checked = on;
+  localStorage.setItem('advmode', on ? '1' : '0');
+  applyAdv(on);
+  if (persist) fetch('/api/config', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ui_advanced: on ? 1 : 0})
+  }).catch(() => {});
+}
+setAdv(localStorage.getItem('advmode') === '1', false);
+advmode.onchange = () => setAdv(advmode.checked, true);
 
 // ============ Cam control tab: Betaflight-style AUX range bars =============
 // name= attributes still map 1:1 to /api/config: record.switch.threshold_us,
@@ -525,6 +532,7 @@ async function loadConfig() {
   const c = await fetch('/api/config').then(r => r.json());
   fillConfig(c);
   osdLoad();
+  if (c.ui_advanced != null) setAdv(!!c.ui_advanced, false);   // device value wins
   cfgBrand = (c.camera && c.camera.brand) || '';
   rebootBaseline = getField('msp.baud') + '/' + getField('msp.swap_pins');
   applyGates();
@@ -804,4 +812,6 @@ async function pollLog() {
 
 loadConfig().catch(() => msg('could not load config — is the bridge up?'));
 poll(); setInterval(poll, 1500);
-setInterval(() => { if ($('#system').classList.contains('on')) pollLog(); }, 3000);
+setInterval(() => {
+  if (document.body.classList.contains('adv') && $('#system').classList.contains('on')) pollLog();
+}, 3000);

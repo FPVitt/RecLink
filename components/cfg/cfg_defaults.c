@@ -65,6 +65,7 @@ void cfg_load_defaults(cfg_t *d)
 
     d->msp.baud = 115200;
     d->msp_swap_pins = 0;       // board wired TX=BRIDGE_UART_TX_GPIO, RX=..._RX_GPIO
+    d->ui_advanced   = 0;       // portal starts in basic mode
 
     // wifi
     d->wifi.ssid[0]           = '\0';    // auto: CAMBRIDGE-XXXX

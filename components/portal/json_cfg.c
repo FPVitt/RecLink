@@ -88,6 +88,7 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON_AddNumberToObject(wifi, "portal_timeout_min", c->wifi.portal_timeout_min);
 
     cJSON_AddNumberToObject(r, "led_brightness", c->led_brightness);
+    cJSON_AddNumberToObject(r, "ui_advanced", c->ui_advanced);
     return r;
 }
 
@@ -222,5 +223,6 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
         mnum_u(o, "portal_timeout_min", &c->wifi.portal_timeout_min, 1);
     }
     mnum_u(j, "led_brightness", &c->led_brightness, 1);
+    mnum_u(j, "ui_advanced", &c->ui_advanced, 1);
     return ESP_OK;
 }
