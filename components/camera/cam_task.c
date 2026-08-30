@@ -76,6 +76,9 @@ static bool     s_was_ready;      // link reached READY since the last go_lost
 // bond is dead and every retry fails identically -- so after a few, erase the
 // bond and raise FLAG_REPAIR_NEEDED instead of hammering forever.
 static int      s_bond_fails;
+// Portal scan-pause exemption: set when the link reaches READY, re-armed at the
+// start of each portal session (see cam_ble_pause_scan / scan_allowed).
+static bool     s_connected_this_session;
 // The one shared camera-state scratch (spec 3.4). cam_task + the driver
 // callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
 #define s_cs (*cam_scratch())
@@ -86,7 +89,7 @@ static void set_link(cam_link_state_t st)
     if (s_cs.link == st) { return; }
     s_cs.link = st;
     s_state_since_ms = now_ms();
-    if (st == CAM_LINK_READY) { s_was_ready = true; }
+    if (st == CAM_LINK_READY) { s_was_ready = true; s_connected_this_session = true; }
     cam_state_commit();
     cam_event_t e = { .type = CAM_EV_LINK, .value = (int32_t)st };
     xQueueSend(s_evq, &e, 0);
@@ -231,9 +234,11 @@ void cam_throttle(bool on) { s_throttle = on; }
 
 // Portal Wi-Fi AP is up: on the single-radio C3 a continuous active BLE scan
 // starves the macOS association handshake (auth/assoc/EAPOL/DHCP), so pause the
-// camera hunt for the portal session. An already-established READY link is left
-// alone (low-bandwidth, coex-friendly, and the OSD preview + clock use it).
-// A pairing attempt from the portal overrides this (it sets s_first_pair).
+// *cold* camera hunt for the portal session. Exceptions (scan_allowed):
+//   - a pairing attempt is in progress (s_first_pair), or
+//   - the camera has connected at least once this portal session
+//     (s_connected_this_session, declared up top) -- reconnecting a camera you
+//     were just using is a brief targeted scan and you're already on Wi-Fi.
 static volatile bool s_scan_paused;
 void cam_ble_pause_scan(bool on)
 {
@@ -305,7 +310,10 @@ static void exec_cmd(const cam_cmd_t *c)
 // ---- state machine step --------------------------------------
 // Scanning is paused for the portal session (see cam_ble_pause_scan) unless a
 // pairing attempt is in progress.
-static bool scan_allowed(void) { return !s_scan_paused || s_first_pair; }
+static bool scan_allowed(void)
+{
+    return !s_scan_paused || s_first_pair || s_connected_this_session;
+}
 
 static void begin_scan(void)
 {
@@ -522,13 +530,15 @@ static void cam_task(void *arg)
             case IQ_CMD_SCAN_PAUSE:
                 s_scan_paused = it.flag.on;
                 if (s_scan_paused) {
-                    // Stop hunting for the portal session unless mid-pair. An
-                    // established READY link is kept.
-                    if (s_cs.link == CAM_LINK_SCAN && !s_first_pair) {
+                    // New portal session: only a camera already connected right
+                    // now is exempt from the pause (see scan_allowed).
+                    s_connected_this_session = (s_cs.link == CAM_LINK_READY);
+                    if (s_cs.link == CAM_LINK_SCAN && !scan_allowed()) {
                         ble_central_scan(false);
                     }
                     applog_note("BLE scan paused (portal AP up)");
                 } else {
+                    s_connected_this_session = false;
                     // Portal down: resume promptly if we were hunting.
                     if (s_drv && (s_cs.link == CAM_LINK_SCAN || s_cs.link == CAM_LINK_LOST)) {
                         s_backoff_idx = 0;
