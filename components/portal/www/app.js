@@ -237,15 +237,11 @@ function liveData(s) {
     hot: cs.hot, rec_fail: false, clock_fail: false
   });
 }
-function canvasDims() {
-  let str = '30x16', assumed = true;
-  const cv = lastStatus && lastStatus.msp && lastStatus.msp.canvas;
-  if (cv && /^\d+x\d+$/.test(cv) && cv !== '0x0') { str = cv; assumed = false; }
-  const p = str.split('x');
-  return [(+p[0]) || 30, (+p[1]) || 16, assumed];
-}
 function renderPreview() {
-  const g = $('#osdgrid'); if (!g) return;
+  const scr = $('#osdscreen'); if (!scr) return;
+  const box = $('#osdlines');
+  while (box.children.length < 4) box.appendChild(el('div', 'osdline'));
+
   const connected = !!(lastStatus && lastStatus.camera && lastStatus.camera.link === 'READY');
   const sim = $('#osdsim');
   sim.disabled = connected;
@@ -263,9 +259,12 @@ function renderPreview() {
       : 'Sample data — camera not connected. On the real OSD only “CAM LOST” shows until the link is ready.';
   }
 
-  const dims = canvasDims(); const cols = dims[0], rows = dims[1], assumed = dims[2];
   const corner = +($('[name="osd.corner"]').value || 1);
   const top = corner < 2, left = (corner % 2) === 0;
+  scr.classList.toggle('b-top', top);
+  scr.classList.toggle('b-bot', !top);
+  scr.classList.toggle('b-left', left);
+  scr.classList.toggle('b-right', !left);
 
   let lines;
   if (!d.link) { lines = [d.searching ? 'CAM ?' : 'CAM LOST', '', '', '']; }
@@ -274,26 +273,16 @@ function renderPreview() {
   const clipped = [];
   lines = lines.map((t, i) => { if (t.length > 16) { clipped.push({n: i + 1, full: t}); return t.slice(0, 16); } return t; });
 
-  const blockRow = top ? 0 : Math.max(0, rows - 4);
-  const startCol = left ? 0 : Math.max(0, cols - 16);
-  const out = [];
-  for (let rr = 0; rr < rows; rr++) {
-    const row = new Array(cols).fill('·');
-    if (rr >= blockRow && rr < blockRow + 4) {
-      const txt = lines[rr - blockRow] || '';
-      for (let k = 0; k < txt.length && startCol + k < cols; k++) row[startCol + k] = txt[k] === ' ' ? '␣' : txt[k];
-    }
-    out.push(row.join(''));
+  for (let i = 0; i < 4; i++) {
+    const txt = lines[i] || "";
+    if (box.children[i].textContent !== txt) box.children[i].textContent = txt;
   }
-  const grid = out.join('\n');
-  if (g.textContent !== grid) g.textContent = grid;
 
   const clipEl = $('#osdclip');
   clipEl.textContent = clipped.length
     ? clipped.map(c => 'Line ' + c.n + ' is ' + c.full.length + ' chars — clipped to “' + c.full.slice(0, 16) + '”').join('   ')
     : '';
   $('#osdnote').textContent = srcNote
-    + (assumed ? '  Grid size unknown — assuming 30×16.' : '  Grid ' + cols + '×' + rows + ' from the FC.')
     + (d.link && d.warn_blink && activeWarning(d) ? '  The warning blinks on the real OSD.' : '');
 }
 ['input', 'change'].forEach(ev => document.addEventListener(ev, e => {

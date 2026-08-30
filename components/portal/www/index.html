@@ -100,7 +100,10 @@
 
   <div class="card" id="osdprev">
     <h3>Preview</h3>
-    <pre id="osdgrid" class="mono"></pre>
+    <p class="muted">The four custom-message lines only (Betaflight <code>CUSTOM_MESSAGE</code> 0&ndash;3). Indicative &mdash; the OSD also shows Betaflight&rsquo;s own elements.</p>
+    <div id="osdscreen" class="osdscreen b-top b-right">
+      <div id="osdlines" class="osdlines"></div>
+    </div>
     <p id="osdclip" class="warn-inline"></p>
     <p id="osdnote" class="muted"></p>
     <label>Simulate a connected camera<input type="checkbox" id="osdsim"></label>
@@ -108,7 +111,7 @@
 
   <div class="card">
     <h3>On-screen corner</h3>
-    <p class="muted">Positions the preview block only. The real position of OSD elements 0&ndash;3 is set in Betaflight&rsquo;s OSD layout, not here.</p>
+    <p class="muted">Aligns the 4-line preview block only (top/bottom, left/right). The real position of OSD elements 0&ndash;3 is set in Betaflight&rsquo;s OSD layout, not here.</p>
     <div class="corner" id="corner">
       <button type="button" data-c="0">&#8598;</button><button type="button" data-c="1">&#8599;</button>
       <button type="button" data-c="2">&#8601;</button><button type="button" data-c="3">&#8600;</button>
