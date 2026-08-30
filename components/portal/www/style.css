@@ -70,12 +70,12 @@ button.reveal,button#mspscan{background:transparent;border:1px solid var(--line)
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:4px 0}
 
 .flags{margin:10px 0 0;display:flex;gap:6px;flex-wrap:wrap}
+.flags:empty{display:none}
 .flags span{background:#5a3a13;color:#f1c27a;border-radius:4px;padding:3px 9px;font-size:12px}
 .flags .ackflag{cursor:pointer;background:var(--dng);color:#fff}
 #counters{margin:8px 0 0;font-size:12px;color:var(--mut)}
 
 details summary{cursor:pointer;color:var(--mut);font-size:13px;padding:8px 0}
-#tokens{line-height:1.9}
 
 #log,#scanout{max-height:240px;overflow:auto;background:#11151b;border:1px solid var(--line);
   border-radius:6px;padding:8px;margin-top:8px}

@@ -32,18 +32,18 @@
   <div class="card">
     <h3>Now</h3>
     <div class="grid" id="stat-primary"></div>
+    <div id="flags" class="flags"></div>
   </div>
   <div class="card">
     <h3>Details</h3>
     <div class="grid" id="stat-detail"></div>
     <div class="row"><button type="button" id="camrefresh">Refresh camera state</button></div>
   </div>
-  <div class="card">
+  <div class="card adv-only">
     <h3>Diagnostics</h3>
-    <div class="kv adv-only"><span>AUX channels (&micro;s)</span><span id="aux" class="mono">&mdash;</span></div>
-    <div id="flags" class="flags"></div>
-    <pre id="counters" class="mono adv-only"></pre>
-    <details id="mspdbgwrap" class="adv-only"><summary>MSP link debug</summary><pre id="mspdbg" class="mono"></pre></details>
+    <div class="kv"><span>AUX channels (&micro;s)</span><span id="aux" class="mono">&mdash;</span></div>
+    <pre id="counters" class="mono"></pre>
+    <details id="mspdbgwrap"><summary>MSP link debug</summary><pre id="mspdbg" class="mono"></pre></details>
   </div>
 </section>
 
@@ -145,8 +145,6 @@
       <div class="oline" data-i="3"><div class="olh"><b>Line 4</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"><label class="rawrow" hidden>template <input id="raw-3" class="mono" maxlength="23"></label></div>
     </div>
   </div>
-
-  <details id="tokwrap"><summary>Token reference</summary><div id="tokens" class="muted mono"></div></details>
 
   <label>Update rate &mdash; Hz (1&ndash;10)
     <input type="number" inputmode="numeric" name="osd.refresh_hz" min="1" max="10" step="1"></label>

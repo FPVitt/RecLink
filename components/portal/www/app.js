@@ -221,8 +221,6 @@ const TOKLIST = [
   ['sp','speed'],['cn','craft name'],['wr','warning']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
-$('#tokens').innerHTML = TOKLIST.map(t => `<b>%${t[0]}</b> ${t[1]}`).join('<br>')
-  + '<br><span class="muted">plus any literal text you type</span>';
 
 const model = [[], [], [], []];
 let focusLine = 0;
