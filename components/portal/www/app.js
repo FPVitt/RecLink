@@ -350,7 +350,8 @@ function tokVal(pair, d) {
     case 'rt': return d.rec_remaining.valid ? remainStr(d.rec_remaining.v) : '';
     case 'bt': return d.battery.valid ? d.battery.v + '%' : '';
     case 'bb': { if (!d.battery.valid) return ''; let b = Math.floor((d.battery.v + 12) / 25);
-      if (b > 4) b = 4; return '█'.repeat(b) + '░'.repeat(4 - b); }
+      if (b > 4) b = 4;
+      return d.digital ? '#'.repeat(b) + '-'.repeat(4 - b) : '█'.repeat(b) + '░'.repeat(4 - b); }
     case 'rs': return d.resolution.valid ? d.resolution.v : '';
     case 'fp': return d.fps.valid ? d.fps.v : '';
     case 'ln': return d.lens.valid ? d.lens.v : '';
@@ -393,7 +394,18 @@ function withForm(d) {
   d.warn_blink = $('[name="osd.warn.blink"]').checked;
   d.blinkOn = false;
   d.units = +$('[name="osd.units"]').value || 0;
+  d.digital = +$('[name="osd.type"]').value === 1;
   return d;
+}
+// mirror osd_format.c digital filter: fold lowercase, keep only 0x20..0x5F
+function digitalize(s) {
+  let o = '';
+  for (const ch of s) {
+    let c = ch.charCodeAt(0);
+    if (c >= 97 && c <= 122) c -= 32;
+    o += (c < 0x20 || c > 0x5F) ? ' ' : String.fromCharCode(c);
+  }
+  return o;
 }
 function sampleData() {
   return withForm({
@@ -452,6 +464,7 @@ function renderPreview() {
   let lines;
   if (!d.link) { lines = [d.searching ? 'CAM ?' : 'CAM LOST', '', '', '']; }
   else { lines = [0, 1, 2, 3].map(i => expandTmpl($(`[name="osd.lines.${i}"]`).value || '', d)); }
+  if (d.digital) lines = lines.map(digitalize);   // mirror the firmware digital filter
 
   const clipped = [];
   lines = lines.map((t, i) => { if (t.length > 16) { clipped.push({n: i + 1, full: t}); return t.slice(0, 16); } return t; });

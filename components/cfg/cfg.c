@@ -71,6 +71,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
 
     CLAMP(c->osd.refresh_hz, 1, 10);
     CLAMP(c->osd.corner, 0, 3);
+    CLAMP(c->osd.type, 0, 1);
     // New OSD tokens appended over time: if a blob has every classic token on
     // but none of the newer ones, turn the newer ones on too.
     if ((c->osd.fields_mask & 0xFFFu) == 0xFFFu) {

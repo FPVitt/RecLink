@@ -146,6 +146,12 @@
     </div>
   </div>
 
+  <label>OSD type
+    <select name="osd.type">
+      <option value="0">Analog &mdash; full character set</option>
+      <option value="1">Digital &mdash; DJI goggles (A&ndash;Z 0&ndash;9 . : - / % only)</option>
+    </select></label>
+  <p class="muted">Digital: the DJI goggle font only has plain ASCII &mdash; lowercase is folded to uppercase and graphical glyphs (battery bar) drop to <code>#</code>/<code>-</code>. Analog leaves your text untouched.</p>
   <label>Update rate &mdash; Hz (1&ndash;10)
     <input type="number" inputmode="numeric" name="osd.refresh_hz" min="1" max="10" step="1"></label>
   <label>Speed units (used by %sp)

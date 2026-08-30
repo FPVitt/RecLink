@@ -76,7 +76,7 @@ typedef struct __attribute__((packed)) {
 
     struct {
         uint8_t  refresh_hz;
-        uint8_t  auto_place;
+        uint8_t  type;            // 0 analog (full charset) / 1 digital (DJI-goggle-safe subset)
         uint8_t  corner;          // 0 TL 1 TR 2 BL 3 BR
         char     line[4][24];
         uint32_t fields_mask;

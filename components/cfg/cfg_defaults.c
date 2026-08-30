@@ -33,7 +33,7 @@ void cfg_load_defaults(cfg_t *d)
 
     // osd (spec 9.2 default layout)
     d->osd.refresh_hz  = 4;
-    d->osd.auto_place  = 0;
+    d->osd.type        = 0;      // analog / full character set
     d->osd.corner      = 1;
     strcpy(d->osd.line[0], "%st %et");
     strcpy(d->osd.line[1], "BAT %bt %wr");

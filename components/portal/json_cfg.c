@@ -47,7 +47,7 @@ cJSON *cfg_to_json(const cfg_t *c)
 
     cJSON *osd = cJSON_AddObjectToObject(r, "osd");
     cJSON_AddNumberToObject(osd, "refresh_hz", c->osd.refresh_hz);
-    cJSON_AddBoolToObject(osd, "auto_place", c->osd.auto_place);
+    cJSON_AddNumberToObject(osd, "type", c->osd.type);
     cJSON_AddNumberToObject(osd, "corner", c->osd.corner);
     cJSON *lines = cJSON_AddArrayToObject(osd, "lines");
     for (int i = 0; i < 4; i++) { cJSON_AddItemToArray(lines, cJSON_CreateString(c->osd.line[i])); }
@@ -173,7 +173,7 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
     }
     if ((o = J_OBJ(j, "osd"))) {
         mnum_u(o, "refresh_hz", &c->osd.refresh_hz, 1);
-        mbool(o, "auto_place", &c->osd.auto_place);
+        mnum_u(o, "type", &c->osd.type, 1);
         mnum_u(o, "corner", &c->osd.corner, 1);
         mnum_u(o, "fields_mask", &c->osd.fields_mask, 4);
         mnum_u(o, "units", &c->osd.units, 1);

@@ -88,7 +88,10 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
             p++;
             if (!field_on(cfg, OSD_TOK_BB) || !cam->battery_pct.valid) { continue; }
             int bars = (cam->battery_pct.v + 12) / 25; if (bars > 4) bars = 4;
-            for (int i = 0; i < 4; i++) { tmp[i] = (char)(i < bars ? 0xFE : 0xFA); }
+            // analog: MAX7456 block glyphs; digital: plain ASCII (see filter below)
+            char full = (cfg->osd.type == 1) ? '#' : (char)0xFE;
+            char none = (cfg->osd.type == 1) ? '-' : (char)0xFA;
+            for (int i = 0; i < 4; i++) { tmp[i] = (i < bars) ? full : none; }
             tmp[4] = '\0';
             len = app(out, out_cap, len, tmp);
         } else if (TOK2('r','s')) {                // resolution
@@ -184,6 +187,18 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
             if (len + 2 < out_cap) { out[len++] = '%'; out[len++] = a; out[len] = '\0'; }
         }
         #undef TOK2
+    }
+
+    // Digital OSD (DJI goggles): only the plain-ASCII slots 0x20..0x5F are
+    // reliably present in the DJI font -- fold lowercase up, drop the rest
+    // (graphical glyphs, control chars, {|}~` etc.). Analog leaves it alone.
+    if (cfg->osd.type == 1) {
+        for (size_t i = 0; i < len; i++) {
+            unsigned char c = (unsigned char)out[i];
+            if (c >= 'a' && c <= 'z') { c -= 32; }
+            if (c < 0x20 || c > 0x5F) { c = ' '; }
+            out[i] = (char)c;
+        }
     }
 
     // hard 16-char clamp (spec 9.1)
