@@ -29,7 +29,7 @@ void cfg_load_defaults(cfg_t *d)
     d->preset.allow_during_record = 0;
     d->preset.bands[0].max_us = 1300; d->preset.bands[0].id = 0x00000000u;
     d->preset.bands[1].max_us = 1700; d->preset.bands[1].id = 0x00000001u;
-    d->preset.bands[2].max_us = 0xFFFF; d->preset.bands[2].id = 0x00000002u;
+    d->preset.bands[2].max_us = 2100; d->preset.bands[2].id = 0x00000002u;   // top zone, fixed edge
 
     // osd (spec 9.2 default layout)
     d->osd.refresh_hz  = 4;

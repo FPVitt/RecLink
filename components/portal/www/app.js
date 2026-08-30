@@ -2,6 +2,7 @@
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const msg = t => { $('#msg').textContent = t; };
+const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
 
 // ---- tabs ----
 $$('#tabs button').forEach(b => b.onclick = () => {
@@ -11,16 +12,192 @@ $$('#tabs button').forEach(b => b.onclick = () => {
   $('#' + b.dataset.t).classList.add('on');
 });
 
-// ---- preset zones (name= stays preset.bands.N.*) ----
-const bandsWrap = $('#bands');
+// ============ Cam control tab: Betaflight-style AUX range bars =============
+// name= attributes still map 1:1 to /api/config: record.switch.threshold_us,
+// preset.bands.N.max_us / .id, record.switch.channel, preset.channel,
+// hilight.channel. Zone 3's upper edge is fixed at 2100 us in firmware, so
+// preset.bands.2.max_us is deliberately NOT a control (server keeps its value).
+const US_MIN = 900, US_MAX = 2100, US_SPAN = US_MAX - US_MIN;
+const clampUs = u => u < US_MIN ? US_MIN : u > US_MAX ? US_MAX : u;
+const snapUs  = u => Math.round(clampUs(u) / 25) * 25;
+const usPct   = u => (clampUs(u) - US_MIN) / US_SPAN * 100;
+
+(function fillAux() {
+  let o = '<option value="0">Disabled</option>';
+  for (let i = 1; i <= 14; i++) { o += `<option value="${i}">AUX ${i}</option>`; }
+  $$('select[data-auxsel]').forEach(s => { s.innerHTML = o; });
+})();
+
+const zwrap = $('#zone-ids');
 for (let i = 0; i < 3; i++) {
-  bandsWrap.insertAdjacentHTML('beforeend',
-    `<fieldset class="pz"><legend>Zone ${i + 1}</legend>
-     <label>Knob position up to &mdash; &micro;s
-       <input type="number" inputmode="numeric" name="preset.bands.${i}.max_us" min="900" max="2100" step="25"></label>
-     <label>Preset / mode ID to apply
-       <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></fieldset>`);
+  zwrap.insertAdjacentHTML('beforeend',
+    `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>
+       <label>up to &micro;s ${i < 2
+         ? `<input type="number" inputmode="numeric" name="preset.bands.${i}.max_us" min="900" max="2100" step="25">`
+         : `<span class="ro">2100 (fixed)</span>`}</label>
+       <label>Preset / mode ID
+         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></div>`);
 }
+
+const numAt = name => {
+  const e = document.querySelector(`[name="${CSS.escape(name)}"]`);
+  return e ? (e.value === '' ? 0 : Number(e.value)) : 0;
+};
+function setNum(name, u) {
+  const e = document.querySelector(`[name="${CSS.escape(name)}"]`);
+  if (!e || String(e.value) === String(u)) return;
+  e.value = u;
+  e.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+const BARS = {};
+let presetLiveUs = null;
+
+function barVals(fn) {
+  if (fn === 'record')  return [snapUs(numAt('record.switch.threshold_us') || 1700)];
+  if (fn === 'hilight') return [1700];
+  return [snapUs(numAt('preset.bands.0.max_us') || 1300),
+          snapUs(numAt('preset.bands.1.max_us') || 1700)];
+}
+function setBarVal(fn, i, u) {
+  u = snapUs(u);
+  if (fn === 'record') { setNum('record.switch.threshold_us', u); return; }
+  if (fn === 'preset') {
+    const v = barVals('preset');
+    if (i === 0) u = Math.min(u, v[1] - 25);
+    else         u = Math.max(u, v[0] + 25);
+    setNum('preset.bands.' + i + '.max_us', snapUs(u));
+  }
+}
+function tickHTML() {
+  return [1000, 1500, 2000].map(u =>
+    `<i class="tick" style="left:${usPct(u)}%"></i>` +
+    `<i class="tlab" style="left:${usPct(u)}%">${u}</i>`).join('');
+}
+function buildBar(host) {
+  const fn = host.dataset.fn;
+  host.innerHTML = '<i class="track"></i>' +
+    (fn === 'preset' ? '<i class="seg z0"></i><i class="seg z1"></i><i class="seg z2"></i>'
+                     : '<i class="fill"></i>') +
+    tickHTML() + '<i class="cursor" hidden><i class="cval"></i></i>';
+  const b = {
+    host, fn,
+    fill: host.querySelector('.fill'),
+    segs: [...host.querySelectorAll('.seg')],
+    cursor: host.querySelector('.cursor'),
+    cval: host.querySelector('.cval'),
+    handles: []
+  };
+  const nh = fn === 'record' ? 1 : fn === 'preset' ? 2 : 0;
+  for (let i = 0; i < nh; i++) {
+    const h = el('i', 'handle');
+    h.tabIndex = 0;
+    h.setAttribute('role', 'slider');
+    h.setAttribute('aria-valuemin', US_MIN);
+    h.setAttribute('aria-valuemax', US_MAX);
+    host.appendChild(h);
+    attachDrag(b, h, i);
+    b.handles.push(h);
+  }
+  BARS[fn] = b;
+  layoutBar(fn);
+}
+function layoutBar(fn) {
+  const b = BARS[fn]; if (!b) return;
+  const v = barVals(fn);
+  if (fn === 'preset') {
+    const p0 = usPct(v[0]), p1 = usPct(v[1]);
+    b.segs[0].style.cssText = `left:0;width:${p0}%`;
+    b.segs[1].style.cssText = `left:${p0}%;width:${p1 - p0}%`;
+    b.segs[2].style.cssText = `left:${p1}%;right:0`;
+    b.handles[0].style.left = p0 + '%';
+    b.handles[1].style.left = p1 + '%';
+    b.handles[0].setAttribute('aria-valuenow', v[0]);
+    b.handles[1].setAttribute('aria-valuenow', v[1]);
+  } else {
+    const p = usPct(fn === 'hilight' ? 1700 : v[0]);
+    b.fill.style.cssText = `left:${p}%;right:0`;
+    if (b.handles[0]) {
+      b.handles[0].style.left = p + '%';
+      b.handles[0].setAttribute('aria-valuenow', v[0]);
+    }
+  }
+}
+function attachDrag(b, h, i) {
+  const usFromX = cx => {
+    const r = b.host.querySelector('.track').getBoundingClientRect();
+    return US_MIN + (cx - r.left) / r.width * US_SPAN;
+  };
+  h.addEventListener('pointerdown', e => {
+    if (h.getAttribute('aria-disabled') === 'true') return;
+    h.setPointerCapture(e.pointerId);
+    h.classList.add('on');
+    e.preventDefault();
+  });
+  h.addEventListener('pointermove', e => {
+    if (!h.hasPointerCapture(e.pointerId)) return;
+    setBarVal(b.fn, i, usFromX(e.clientX));
+    layoutBar(b.fn);
+    if (b.fn === 'preset') paintZones();
+  });
+  const up = e => { h.classList.remove('on'); try { h.releasePointerCapture(e.pointerId); } catch (_) {} };
+  h.addEventListener('pointerup', up);
+  h.addEventListener('pointercancel', up);
+  h.addEventListener('keydown', e => {
+    const d = /Left|Down/.test(e.key) ? -25 : /Right|Up/.test(e.key) ? 25 : 0;
+    if (!d) return;
+    e.preventDefault();
+    setBarVal(b.fn, i, barVals(b.fn)[i] + d);
+    layoutBar(b.fn);
+    if (b.fn === 'preset') paintZones();
+  });
+}
+function setBarEnabled(fn, on) {
+  const b = BARS[fn]; if (!b) return;
+  b.host.classList.toggle('off', !on);
+  b.handles.forEach(h => {
+    h.setAttribute('aria-disabled', on ? 'false' : 'true');
+    h.tabIndex = on ? 0 : -1;
+  });
+}
+function paintZones(liveUs) {
+  const b = BARS.preset; if (!b) return;
+  if (liveUs !== undefined) presetLiveUs = liveUs;
+  const v = barVals('preset');
+  const z = presetLiveUs == null ? -1
+          : presetLiveUs <= v[0] ? 0 : presetLiveUs <= v[1] ? 1 : 2;
+  b.segs.forEach((s, k) => s.classList.toggle('live', k === z));
+  $$('#zone-ids .pz').forEach((r, k) => r.classList.toggle('live', k === z));
+}
+function layoutAllBars() { Object.keys(BARS).forEach(layoutBar); paintZones(); }
+
+function updateCursors(m) {
+  const aux = (m && m.connected && Array.isArray(m.aux)) ? m.aux : null;
+  [['record', 'record.switch.channel'],
+   ['preset', 'preset.channel'],
+   ['hilight', 'hilight.channel']].forEach(pair => {
+    const b = BARS[pair[0]]; if (!b) return;
+    const ch = numAt(pair[1]);
+    const u = (aux && ch && !b.host.classList.contains('off') && aux.length > 3 + ch)
+              ? aux[3 + ch] : null;
+    if (u == null) {
+      if (!b.cursor.hidden) b.cursor.hidden = true;
+      if (pair[0] === 'preset') paintZones(null);
+      return;
+    }
+    const left = usPct(u) + '%';
+    if (b.cursor.hidden) b.cursor.hidden = false;
+    if (b.cursor.style.left !== left) { b.cursor.style.left = left; b.cval.textContent = u + ' µs'; }
+    if (pair[0] === 'preset') paintZones(u);
+  });
+}
+$$('.rangebar').forEach(buildBar);
+['input', 'change'].forEach(ev => $('#cam-control').addEventListener(ev, e => {
+  const n = (e.target && e.target.name) || '';
+  if (n === 'record.switch.threshold_us') layoutBar('record');
+  else if (/^preset\.bands\.[01]\.max_us$/.test(n)) { layoutBar('preset'); paintZones(); }
+  if (/\.channel$/.test(n) && lastStatus) updateCursors(lastStatus.msp);
+}));
 
 // ================= OSD tab: chip line editor + live preview =================
 const TOKLIST = [
@@ -33,7 +210,6 @@ const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
 $('#tokens').innerHTML = TOKLIST.map(t => `<b>%${t[0]}</b> ${t[1]}`).join('<br>')
   + '<br><span class="muted">plus any literal text you type</span>';
 
-const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
 const model = [[], [], [], []];
 let focusLine = 0;
 let lastStatus = null;
@@ -354,16 +530,22 @@ function gate(el, on, reason) {
 }
 function applyGates() {
   const mode = Number(getField('record.mode'));
-  gate($('#rec-switch'), mode === 2 || mode === 3, 'only used with a switch trigger');
+  const recSw = mode === 2 || mode === 3;
+  gate($('#rec-switch'), recSw, 'only used with a switch trigger');
+  setBarEnabled('record', recSw);
 
   const pOn = getField('preset.enabled');
-  $$('#preset input:not([name="preset.enabled"]),#preset .pz input').forEach(i => i.disabled = !pOn);
+  gate($('#preset-setup'), pOn, 'turn on “Enable zone control” first');
+  setBarEnabled('preset', pOn);
 
   const isGP = cfgBrand === 'gopro', isDJI = cfgBrand === 'dji';
   gate($('#lbl-check'),  isGP  || !cfgBrand, 'GoPro only');
   gate($('#lbl-resync'), isDJI || !cfgBrand, 'DJI only');
   const gp = !!isDJI;
   $$('[name^="gps_push."]').forEach(i => i.disabled = !gp);
+
+  layoutAllBars();
+  if (lastStatus) updateCursors(lastStatus.msp);
 }
 $$('[name="record.mode"],[name="preset.enabled"]').forEach(el =>
   el.addEventListener('change', applyGates));
@@ -485,7 +667,7 @@ let lastFlags = '', lastCounters = '', lastDbg = '';
 function setOffline(off) {
   document.body.classList.toggle('offline', off);
   $('#conn').hidden = !off;
-  if (off) $('#fw').textContent = 'offline';
+  if (off) { $('#fw').textContent = 'offline'; updateCursors(null); }
 }
 
 async function poll() {
@@ -544,6 +726,7 @@ async function poll() {
 
   $('#aux').textContent = (fcUp && m.aux && m.aux.length)
     ? m.aux.map((v, i) => 'ch' + (i + 1) + ':' + v).join('  ') : '—';
+  updateCursors(m);
 
   const fj = JSON.stringify(s.flags || []);
   if (fj !== lastFlags) {

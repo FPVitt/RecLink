@@ -62,6 +62,12 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
 
     CLAMP(c->preset.channel, 0, 14);
     CLAMP(c->preset.dwell_ms, 50, 5000);
+    // Zone edges must be ascending and inside the band; zone 3's top is pinned.
+    CLAMP(c->preset.bands[0].max_us, 925, 2075);
+    CLAMP(c->preset.bands[1].max_us, c->preset.bands[0].max_us + 25, 2075);
+    c->preset.bands[2].max_us = 2100;
+
+    CLAMP(c->hilight.channel, 0, 14);
 
     CLAMP(c->osd.refresh_hz, 1, 10);
     CLAMP(c->osd.corner, 0, 3);
