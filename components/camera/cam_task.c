@@ -69,6 +69,11 @@ static uint32_t s_state_since_ms;
 static int      s_hang_fails;
 static uint32_t s_first_hang_ms;
 static bool     s_was_ready;      // link reached READY since the last go_lost
+// Consecutive pairing/encryption failures on a *bonded reconnect*. If the camera
+// forgot us (re-paired to a phone, "reset connections" on the GoPro), the stored
+// bond is dead and every retry fails identically -- so after a few, erase the
+// bond and raise FLAG_REPAIR_NEEDED instead of hammering forever.
+static int      s_bond_fails;
 // The one shared camera-state scratch (spec 3.4). cam_task + the driver
 // callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
 #define s_cs (*cam_scratch())
@@ -338,10 +343,24 @@ static void handle_ble_evt(int ev, int status)
         }
         break;
     case BLE_EVT_ENC_DONE:
+        s_bond_fails = 0;
         set_link(CAM_LINK_SYNCING);
         ble_central_discover_all();
         break;
     case BLE_EVT_ENC_FAIL:
+        // On a bonded reconnect, repeated identical pairing failures mean the
+        // camera dropped its side of the bond -- erasing ours and asking for a
+        // re-pair is the only real fix (spec 3.6 / 11.0 FLAG_REPAIR_NEEDED).
+        if (!s_first_pair && ++s_bond_fails >= 3) {
+            applog_note("cam: pairing failed x%d -- bond stale, erasing + REPAIR_NEEDED", s_bond_fails);
+            ble_central_erase_all_bonds();
+            bridge_flag_set(FLAG_REPAIR_NEEDED);
+            s_bond_fails = 0;
+            go_lost("bond stale (repair needed)", false);
+            s_drv = NULL;                 // stop reconnecting until re-paired
+            set_link(CAM_LINK_IDLE);
+            break;
+        }
         go_lost("bond failed", false);
         break;
     case BLE_EVT_MTU_DONE:
@@ -452,6 +471,8 @@ static void cam_task(void *arg)
                     s_drv = d;
                     s_first_pair = true;
                     s_backoff_idx = 0;
+                    s_bond_fails = 0;
+                    bridge_flag_clear(FLAG_REPAIR_NEEDED);
                     begin_scan();
                 }
                 break;

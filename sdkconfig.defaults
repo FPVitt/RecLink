@@ -40,6 +40,14 @@ CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
 CONFIG_BT_NIMBLE_SM_SC=y
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=4096
 CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+# cam_task owns reconnection (its own backoff + one-corrective-action discipline,
+# spec 5.2 / 8.1). NimBLE's built-in blind connect-reattempt runs a *second*
+# reconnect loop that races ours: it silently re-issues a failed connect up to N
+# times before delivering the failure event, so our 10 s connect timeout fires
+# mid-reattempt, a transient reattempt success triggers an MTU exchange on a
+# dead handle (BLE_ERR_UNK_CONN_ID), and pairing gets killed in flight
+# ("bond failed"). Disable it -- one owner per resource.
+CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
 
 # --- Wi-Fi: AP only. Bump RX buffers so a sustained upload (OTA) doesn't
 #     collapse the TCP window when flash writes stall the receiver.
