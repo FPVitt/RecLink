@@ -8,14 +8,19 @@
 </head>
 <body>
 <header>
-  <h1>FC&nbsp;&#8644;&nbsp;Cam Bridge</h1>
-  <span id="fw" class="muted"></span>
+  <div>
+    <h1>FC&nbsp;&#8644;&nbsp;Cam Bridge</h1>
+    <p class="sub">Bench setup &amp; diagnostics. Not available in flight.</p>
+  </div>
+  <span id="fw" class="muted mono"></span>
 </header>
+
+<div id="conn" hidden>Bridge offline &ndash; reconnecting&hellip; <span class="muted">(showing last known values)</span></div>
 
 <nav id="tabs">
   <button data-t="status" class="on">Status</button>
   <button data-t="recording">Recording</button>
-  <button data-t="preset">Preset</button>
+  <button data-t="preset">Presets</button>
   <button data-t="osd">OSD</button>
   <button data-t="clock">Clock</button>
   <button data-t="camera">Camera</button>
@@ -25,118 +30,193 @@
 
 <main>
 <section id="status" class="tab on">
-  <div class="grid" id="statgrid"></div>
-  <div class="row"><button type="button" id="camrefresh">Refresh camera</button></div>
-  <h3>AUX channels</h3>
-  <div id="aux" class="muted mono"></div>
-  <div id="flags" class="flags"></div>
+  <div class="card">
+    <h3>Now</h3>
+    <div class="grid" id="stat-primary"></div>
+  </div>
+  <div class="card">
+    <h3>Details</h3>
+    <div class="grid" id="stat-detail"></div>
+    <div class="row"><button type="button" id="camrefresh">Refresh camera state</button></div>
+  </div>
+  <div class="card">
+    <h3>Diagnostics</h3>
+    <div class="kv"><span>AUX channels (&micro;s)</span><span id="aux" class="mono">&mdash;</span></div>
+    <div id="flags" class="flags"></div>
+    <pre id="counters" class="mono"></pre>
+  </div>
 </section>
 
 <section id="recording" class="tab">
-  <label>Mode
+  <p class="muted">When the camera starts and stops recording.</p>
+  <label>Trigger
     <select name="record.mode">
-      <option value="0">Off</option><option value="1">On arm</option>
-      <option value="2">On switch</option><option value="3">Arm + switch</option>
+      <option value="0">Never (manual only)</option>
+      <option value="1">When the aircraft is armed</option>
+      <option value="2">From a radio switch</option>
+      <option value="3">Armed AND switch on</option>
     </select></label>
-  <label>Arm delay (ms) <input type="number" name="record.arm_delay_ms"></label>
-  <label>Stop delay (ms) <input type="number" name="record.stop_delay_ms"></label>
-  <label>Verify timeout (ms) <input type="number" name="record.verify_timeout_ms"></label>
-  <label>Retry count <input type="number" name="record.retry_count"></label>
-  <fieldset><legend>Switch</legend>
-    <label>AUX channel (0=none) <input type="number" name="record.switch.channel"></label>
-    <label>Threshold (us) <input type="number" name="record.switch.threshold_us"></label>
-    <label>Debounce (ms) <input type="number" name="record.switch.debounce_ms"></label>
+  <label>Start delay after trigger &mdash; ms (0&ndash;10000)
+    <input type="number" inputmode="numeric" name="record.arm_delay_ms" min="0" max="10000" step="100"></label>
+  <label>Keep recording after trigger clears &mdash; ms (0&ndash;20000)
+    <input type="number" inputmode="numeric" name="record.stop_delay_ms" min="0" max="20000" step="100"></label>
+  <label>Wait for camera to confirm &mdash; ms (100&ndash;5000)
+    <input type="number" inputmode="numeric" name="record.verify_timeout_ms" min="100" max="5000" step="100"></label>
+  <label>Retries if not confirmed (0&ndash;10)
+    <input type="number" inputmode="numeric" name="record.retry_count" min="0" max="10" step="1"></label>
+  <fieldset id="rec-switch">
+    <legend>Radio switch</legend>
+    <label>AUX channel (1&ndash;14, 0 = none)
+      <input type="number" inputmode="numeric" name="record.switch.channel" min="0" max="14" step="1"></label>
+    <label>On above &mdash; &micro;s (900&ndash;2100)
+      <input type="number" inputmode="numeric" name="record.switch.threshold_us" min="900" max="2100" step="25"></label>
+    <label>Debounce &mdash; ms (0&ndash;2000)
+      <input type="number" inputmode="numeric" name="record.switch.debounce_ms" min="0" max="2000" step="50"></label>
+    <p class="muted">Use Status &rarr; AUX channels, or Network &rarr; "Scan AUX now", to find the channel and its &micro;s values.</p>
   </fieldset>
 </section>
 
 <section id="preset" class="tab">
-  <label><input type="checkbox" name="preset.enabled"> Enabled</label>
-  <label>AUX channel <input type="number" name="preset.channel"></label>
-  <label>Dwell (ms) <input type="number" name="preset.dwell_ms"></label>
-  <label><input type="checkbox" name="preset.allow_during_record"> Allow while recording</label>
+  <p class="muted">Turn a radio knob/switch to apply a saved camera preset or mode. The knob range is split into three zones; each zone applies the preset ID you set for it.</p>
+  <label>Enable knob control<input type="checkbox" name="preset.enabled"></label>
+  <label>AUX channel (1&ndash;14)
+    <input type="number" inputmode="numeric" name="preset.channel" min="0" max="14" step="1"></label>
+  <label>Hold time before applying &mdash; ms (50&ndash;5000)
+    <input type="number" inputmode="numeric" name="preset.dwell_ms" min="50" max="5000" step="50"></label>
+  <label>Allow changes while recording<input type="checkbox" name="preset.allow_during_record"></label>
   <div id="bands"></div>
-  <h3>Test</h3>
-  <p class="muted">Apply a band's preset/mode to the camera now (uses the saved id).</p>
-  <div class="row">
-    <button type="button" data-preset="0">Band 0</button>
-    <button type="button" data-preset="1">Band 1</button>
-    <button type="button" data-preset="2">Band 2</button>
-  </div>
+  <fieldset>
+    <legend>Test now (applies to the camera)</legend>
+    <p class="muted">Sends the saved preset ID for that zone to the camera immediately.</p>
+    <div class="row">
+      <button type="button" data-preset="0">Apply zone 1</button>
+      <button type="button" data-preset="1">Apply zone 2</button>
+      <button type="button" data-preset="2">Apply zone 3</button>
+    </div>
+  </fieldset>
 </section>
 
 <section id="osd" class="tab">
-  <label>Refresh (Hz) <input type="number" name="osd.refresh_hz" min="1" max="10"></label>
-  <label>Line 0 <input name="osd.lines.0" maxlength="23"></label>
-  <label>Line 1 <input name="osd.lines.1" maxlength="23"></label>
-  <label>Line 2 <input name="osd.lines.2" maxlength="23"></label>
-  <label>Line 3 <input name="osd.lines.3" maxlength="23"></label>
-  <div id="tokens" class="muted"></div>
-  <fieldset><legend>Warnings</legend>
-    <label>Low batt % <input type="number" name="osd.warn.batt_pct"></label>
-    <label>SD low (min) <input type="number" name="osd.warn.sd_low_min"></label>
-    <label><input type="checkbox" name="osd.warn.blink"> Blink</label>
-    <label><input type="checkbox" name="osd.warn.show_on_lost"> Show warning when cam lost</label>
+  <p class="muted">Text the bridge writes to the Betaflight OSD. Unconfirmed camera values render blank, never as 0.</p>
+  <label>Update rate &mdash; Hz (1&ndash;10)
+    <input type="number" inputmode="numeric" name="osd.refresh_hz" min="1" max="10" step="1"></label>
+  <label>Line 1 <input name="osd.lines.0" maxlength="23"></label>
+  <label>Line 2 <input name="osd.lines.1" maxlength="23"></label>
+  <label>Line 3 <input name="osd.lines.2" maxlength="23"></label>
+  <label>Line 4 <input name="osd.lines.3" maxlength="23"></label>
+  <details id="tokwrap"><summary>Token reference</summary><div id="tokens" class="muted mono"></div></details>
+  <fieldset>
+    <legend>Warnings</legend>
+    <label>Camera battery low below &mdash; % (0&ndash;100)
+      <input type="number" inputmode="numeric" name="osd.warn.batt_pct" min="0" max="100" step="1"></label>
+    <label>SD card low below &mdash; min left (0&ndash;60)
+      <input type="number" inputmode="numeric" name="osd.warn.sd_low_min" min="0" max="60" step="1"></label>
+    <label>Blink warnings<input type="checkbox" name="osd.warn.blink"></label>
+    <label>Show a warning when the camera link is lost<input type="checkbox" name="osd.warn.show_on_lost"></label>
   </fieldset>
 </section>
 
 <section id="clock" class="tab">
-  <label><input type="checkbox" name="clock.enabled"> Enabled</label>
-  <label><input type="checkbox" name="clock.require_gps"> Require GPS</label>
-  <label>Min sats <input type="number" name="clock.min_sats"></label>
-  <label>Threshold (s) <input type="number" name="clock.threshold_s" min="2"></label>
-  <label>UTC offset (min) <input type="number" name="clock.utc_offset_min"></label>
-  <label><input type="checkbox" name="clock.dst"> DST</label>
-  <label>Check period (min, GoPro) <input type="number" name="clock.check_period_min"></label>
-  <label>Resync period (min, DJI) <input type="number" name="clock.resync_period_min"></label>
-  <label>Verify retries <input type="number" name="clock.retry_count"></label>
-  <div id="clocklive" class="muted mono"></div>
-  <button id="syncnow" type="button">Sync now</button>
+  <p class="muted">Syncs the camera clock from the FC's GPS time so footage timestamps are correct.</p>
+  <label>Enable clock sync<input type="checkbox" name="clock.enabled"></label>
+  <label>Only sync with a GPS fix<input type="checkbox" name="clock.require_gps"></label>
+  <label>Minimum satellites (3&ndash;32)
+    <input type="number" inputmode="numeric" name="clock.min_sats" min="3" max="32" step="1"></label>
+  <label>Re-sync when off by more than &mdash; s (2&ndash;3600)
+    <input type="number" inputmode="numeric" name="clock.threshold_s" min="2" max="3600" step="1"></label>
+  <label>UTC offset &mdash; min (&minus;840&ndash;840, 0 = camera runs on UTC)
+    <input type="number" inputmode="numeric" name="clock.utc_offset_min" min="-840" max="840" step="15"></label>
+  <label>Daylight saving (+1 h)<input type="checkbox" name="clock.dst"></label>
+  <label id="lbl-check">Re-check period, GoPro &mdash; min (1&ndash;240)
+    <input type="number" inputmode="numeric" name="clock.check_period_min" min="1" max="240" step="1"></label>
+  <label id="lbl-resync">Re-sync period, DJI &mdash; min (&ge;1)
+    <input type="number" inputmode="numeric" name="clock.resync_period_min" min="1" max="1440" step="1"></label>
+  <label>Verify retries (0&ndash;10)
+    <input type="number" inputmode="numeric" name="clock.retry_count" min="0" max="10" step="1"></label>
+  <div class="card"><div id="clocklive" class="mono muted">&mdash;</div></div>
+  <div class="row"><button id="syncnow" type="button">Sync now</button></div>
 </section>
 
 <section id="camera" class="tab">
-  <div id="camlive" class="muted mono"></div>
-  <button type="button" data-pair="gopro">Pair GoPro</button>
-  <button type="button" data-pair="dji">Pair DJI</button>
-  <button type="button" id="camtest">3s test record</button>
-  <button type="button" id="camforget" class="danger">Forget camera</button>
+  <p class="muted">Pairing and camera actions. These act on the camera immediately &ndash; they are not saved settings.</p>
+  <div class="card"><div id="camlive" class="mono muted">&mdash;</div></div>
+  <div class="row">
+    <button type="button" data-pair="gopro">Pair GoPro</button>
+    <button type="button" data-pair="dji">Pair DJI</button>
+  </div>
+  <div class="row">
+    <button type="button" id="camtest">3 s test recording</button>
+  </div>
+  <fieldset class="danger-zone">
+    <legend>Danger</legend>
+    <button type="button" id="camforget" class="danger">Forget paired camera</button>
+    <p class="muted">Erases the pairing. You must put the camera back in pairing mode to reconnect.</p>
+  </fieldset>
 </section>
 
 <section id="network" class="tab">
-  <label>SSID (blank = auto) <input name="wifi.ssid" maxlength="19"></label>
-  <label>Password (blank = keep) <input name="wifi.password" type="password" maxlength="31"></label>
-  <label>Channel (0 = auto) <input type="number" name="wifi.channel"></label>
-  <label>Portal trigger
-    <select name="wifi.portal_trigger"><option value="0">Button</option><option value="1">Always (disarmed)</option></select></label>
-  <label>Portal timeout (min) <input type="number" name="wifi.portal_timeout_min"></label>
-  <label>MSP baud
-    <select name="msp.baud"><option>115200</option><option>230400</option><option>250000</option><option>460800</option></select></label>
-  <label><input type="checkbox" name="msp.swap_pins"> Swap MSP TX/RX pins</label>
-  <p class="muted">Enable if the FC UART is wired backwards (bridge RX↔FC RX). Takes effect after a reboot.</p>
+  <h3>Wi-Fi (config portal)</h3>
+  <p class="muted warn-inline">&#9888; Changing SSID or password changes how you reach this page. Note the new values before saving.</p>
+  <label>Network name / SSID (blank = auto)
+    <input name="wifi.ssid" maxlength="19"></label>
+  <label>Password (blank = keep current, min 8 chars)
+    <input name="wifi.password" type="password" maxlength="31" autocomplete="new-password">
+    <button type="button" class="reveal" data-for="wifi.password">show</button></label>
+  <label>Wi-Fi channel (0 = auto, 1&ndash;13)
+    <input type="number" inputmode="numeric" name="wifi.channel" min="0" max="13" step="1"></label>
+  <label>Open the portal
+    <select name="wifi.portal_trigger">
+      <option value="0">Only after holding the button</option>
+      <option value="1">Always, while disarmed</option>
+    </select></label>
+  <label>Portal auto-close &mdash; min (1&ndash;120)
+    <input type="number" inputmode="numeric" name="wifi.portal_timeout_min" min="1" max="120" step="1"></label>
+
+  <h3>Flight controller link (MSP serial)</h3>
+  <label>Baud rate
+    <select name="msp.baud">
+      <option>115200</option><option>230400</option><option>250000</option><option>460800</option>
+    </select></label>
+  <label>Swap TX/RX pins<input type="checkbox" name="msp.swap_pins"></label>
+  <p class="muted">Enable if the FC UART is wired backwards. <strong>Baud and pin swap apply only after a reboot.</strong></p>
+  <div class="row"><button type="button" id="mspscan">Scan AUX now</button></div>
+  <pre id="scanout" class="mono muted"></pre>
 </section>
 
 <section id="system" class="tab">
   <p class="muted">The bridge is a passenger: it only reads FC arm state and writes OSD text. It never touches arming, RC, PIDs, or navigation.</p>
-  <label><input type="checkbox" name="gps_push.enabled"> DJI GPS position push</label>
-  <label>GPS push rate (Hz) <input type="number" name="gps_push.rate_hz" min="1" max="2"></label>
-  <label>LED brightness <input type="number" name="led_brightness" min="0" max="255"></label>
+  <h3>DJI GPS position push</h3>
+  <label>Send aircraft GPS position to the camera<input type="checkbox" name="gps_push.enabled"></label>
+  <label>Push rate &mdash; Hz (1&ndash;2)
+    <input type="number" inputmode="numeric" name="gps_push.rate_hz" min="1" max="2" step="1"></label>
+  <h3>Indicator LED</h3>
+  <label>Brightness (16&ndash;255)
+    <input type="number" inputmode="numeric" name="led_brightness" min="16" max="255" step="1"></label>
+  <h3>Actions</h3>
   <div class="row">
-    <button type="button" id="identify">Identify</button>
-    <button type="button" id="reboot">Reboot</button>
-    <button type="button" id="factory" class="danger">Factory reset</button>
+    <button type="button" id="identify">Identify (blink LED)</button>
+    <button type="button" id="reboot">Reboot bridge</button>
   </div>
-  <h3>Firmware update</h3>
-  <p class="muted">Upload <code>build/fc_cam_bridge.bin</code> (the app image, ~1&nbsp;MB).</p>
-  <input type="file" id="otafile" accept=".bin">
-  <button type="button" id="otago">Upload &amp; flash</button>
-  <progress id="otabar" value="0" max="100" style="width:100%;display:none"></progress>
+
+  <fieldset class="danger-zone">
+    <legend>Danger</legend>
+    <div class="row"><button type="button" id="factory" class="danger">Factory reset</button></div>
+    <p class="muted">Erases all settings and camera pairing, then reboots.</p>
+    <h3>Firmware update (OTA)</h3>
+    <p class="muted">Upload <code>build/fc_cam_bridge.bin</code> (~1&nbsp;MB). The bridge reboots when done; a bad image is rejected and the current firmware is kept.</p>
+    <input type="file" id="otafile" accept=".bin">
+    <div class="row"><button type="button" id="otago" class="danger">Upload &amp; flash</button></div>
+  </fieldset>
+
   <h3>Log</h3>
   <pre id="log" class="mono"></pre>
 </section>
 </main>
 
 <footer>
-  <button id="save">Save all settings</button>
-  <span id="msg" class="muted"></span>
+  <button id="save">Save settings</button>
+  <button id="rebootnow" class="danger" hidden>Reboot now</button>
+  <span id="msg" class="muted" aria-live="polite"></span>
 </footer>
 <script src="/app.js"></script>
 </body>
