@@ -17,9 +17,16 @@ typedef struct {
 
     bool     armed;
     uint32_t arming_disable_flags;
+    int8_t   arm_bit_index;         // BOXARM bit in flightModeFlags (from MSP_BOXIDS); -1 = unresolved
 
     uint16_t rc[18];                // us; idx 0..3 = RPYT, 4.. = AUX1..
     uint8_t  rc_channel_count;
+
+    // measured MSP receive cadence (EMA of the interval between responses, ms;
+    // 0 = not measured yet). Diagnostics only -- surfaced in /api/status.
+    uint16_t rc_period_ms;          // MSP_RC  (nominal 100 ms / 10 Hz)
+    uint16_t status_period_ms;      // MSP_STATUS (nominal 50 ms / 20 Hz)
+    uint32_t rc_last_rx_ms;         // uptime of the last MSP_RC response
 
     gps_fix_t gps;
     bool     gps_present;           // MSP_STATUS sensor bit 3

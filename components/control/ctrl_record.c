@@ -11,8 +11,7 @@ static const char *TAG = "ctrl.rec";
 enum { PH_IDLE, PH_START_DELAY, PH_VERIFY_START, PH_STOP_DELAY, PH_VERIFY_STOP };
 
 static struct {
-    bool     sw_raw, sw_active;
-    uint32_t sw_since;
+    bool     sw_active;
     bool     desired;
     bool     combi_cut;          // combi mode: switch forced a stop this clip
     bool     sw_prev;
@@ -45,13 +44,9 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
     uint8_t mode = cfg->record.mode;
     if (mode == REC_OFF) { S.phase = PH_IDLE; return; }
 
-    // ---- switch decode with debounce (spec 8.2) --------------------
-    bool sw_raw = ctrl_switch_active(&c->fc, cfg->record.sw.channel,
-                                     cfg->record.sw.threshold_us, S.sw_active);
-    if (sw_raw != S.sw_raw) { S.sw_raw = sw_raw; S.sw_since = c->now_ms; }
-    if ((c->now_ms - S.sw_since) >= cfg->record.sw.debounce_ms && sw_raw != S.sw_active) {
-        S.sw_active = sw_raw;
-    }
+    // ---- switch decode (spec 8.2): 40 us threshold hysteresis, no debounce --
+    S.sw_active = ctrl_switch_active(&c->fc, cfg->record.sw.channel,
+                                    cfg->record.sw.threshold_us, S.sw_active);
     bool sw_falling = S.sw_prev && !S.sw_active;
     bool sw_rising  = !S.sw_prev && S.sw_active;
     S.sw_prev = S.sw_active;

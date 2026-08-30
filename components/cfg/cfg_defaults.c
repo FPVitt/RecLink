@@ -21,7 +21,6 @@ void cfg_load_defaults(cfg_t *d)
     d->record.retry_count       = 3;
     d->record.sw.channel        = 0;      // none
     d->record.sw.threshold_us   = 1700;
-    d->record.sw.debounce_ms    = 150;
 
     // preset (spec 8.3) -- 3-pos switch band edges
     d->preset.enabled             = 0;

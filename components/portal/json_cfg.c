@@ -31,7 +31,6 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON *sw = cJSON_AddObjectToObject(rec, "switch");
     cJSON_AddNumberToObject(sw, "channel", c->record.sw.channel);
     cJSON_AddNumberToObject(sw, "threshold_us", c->record.sw.threshold_us);
-    cJSON_AddNumberToObject(sw, "debounce_ms", c->record.sw.debounce_ms);
 
     cJSON *pre = cJSON_AddObjectToObject(r, "preset");
     cJSON_AddBoolToObject(pre, "enabled", c->preset.enabled);
@@ -155,7 +154,6 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
         if (sw) {
             mnum_u(sw, "channel", &c->record.sw.channel, 1);
             mnum_u(sw, "threshold_us", &c->record.sw.threshold_us, 2);
-            mnum_u(sw, "debounce_ms", &c->record.sw.debounce_ms, 2);
         }
     }
     if ((o = J_OBJ(j, "preset"))) {

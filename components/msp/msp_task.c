@@ -166,14 +166,17 @@ static void msp_task(void *arg)
 
     fc_state_t st;
     memset(&st, 0, sizeof(st));
+    st.arm_bit_index = -1;
 
     msp_parse_ctx_t pctx;
     msp_parse_ctx_init(&pctx, cfg ? cfg->clock.min_sats : 6);
 
-    // arm debounce (spec 4.3 step 4)
+    // arm edge (spec 4.3): emit on any change, no debounce (owner decision
+    // 2026-08-30 -- a spurious edge only toggles the camera, never the aircraft).
     bool armed_pub = false, have_armed = false;
-    bool armed_raw_prev = false;
-    int  armed_stable = 0;
+
+    // measured MSP cadence (diagnostics). EMA of the interval between responses.
+    uint32_t last_rc_rx = 0, last_status_rx = 0;
 
     bool link_pub = false;
     bool gps_good_pub = false;
@@ -195,7 +198,27 @@ static void msp_task(void *arg)
             if (msp_rx_byte(&rx, rxb[i], &fr, &bad)) {
                 st.last_rx_ms = now;
                 if (msp_parse_frame(&fr, &st, &pctx)) { /* changed */ }
-                if (fr.dir == '>') { msp_sched_mark_oneshot_done(fr.func); }
+                if (fr.dir == '>') {
+                    msp_sched_mark_oneshot_done(fr.func);
+                    // measured cadence: EMA (1/4) of the response interval, dt
+                    // capped so a link outage doesn't skew it.
+                    if (fr.func == MSP_RC) {
+                        if (last_rc_rx) {
+                            uint32_t dt = now - last_rc_rx; if (dt > 2000) dt = 2000;
+                            st.rc_period_ms = st.rc_period_ms
+                                ? (uint16_t)(st.rc_period_ms - (st.rc_period_ms >> 2) + (dt >> 2)) : (uint16_t)dt;
+                        }
+                        last_rc_rx = now;
+                        st.rc_last_rx_ms = now;
+                    } else if (fr.func == MSP_STATUS) {
+                        if (last_status_rx) {
+                            uint32_t dt = now - last_status_rx; if (dt > 2000) dt = 2000;
+                            st.status_period_ms = st.status_period_ms
+                                ? (uint16_t)(st.status_period_ms - (st.status_period_ms >> 2) + (dt >> 2)) : (uint16_t)dt;
+                        }
+                        last_status_rx = now;
+                    }
+                }
                 fc_state_publish(&st);
                 published = true;
             }
@@ -219,16 +242,10 @@ static void msp_task(void *arg)
             }
         }
 
-        // ---- arm edge debounce ------------------------------------
+        // ---- arm edge (spec 4.3, no debounce) --------------------
         if (pctx.arm_bit_index >= 0 && link_up) {
             bool raw = st.armed;
-            if (raw == armed_raw_prev) {
-                if (armed_stable < 4) { armed_stable++; }
-            } else {
-                armed_stable = 0;
-            }
-            armed_raw_prev = raw;
-            if (armed_stable >= 2 && (!have_armed || raw != armed_pub)) {
+            if (!have_armed || raw != armed_pub) {
                 armed_pub = raw;
                 have_armed = true;
                 emit_event(FC_EV_ARMED, raw ? 1 : 0);

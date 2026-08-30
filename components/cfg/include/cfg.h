@@ -62,7 +62,7 @@ typedef struct __attribute__((packed)) {
         struct {
             uint8_t  channel;     // AUX 1..14 (0 = none)
             uint16_t threshold_us;
-            uint16_t debounce_ms;
+            uint16_t _rsvd_debounce_ms;   // removed: RC switch debounce (owner decision 2026-08-30)
         } sw;
     } record;
 

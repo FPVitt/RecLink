@@ -59,7 +59,6 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     CLAMP(c->record.retry_count, 0, 10);
     CLAMP(c->record.sw.channel, 0, 14);
     CLAMP(c->record.sw.threshold_us, 900, 2100);
-    CLAMP(c->record.sw.debounce_ms, 0, 2000);
 
     CLAMP(c->preset.channel, 0, 14);
     CLAMP(c->preset.dwell_ms, 50, 5000);

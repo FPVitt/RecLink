@@ -116,6 +116,24 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddNumberToObject(m, "fc_utc", (double)(fc_utc / 1000));
     cJSON_AddNumberToObject(m, "last_rx_ms", (double)(now_ms() - fc.last_rx_ms));
 
+    // MSP diagnostics: measured receive cadence + arm-detection internals.
+    cJSON *dbg = cJSON_AddObjectToObject(m, "debug");
+    cJSON_AddNumberToObject(dbg, "rc_period_ms", fc.rc_period_ms);
+    cJSON_AddNumberToObject(dbg, "rc_hz",
+        fc.rc_period_ms ? (double)((int)(10000.0 / fc.rc_period_ms + 0.5)) / 10.0 : 0);
+    cJSON_AddNumberToObject(dbg, "rc_age_ms",
+        fc.rc_last_rx_ms ? (double)(now_ms() - fc.rc_last_rx_ms) : -1);
+    cJSON_AddNumberToObject(dbg, "rc_channels", fc.rc_channel_count);
+    cJSON_AddNumberToObject(dbg, "status_period_ms", fc.status_period_ms);
+    cJSON_AddNumberToObject(dbg, "status_hz",
+        fc.status_period_ms ? (double)((int)(10000.0 / fc.status_period_ms + 0.5)) / 10.0 : 0);
+    cJSON_AddNumberToObject(dbg, "rc_nominal_hz", 10);       // msp_sched MSP_RC period
+    cJSON_AddNumberToObject(dbg, "status_nominal_hz", 20);   // msp_sched MSP_STATUS period
+    cJSON_AddNumberToObject(dbg, "arm_bit", fc.arm_bit_index);
+    cJSON_AddBoolToObject(dbg, "arm_bit_resolved", fc.arm_bit_index >= 0);
+    cJSON_AddNumberToObject(dbg, "arm_disable_flags", (double)fc.arming_disable_flags);
+    cJSON_AddBoolToObject(dbg, "armed_raw", fc.armed);
+
     cJSON *clk = cJSON_AddObjectToObject(j, "clock");
     bool readable, last_ok, ever; int32_t delta_ms; uint32_t last_res;
     ctrl_clock_status(&readable, &delta_ms, &last_ok, &last_res, &ever);

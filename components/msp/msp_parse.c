@@ -84,6 +84,7 @@ bool msp_parse_frame(const msp_frame_t *f, fc_state_t *s, msp_parse_ctx_t *ctx)
             if (p[i] == 0) { ctx->arm_bit_index = (int)i; break; }
         }
         ctx->boxids_ok = (ctx->arm_bit_index >= 0);
+        s->arm_bit_index = (int8_t)ctx->arm_bit_index;   // surfaced in /api/status
         if (!ctx->boxids_ok) { ESP_LOGW(TAG, "BOXARM not found in %u boxids", f->len); }
         changed = true;
         break;

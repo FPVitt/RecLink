@@ -12,6 +12,7 @@ void fc_state_init(void)
 {
     s_mux = xSemaphoreCreateMutexStatic(&s_mux_buf);
     // sane zero state; link_up false, nothing valid
+    s_fc.arm_bit_index = -1;   // -1 = BOXARM not resolved from MSP_BOXIDS yet
 }
 
 void fc_state_get(fc_state_t *dst)
