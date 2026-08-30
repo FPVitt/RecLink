@@ -86,28 +86,18 @@ body:not(.dirty) footer #save{opacity:.6}
 
 /* OSD chip editor + preview */
 .osdscreen{position:relative;container-type:inline-size;background:#05070a;
-  border:1px solid var(--line);border-radius:8px;padding:26px 10px 14px;
+  border:1px solid var(--line);border-radius:8px;padding:14px 12px;
   min-height:clamp(150px,46cqw,300px);
-  display:flex;flex-direction:column;overflow:hidden}
-.osdscreen.b-top{justify-content:flex-start}
-.osdscreen.b-bot{justify-content:flex-end}
+  display:flex;flex-direction:column;justify-content:flex-start;overflow:hidden}
 /* Goggles-style OSD: chunky squared bold mono, crisp outline over "video".
    Real DJI/BF digital-OSD font not embedded — see report. Approximated with
    the system mono stack styled heavy. */
-.osdlines{position:relative;display:flex;flex-direction:column;width:16ch;
+.osdlines{display:flex;flex-direction:column;width:16ch;align-self:flex-start;text-align:left;
   font-family:ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;
   font-size:15px;font-size:clamp(13px,7vw,30px);font-size:clamp(13px,8cqw,34px);
   font-weight:800;letter-spacing:.04em;line-height:1.9;
-  color:#fff;text-shadow:-1px 0 1px #000,1px 0 1px #000,0 -1px 1px #000,0 1px 1px #000,0 0 3px rgba(0,0,0,.95);
-  border-right:1px solid rgba(255,255,255,.16)}
-.osdscreen.b-left .osdlines{align-self:flex-start;text-align:left}
-.osdscreen.b-right .osdlines{align-self:flex-end;text-align:right;
-  border-right:0;border-left:1px solid rgba(255,255,255,.16)}
-.osdlines::after{content:"16 ch";position:absolute;top:-1.4em;font-size:10px;
-  font-weight:400;letter-spacing:.04em;color:var(--mut);font-family:system-ui,sans-serif}
-.osdscreen.b-left .osdlines::after{right:-.5em}
-.osdscreen.b-right .osdlines::after{left:-.5em}
-.osdline{white-space:pre;min-height:1.9em;transform:scaleY(1.18);transform-origin:center}
+  color:#fff;text-shadow:-1px 0 1px #000,1px 0 1px #000,0 -1px 1px #000,0 1px 1px #000,0 0 3px rgba(0,0,0,.95)}
+.osdline{white-space:pre;min-height:1.9em;transform:scaleY(1.18);transform-origin:left center}
 #osdclip,#osdnote{font-size:12px;margin:6px 0 0}
 .palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .pchip{display:inline-flex;align-items:center;gap:6px;background:#11151b;border:1px solid var(--line);
@@ -128,10 +118,6 @@ body:not(.dirty) footer #save{opacity:.6}
 .chip .x{background:transparent;border:0;color:var(--mut);min-width:0;min-height:32px;padding:2px 5px;font-size:13px}
 .rawrow{display:block;padding:0}
 .rawrow input{width:100%;margin-top:6px}
-.corner{display:grid;grid-template-columns:44px 44px;gap:6px}
-.corner button{background:#11151b;border:1px solid var(--line);color:var(--fg);
-  min-width:44px;font-size:18px;padding:0}
-.corner button.on{border-color:var(--acc);color:var(--acc)}
 
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important}

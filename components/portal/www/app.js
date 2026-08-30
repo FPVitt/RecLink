@@ -121,11 +121,6 @@ $$('#olines .rawrow input').forEach(inp => {
     renderChips(i); setDirty(true); renderPreview();
   };
 });
-$$('#corner button').forEach(b => b.onclick = () => {
-  $('[name="osd.corner"]').value = b.dataset.c;
-  $$('#corner button').forEach(x => x.classList.toggle('on', x === b));
-  setDirty(true); renderPreview();
-});
 $('#osdsim').onclick = renderPreview;
 
 function osdLoad() {
@@ -133,8 +128,6 @@ function osdLoad() {
     const v = $(`[name="osd.lines.${i}"]`).value || '';
     model[i] = parseTmpl(v); $('#raw-' + i).value = v; renderChips(i);
   }
-  const cv = $('[name="osd.corner"]').value || '1';
-  $$('#corner button').forEach(x => x.classList.toggle('on', x.dataset.c === cv));
   setFocusLine(0);
   renderPreview();
 }
@@ -258,13 +251,6 @@ function renderPreview() {
       ? 'Sample data — camera not connected (simulating a connected camera).'
       : 'Sample data — camera not connected. On the real OSD only “CAM LOST” shows until the link is ready.';
   }
-
-  const corner = +($('[name="osd.corner"]').value || 1);
-  const top = corner < 2, left = (corner % 2) === 0;
-  scr.classList.toggle('b-top', top);
-  scr.classList.toggle('b-bot', !top);
-  scr.classList.toggle('b-left', left);
-  scr.classList.toggle('b-right', !left);
 
   let lines;
   if (!d.link) { lines = [d.searching ? 'CAM ?' : 'CAM LOST', '', '', '']; }
