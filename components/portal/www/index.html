@@ -48,7 +48,7 @@
 </section>
 
 <section id="cam-control" class="tab">
-  <p class="muted">Radio-switch control of the camera. For each function pick an AUX channel, then drag the handles on the 900&ndash;2100&nbsp;&micro;s bar to set the active band &mdash; like Betaflight&rsquo;s Modes tab. Flip the switch on your transmitter and the orange marker shows where that channel sits right now.</p>
+  <p class="muted">Pick an AUX channel, drag the band handles. The orange marker is the channel&rsquo;s live value.</p>
 
   <div class="card">
     <h3>Recording</h3>
@@ -66,7 +66,6 @@
       <div class="rangebar" id="rb-record" data-fn="record"></div>
       <label>On above &mdash; &micro;s (900&ndash;2100)
         <input type="number" inputmode="numeric" name="record.switch.threshold_us" min="900" max="2100" step="25"></label>
-      <p class="muted">Recording runs while the channel sits above the handle. The upper edge is fixed at 2100&nbsp;&micro;s.</p>
     </fieldset>
     <details class="adv adv-only">
       <summary>Advanced &mdash; timing</summary>
@@ -90,7 +89,7 @@
         <select name="preset.channel" data-auxsel></select></label>
       <div class="rangebar" id="rb-preset" data-fn="preset"></div>
       <div id="zone-ids"></div>
-      <p class="muted">When the knob rests in a zone for the hold time, the bridge applies that zone&rsquo;s Preset / mode ID &mdash; a GoPro preset ID or a DJI mode value. Zone 3 runs up to 2100&nbsp;&micro;s.</p>
+      <p class="muted">Each zone applies its Preset / mode ID (GoPro preset ID or DJI mode value).</p>
     </fieldset>
     <details class="adv adv-only">
       <summary>Advanced &mdash; timing &amp; behaviour</summary>
@@ -100,7 +99,6 @@
     </details>
     <fieldset class="adv-only">
       <legend>Test now (acts on the camera)</legend>
-      <p class="muted">Sends that zone&rsquo;s Preset / mode ID to the camera immediately.</p>
       <div class="row">
         <button type="button" data-preset="0">Apply zone 1</button>
         <button type="button" data-preset="1">Apply zone 2</button>
@@ -114,18 +112,21 @@
     <label>AUX channel
       <select name="hilight.channel" data-auxsel></select></label>
     <div class="rangebar" id="rb-hilight" data-fn="hilight"></div>
-    <p class="muted">Tags a moment (GoPro HiLight, DJI QS / snapshot) each time the channel rises above 1700&nbsp;&micro;s. The threshold is fixed in firmware.</p>
+    <p class="muted">Tags a moment (GoPro HiLight / DJI QS) above 1700&nbsp;&micro;s.</p>
   </div>
 
-  <p class="muted">To find a channel and its &micro;s values use <b>Network &rarr; Scan AUX now</b>, or watch <b>Status &rarr; AUX channels</b>.</p>
+  <p class="muted">Find channels: <b>Network &rarr; Scan AUX now</b>.</p>
 </section>
 
 <section id="osd" class="tab">
-  <p class="muted">Build the four lines of text the bridge writes to the Betaflight OSD. Each line is clamped to 16 characters after tokens expand. Unconfirmed camera values render blank, never as 0.</p>
+  <label>OSD type
+    <select name="osd.type">
+      <option value="0">Analog</option>
+      <option value="1">Digital</option>
+    </select></label>
 
   <div class="card" id="osdprev">
     <h3>Preview</h3>
-    <p class="muted">The four custom-message lines only (Betaflight <code>CUSTOM_MESSAGE</code> 0&ndash;3). Indicative &mdash; the OSD also shows Betaflight&rsquo;s own elements.</p>
     <div id="osdscreen" class="osdscreen">
       <div id="osdlines" class="osdlines"></div>
     </div>
@@ -136,7 +137,6 @@
 
   <div class="card" id="osdedit">
     <h3>Lines</h3>
-    <p class="muted" id="palhint">Tap a chip to add it to Line 1</p>
     <div id="palette" class="palette"></div>
     <div id="olines">
       <div class="oline" data-i="0"><div class="olh"><b>Line 1</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"><label class="rawrow" hidden>template <input id="raw-0" class="mono" maxlength="23"></label></div>
@@ -146,12 +146,6 @@
     </div>
   </div>
 
-  <label>OSD type
-    <select name="osd.type">
-      <option value="0">Analog &mdash; full character set</option>
-      <option value="1">Digital &mdash; DJI goggles (A&ndash;Z 0&ndash;9 . : - / % only)</option>
-    </select></label>
-  <p class="muted">Digital: the DJI goggle font only has plain ASCII &mdash; lowercase is folded to uppercase and graphical glyphs (battery bar) drop to <code>#</code>/<code>-</code>. Analog leaves your text untouched.</p>
   <label>Update rate &mdash; Hz (1&ndash;10)
     <input type="number" inputmode="numeric" name="osd.refresh_hz" min="1" max="10" step="1"></label>
   <label>Speed units (used by %sp)
@@ -171,7 +165,7 @@
 </section>
 
 <section id="clock" class="tab adv-only">
-  <p class="muted">Syncs the camera clock from the FC's GPS time so footage timestamps are correct.</p>
+  <p class="muted">Sets the camera clock from FC GPS time.</p>
   <label>Enable clock sync<input type="checkbox" name="clock.enabled"></label>
   <label>Only sync with a GPS fix<input type="checkbox" name="clock.require_gps"></label>
   <label>Minimum satellites (3&ndash;32)
@@ -193,7 +187,7 @@
 
 <section id="camera" class="tab">
   <h3>Camera binding</h3>
-  <p class="muted">Pair a camera, test it, or erase the pairing. These act on the camera immediately &ndash; they are not saved settings.</p>
+  <p class="muted">These act on the camera now &mdash; not saved settings.</p>
   <div class="card"><div id="camlive" class="mono muted">&mdash;</div></div>
   <div class="row">
     <button type="button" data-pair="gopro">Pair GoPro</button>
@@ -205,7 +199,7 @@
   <fieldset class="danger-zone">
     <legend>Danger</legend>
     <button type="button" id="camforget" class="danger">Forget paired camera</button>
-    <p class="muted">Erases the pairing. You must put the camera back in pairing mode to reconnect.</p>
+    <p class="muted">Erases the pairing &mdash; re-pair to reconnect.</p>
   </fieldset>
 </section>
 
@@ -234,7 +228,7 @@
         <option>115200</option><option>230400</option><option>250000</option><option>460800</option>
       </select></label>
     <label>Swap TX/RX pins<input type="checkbox" name="msp.swap_pins"></label>
-    <p class="muted">Enable if the FC UART is wired backwards. <strong>Baud and pin swap apply only after a reboot.</strong></p>
+    <p class="muted"><strong>Applies after a reboot.</strong></p>
   </div>
   <h3>Radio channels</h3>
   <div class="row"><button type="button" id="mspscan">Scan AUX now</button></div>
@@ -242,9 +236,9 @@
 </section>
 
 <section id="system" class="tab">
-  <p class="muted">The bridge is a passenger: it only reads FC arm state and writes OSD text. It never touches arming, RC, PIDs, or navigation.</p>
+  <p class="muted">The bridge is a passenger &mdash; it only reads arm state and writes OSD text. It never touches arming, RC, PIDs, or navigation.</p>
   <label>Advanced mode<input type="checkbox" id="advmode"></label>
-  <p class="muted">Reveals the Clock tab, diagnostics counters, the MSP link debug, camera test actions, and low-level link settings (baud, pin swap, Wi-Fi channel). Stored in this browser only.</p>
+  <p class="muted">Reveals the Clock tab, diagnostics, and low-level link settings.</p>
   <h3>DJI GPS position push</h3>
   <label>Send aircraft GPS position to the camera<input type="checkbox" name="gps_push.enabled"></label>
   <label>Push rate &mdash; Hz (1&ndash;2)
@@ -263,7 +257,7 @@
     <div class="row"><button type="button" id="factory" class="danger">Factory reset</button></div>
     <p class="muted">Erases all settings and camera pairing, then reboots.</p>
     <h3>Firmware update (OTA)</h3>
-    <p class="muted">Upload <code>build/fc_cam_bridge.bin</code> (~1&nbsp;MB). The bridge reboots when done; a bad image is rejected and the current firmware is kept.</p>
+    <p class="muted">Upload <code>fc_cam_bridge.bin</code>. Reboots when done; a bad image is rejected.</p>
     <input type="file" id="otafile" accept=".bin">
     <div class="row"><button type="button" id="otago" class="danger">Upload &amp; flash</button></div>
   </fieldset>

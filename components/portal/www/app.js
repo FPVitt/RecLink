@@ -284,7 +284,6 @@ function renderChips(i) {
 function setFocusLine(i) {
   focusLine = i;
   $$('.oline').forEach(o => o.classList.toggle('foc', +o.dataset.i === i));
-  $('#palhint').textContent = 'Tap a chip to add it to Line ' + (i + 1);
 }
 (function buildPalette() {
   const pal = $('#palette');
@@ -452,13 +451,11 @@ function renderPreview() {
   let d, srcNote;
   if (connected) {
     d = liveData(lastStatus);
-    srcNote = 'Live data from the camera. Lens, craft name, FC battery and speed are not in the status feed yet — shown from sample data.';
+    srcNote = 'Live data';
   } else {
     d = sampleData();
     if (!sim.checked) { d.link = false; d.searching = false; }
-    srcNote = sim.checked
-      ? 'Sample data — camera not connected (simulating a connected camera).'
-      : 'Sample data — camera not connected. On the real OSD only “CAM LOST” shows until the link is ready.';
+    srcNote = sim.checked ? 'Sample data (simulated)' : 'Sample data (no camera)';
   }
 
   let lines;
@@ -478,8 +475,7 @@ function renderPreview() {
   clipEl.textContent = clipped.length
     ? clipped.map(c => 'Line ' + c.n + ' is ' + c.full.length + ' chars — clipped to “' + c.full.slice(0, 16) + '”').join('   ')
     : '';
-  $('#osdnote').textContent = srcNote
-    + (d.link && d.warn_blink && activeWarning(d) ? '  The warning blinks on the real OSD.' : '');
+  $('#osdnote').textContent = srcNote;
 }
 ['input', 'change'].forEach(ev => document.addEventListener(ev, e => {
   if (e.target.closest && e.target.closest('#osd')) renderPreview();
