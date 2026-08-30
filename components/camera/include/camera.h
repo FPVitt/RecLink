@@ -94,6 +94,7 @@ esp_err_t cam_forget(void);                    // delete bond + cfg + go IDLE
 esp_err_t cam_refresh(void);                    // portal: re-pull all camera state
 void      cam_ble_suspend(void);                // drop the BLE link (for OTA)
 void      cam_throttle(bool on);                // slow driver polling (portal up)
+void      cam_ble_pause_scan(bool on);          // pause the camera hunt (portal AP up; keeps a READY link)
 uint32_t  cam_notify_drops(void);              // BLE notifications lost to a full queue (monotonic)
 void      cam_erase_all_bonds(void);           // factory reset path (spec 11.0)
 bool      cam_reconcile_bonds(bool erase_orphan_bond);  // boot; -> FLAG_REPAIR_NEEDED

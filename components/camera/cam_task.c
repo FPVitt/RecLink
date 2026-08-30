@@ -31,7 +31,8 @@ static const char *TAG = "cam";
 static const uint32_t k_backoff_s[] = { 1, 2, 4, 8, 16, 30, 30 };
 
 // ---- internal event queue -----------------------------------------
-typedef enum { IQ_BLE_EVT, IQ_NOTIFY, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET, IQ_CMD_SUSPEND } iq_kind_t;
+typedef enum { IQ_BLE_EVT, IQ_NOTIFY, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET,
+               IQ_CMD_SUSPEND, IQ_CMD_SCAN_PAUSE } iq_kind_t;
 typedef struct {
     uint8_t kind;
     union {
@@ -39,6 +40,7 @@ typedef struct {
         struct { uint16_t handle; uint16_t len; uint8_t data[256]; } notify;
         ble_adv_t adv;                    // full advert; cam_task does the matching
         struct { char brand[6]; } pair;
+        struct { uint8_t on; } flag;
     };
 } iq_item_t;
 
@@ -226,6 +228,18 @@ void cam_ble_suspend(void)
 }
 static volatile bool s_throttle;
 void cam_throttle(bool on) { s_throttle = on; }
+
+// Portal Wi-Fi AP is up: on the single-radio C3 a continuous active BLE scan
+// starves the macOS association handshake (auth/assoc/EAPOL/DHCP), so pause the
+// camera hunt for the portal session. An already-established READY link is left
+// alone (low-bandwidth, coex-friendly, and the OSD preview + clock use it).
+// A pairing attempt from the portal overrides this (it sets s_first_pair).
+static volatile bool s_scan_paused;
+void cam_ble_pause_scan(bool on)
+{
+    iq_item_t it = { .kind = IQ_CMD_SCAN_PAUSE, .flag = { .on = on ? 1 : 0 } };
+    xQueueSend(s_iq, &it, pdMS_TO_TICKS(100));
+}
 QueueHandle_t cam_events(void) { return s_evq; }
 
 void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
@@ -289,11 +303,16 @@ static void exec_cmd(const cam_cmd_t *c)
 }
 
 // ---- state machine step --------------------------------------
+// Scanning is paused for the portal session (see cam_ble_pause_scan) unless a
+// pairing attempt is in progress.
+static bool scan_allowed(void) { return !s_scan_paused || s_first_pair; }
+
 static void begin_scan(void)
 {
     invalidate_cam_values();
     set_link(CAM_LINK_SCAN);
-    ble_central_scan(true);
+    if (scan_allowed()) { ble_central_scan(true); }
+    else { ble_central_scan(false); }
 }
 
 // `silent_hang` = the loss was an RX-silence timeout on an established link
@@ -500,6 +519,24 @@ static void cam_task(void *arg)
                 set_link(CAM_LINK_IDLE);
                 applog_note("BLE suspended for OTA");
                 break;
+            case IQ_CMD_SCAN_PAUSE:
+                s_scan_paused = it.flag.on;
+                if (s_scan_paused) {
+                    // Stop hunting for the portal session unless mid-pair. An
+                    // established READY link is kept.
+                    if (s_cs.link == CAM_LINK_SCAN && !s_first_pair) {
+                        ble_central_scan(false);
+                    }
+                    applog_note("BLE scan paused (portal AP up)");
+                } else {
+                    // Portal down: resume promptly if we were hunting.
+                    if (s_drv && (s_cs.link == CAM_LINK_SCAN || s_cs.link == CAM_LINK_LOST)) {
+                        s_backoff_idx = 0;
+                        begin_scan();
+                    }
+                    applog_note("BLE scan resumed");
+                }
+                break;
             }
         }
 
@@ -528,10 +565,16 @@ static void cam_task(void *arg)
 
             // Re-arm scanning while in SCAN: covers ble_central_scan() having
             // been rejected because the host wasn't synced yet (review M10),
-            // and NimBLE dropping discovery on its own.
+            // and NimBLE dropping discovery on its own. Held off while the
+            // portal AP is up (unless pairing) so Wi-Fi association isn't
+            // starved on the single C3 radio.
             if (s_cs.link == CAM_LINK_SCAN && s_drv) {
-                esp_err_t sr = ble_central_scan(true);
-                if (sr != ESP_OK) { ESP_LOGW(TAG, "scan re-arm: %s", esp_err_to_name(sr)); }
+                if (scan_allowed()) {
+                    esp_err_t sr = ble_central_scan(true);
+                    if (sr != ESP_OK) { ESP_LOGW(TAG, "scan re-arm: %s", esp_err_to_name(sr)); }
+                } else {
+                    ble_central_scan(false);
+                }
             }
 
             publish_dirty();
@@ -546,7 +589,7 @@ static void cam_task(void *arg)
         }
 
         // ---- LOST backoff -> rescan ----------------------------
-        if (s_cs.link == CAM_LINK_LOST) {
+        if (s_cs.link == CAM_LINK_LOST && scan_allowed()) {
             uint32_t wait_ms = k_backoff_s[s_backoff_idx] * 1000;
             if (now - s_state_since_ms >= wait_ms) {
                 if (s_backoff_idx < (int)(sizeof(k_backoff_s)/sizeof(k_backoff_s[0])) - 1) {

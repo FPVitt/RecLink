@@ -55,12 +55,17 @@ static void wifi_ap_up(void)
     wc.ap.ssid_len = strlen((char *)wc.ap.ssid);
     strlcpy((char *)wc.ap.password, c->wifi.password, sizeof(wc.ap.password));
     wc.ap.channel = c->wifi.channel ? c->wifi.channel : 1;
-    wc.ap.max_connection = 2;                          // spec 10.2
+    wc.ap.max_connection = 3;                          // spec 10.2 (macOS may hold a stale assoc)
     wc.ap.authmode = strlen(c->wifi.password) >= 8 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
+    wc.ap.pmf_cfg.capable = true;                      // WPA2 + PMF-capable: newer macOS is picky
+    wc.ap.pmf_cfg.required = false;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wc));
     ESP_ERROR_CHECK(esp_wifi_start());
+    // HT20 only -- clients complete the association / EAPOL handshake more
+    // reliably than on HT40, and the portal needs no bandwidth.
+    esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
     // Portal is bench-only and short-lived: keep the radio fully awake and
     // bias BT/Wi-Fi coexistence toward Wi-Fi so association isn't stalled by
     // the camera BLE link.
@@ -121,7 +126,8 @@ static void portal_task(void *arg)
 {
     (void)arg;
     ESP_LOGI(TAG, "portal task: bringing up AP + HTTP");
-    cam_throttle(true);              // ease BLE airtime while the AP is up
+    cam_ble_pause_scan(true);        // stop the camera hunt: a continuous BLE scan
+    cam_throttle(true);              // starves Wi-Fi association on the single C3 radio
     portal_bringup();
 
     s_opened_ms = now_ms();
@@ -146,6 +152,7 @@ static void portal_task(void *arg)
 
     portal_teardown();
     cam_throttle(false);
+    cam_ble_pause_scan(false);       // resume the camera hunt
     s_running = false;
     s_task = NULL;
     vTaskDelete(NULL);
