@@ -48,8 +48,6 @@
 </section>
 
 <section id="cam-control" class="tab">
-  <p class="muted">Pick an AUX channel, drag the band handles. The orange marker is the channel&rsquo;s live value.</p>
-
   <div class="card">
     <h3>Recording</h3>
     <label>Start / stop recording
@@ -131,7 +129,6 @@
       <div id="osdlines" class="osdlines"></div>
     </div>
     <p id="osdclip" class="warn-inline"></p>
-    <p id="osdnote" class="muted"></p>
     <label>Simulate a connected camera<input type="checkbox" id="osdsim"></label>
   </div>
 
@@ -139,10 +136,10 @@
     <h3>Lines</h3>
     <div id="palette" class="palette"></div>
     <div id="olines">
-      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"><label class="rawrow" hidden>template <input id="raw-0" class="mono" maxlength="23"></label></div>
-      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"><label class="rawrow" hidden>template <input id="raw-1" class="mono" maxlength="23"></label></div>
-      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"><label class="rawrow" hidden>template <input id="raw-2" class="mono" maxlength="23"></label></div>
-      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"><label class="rawrow" hidden>template <input id="raw-3" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"><label class="rawrow" hidden><input id="raw-0" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"><label class="rawrow" hidden><input id="raw-1" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"><label class="rawrow" hidden><input id="raw-2" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"><label class="rawrow" hidden><input id="raw-3" class="mono" maxlength="23"></label></div>
     </div>
   </div>
 
@@ -187,7 +184,6 @@
 
 <section id="camera" class="tab">
   <h3>Camera binding</h3>
-  <p class="muted">These act on the camera now &mdash; not saved settings.</p>
   <div class="card"><div id="camlive" class="mono muted">&mdash;</div></div>
   <div class="row">
     <button type="button" data-pair="gopro">Pair GoPro</button>
@@ -236,9 +232,7 @@
 </section>
 
 <section id="system" class="tab">
-  <p class="muted">The bridge is a passenger &mdash; it only reads arm state and writes OSD text. It never touches arming, RC, PIDs, or navigation.</p>
   <label>Advanced mode<input type="checkbox" id="advmode"></label>
-  <p class="muted">Reveals the Clock tab, diagnostics, and low-level link settings.</p>
   <h3>DJI GPS position push</h3>
   <label>Send aircraft GPS position to the camera<input type="checkbox" name="gps_push.enabled"></label>
   <label>Push rate &mdash; Hz (1&ndash;2)
@@ -255,9 +249,8 @@
   <fieldset class="danger-zone">
     <legend>Danger</legend>
     <div class="row"><button type="button" id="factory" class="danger">Factory reset</button></div>
-    <p class="muted">Erases all settings and camera pairing, then reboots.</p>
     <h3>Firmware update (OTA)</h3>
-    <p class="muted">Upload <code>fc_cam_bridge.bin</code>. Reboots when done; a bad image is rejected.</p>
+    <p class="muted">Upload the <code>.bin</code> file, not the <code>.zip</code>.</p>
     <input type="file" id="otafile" accept=".bin">
     <div class="row"><button type="button" id="otago" class="danger">Upload &amp; flash</button></div>
   </fieldset>

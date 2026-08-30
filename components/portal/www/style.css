@@ -102,7 +102,7 @@ body:not(.dirty) footer #save{opacity:.6}
   font-weight:800;letter-spacing:.04em;line-height:1.9;
   color:#fff;text-shadow:-1px 0 1px #000,1px 0 1px #000,0 -1px 1px #000,0 1px 1px #000,0 0 3px rgba(0,0,0,.95)}
 .osdline{white-space:pre;min-height:1.9em;transform:scaleY(1.18);transform-origin:left center}
-#osdclip,#osdnote{font-size:12px;margin:6px 0 0}
+#osdclip{font-size:12px;margin:6px 0 0}
 .palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .pchip{display:inline-flex;align-items:center;gap:6px;background:#11151b;border:1px solid var(--line);
   color:var(--fg);border-radius:6px;padding:8px 10px;font-size:13px;min-height:40px}

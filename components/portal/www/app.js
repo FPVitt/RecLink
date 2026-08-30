@@ -448,14 +448,12 @@ function renderPreview() {
   sim.disabled = connected;
   sim.parentNode.classList.toggle('muted', connected);
 
-  let d, srcNote;
+  let d;
   if (connected) {
     d = liveData(lastStatus);
-    srcNote = 'Live data';
   } else {
     d = sampleData();
     if (!sim.checked) { d.link = false; d.searching = false; }
-    srcNote = sim.checked ? 'Sample data (simulated)' : 'Sample data (no camera)';
   }
 
   let lines;
@@ -475,7 +473,6 @@ function renderPreview() {
   clipEl.textContent = clipped.length
     ? clipped.map(c => 'Line ' + c.n + ' is ' + c.full.length + ' chars — clipped to “' + c.full.slice(0, 16) + '”').join('   ')
     : '';
-  $('#osdnote').textContent = srcNote;
 }
 ['input', 'change'].forEach(ev => document.addEventListener(ev, e => {
   if (e.target.closest && e.target.closest('#osd')) renderPreview();
