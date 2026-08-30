@@ -85,23 +85,29 @@ body.dirty footer #msg::before{content:"unsaved changes";color:var(--warn)}
 body:not(.dirty) footer #save{opacity:.6}
 
 /* OSD chip editor + preview */
-.osdscreen{position:relative;aspect-ratio:16/9;min-height:150px;background:#05070a;
-  border:1px solid var(--line);border-radius:8px;padding:16px 18px;
+.osdscreen{position:relative;container-type:inline-size;background:#05070a;
+  border:1px solid var(--line);border-radius:8px;padding:26px 10px 14px;
+  min-height:clamp(150px,46cqw,300px);
   display:flex;flex-direction:column;overflow:hidden}
 .osdscreen.b-top{justify-content:flex-start}
 .osdscreen.b-bot{justify-content:flex-end}
+/* Goggles-style OSD: chunky squared bold mono, crisp outline over "video".
+   Real DJI/BF digital-OSD font not embedded — see report. Approximated with
+   the system mono stack styled heavy. */
 .osdlines{position:relative;display:flex;flex-direction:column;width:16ch;
-  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;line-height:1.5;
-  color:#fff;text-shadow:0 0 2px rgba(0,0,0,.95),0 1px 2px rgba(0,0,0,.9);
+  font-family:ui-monospace,"DejaVu Sans Mono",Menlo,Consolas,monospace;
+  font-size:15px;font-size:clamp(13px,7vw,30px);font-size:clamp(13px,8cqw,34px);
+  font-weight:800;letter-spacing:.04em;line-height:1.9;
+  color:#fff;text-shadow:-1px 0 1px #000,1px 0 1px #000,0 -1px 1px #000,0 1px 1px #000,0 0 3px rgba(0,0,0,.95);
   border-right:1px solid rgba(255,255,255,.16)}
 .osdscreen.b-left .osdlines{align-self:flex-start;text-align:left}
 .osdscreen.b-right .osdlines{align-self:flex-end;text-align:right;
   border-right:0;border-left:1px solid rgba(255,255,255,.16)}
-.osdlines::after{content:"16 ch";position:absolute;top:-1.25em;font-size:10px;
-  letter-spacing:.04em;color:var(--mut);font-family:system-ui,sans-serif}
+.osdlines::after{content:"16 ch";position:absolute;top:-1.4em;font-size:10px;
+  font-weight:400;letter-spacing:.04em;color:var(--mut);font-family:system-ui,sans-serif}
 .osdscreen.b-left .osdlines::after{right:-.5em}
 .osdscreen.b-right .osdlines::after{left:-.5em}
-.osdline{white-space:pre;min-height:1.5em}
+.osdline{white-space:pre;min-height:1.9em;transform:scaleY(1.18);transform-origin:center}
 #osdclip,#osdnote{font-size:12px;margin:6px 0 0}
 .palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .pchip{display:inline-flex;align-items:center;gap:6px;background:#11151b;border:1px solid var(--line);
