@@ -5,12 +5,26 @@ const msg = t => { $('#msg').textContent = t; };
 const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
 
 // ---- tabs ----
-$$('#tabs button').forEach(b => b.onclick = () => {
-  $$('#tabs button').forEach(x => x.classList.remove('on'));
-  $$('.tab').forEach(x => x.classList.remove('on'));
-  b.classList.add('on');
-  $('#' + b.dataset.t).classList.add('on');
-});
+function showTab(name) {
+  $$('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.t === name));
+  $$('.tab').forEach(x => x.classList.toggle('on', x.id === name));
+}
+$$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
+
+// ---- advanced mode (browser-local; gates .adv-only elements) ----
+const advmode = $('#advmode');
+function applyAdv(on) {
+  document.body.classList.toggle('adv', on);
+  // if the active tab just got hidden, fall back to Status
+  const cur = $('#tabs button.on');
+  if (cur && cur.classList.contains('adv-only') && !on) showTab('status');
+}
+advmode.checked = localStorage.getItem('advmode') === '1';
+applyAdv(advmode.checked);
+advmode.onchange = () => {
+  localStorage.setItem('advmode', advmode.checked ? '1' : '0');
+  applyAdv(advmode.checked);
+};
 
 // ============ Cam control tab: Betaflight-style AUX range bars =============
 // name= attributes still map 1:1 to /api/config: record.switch.threshold_us,

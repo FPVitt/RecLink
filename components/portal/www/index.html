@@ -21,7 +21,7 @@
   <button data-t="status" class="on">Status</button>
   <button data-t="cam-control">Cam control</button>
   <button data-t="osd">OSD</button>
-  <button data-t="clock">Clock</button>
+  <button data-t="clock" class="adv-only">Clock</button>
   <button data-t="camera">Binding</button>
   <button data-t="network">Network</button>
   <button data-t="system">System</button>
@@ -42,8 +42,8 @@
     <h3>Diagnostics</h3>
     <div class="kv"><span>AUX channels (&micro;s)</span><span id="aux" class="mono">&mdash;</span></div>
     <div id="flags" class="flags"></div>
-    <pre id="counters" class="mono"></pre>
-    <details id="mspdbgwrap"><summary>MSP link debug</summary><pre id="mspdbg" class="mono"></pre></details>
+    <pre id="counters" class="mono adv-only"></pre>
+    <details id="mspdbgwrap" class="adv-only"><summary>MSP link debug</summary><pre id="mspdbg" class="mono"></pre></details>
   </div>
 </section>
 
@@ -98,7 +98,7 @@
         <input type="number" inputmode="numeric" name="preset.dwell_ms" min="50" max="5000" step="50"></label>
       <label>Allow zone changes while recording<input type="checkbox" name="preset.allow_during_record"></label>
     </details>
-    <fieldset>
+    <fieldset class="adv-only">
       <legend>Test now (acts on the camera)</legend>
       <p class="muted">Sends that zone&rsquo;s Preset / mode ID to the camera immediately.</p>
       <div class="row">
@@ -109,7 +109,7 @@
     </fieldset>
   </div>
 
-  <div class="card" id="hilight-card">
+  <div class="card adv-only" id="hilight-card">
     <h3>Highlight tag</h3>
     <label>AUX channel
       <select name="hilight.channel" data-auxsel></select></label>
@@ -166,7 +166,7 @@
   </fieldset>
 </section>
 
-<section id="clock" class="tab">
+<section id="clock" class="tab adv-only">
   <p class="muted">Syncs the camera clock from the FC's GPS time so footage timestamps are correct.</p>
   <label>Enable clock sync<input type="checkbox" name="clock.enabled"></label>
   <label>Only sync with a GPS fix<input type="checkbox" name="clock.require_gps"></label>
@@ -213,7 +213,7 @@
   <label>Password (blank = keep current, min 8 chars)
     <input name="wifi.password" type="password" maxlength="31" autocomplete="new-password">
     <button type="button" class="reveal" data-for="wifi.password">show</button></label>
-  <label>Wi-Fi channel (0 = auto, 1&ndash;13)
+  <label class="adv-only">Wi-Fi channel (0 = auto, 1&ndash;13)
     <input type="number" inputmode="numeric" name="wifi.channel" min="0" max="13" step="1"></label>
   <label>Open the portal
     <select name="wifi.portal_trigger">
@@ -223,19 +223,24 @@
   <label>Portal auto-close &mdash; min (1&ndash;120)
     <input type="number" inputmode="numeric" name="wifi.portal_timeout_min" min="1" max="120" step="1"></label>
 
-  <h3>Flight controller link (MSP serial)</h3>
-  <label>Baud rate
-    <select name="msp.baud">
-      <option>115200</option><option>230400</option><option>250000</option><option>460800</option>
-    </select></label>
-  <label>Swap TX/RX pins<input type="checkbox" name="msp.swap_pins"></label>
-  <p class="muted">Enable if the FC UART is wired backwards. <strong>Baud and pin swap apply only after a reboot.</strong></p>
+  <div class="adv-only">
+    <h3>Flight controller link (MSP serial)</h3>
+    <label>Baud rate
+      <select name="msp.baud">
+        <option>115200</option><option>230400</option><option>250000</option><option>460800</option>
+      </select></label>
+    <label>Swap TX/RX pins<input type="checkbox" name="msp.swap_pins"></label>
+    <p class="muted">Enable if the FC UART is wired backwards. <strong>Baud and pin swap apply only after a reboot.</strong></p>
+  </div>
+  <h3>Radio channels</h3>
   <div class="row"><button type="button" id="mspscan">Scan AUX now</button></div>
   <pre id="scanout" class="mono muted"></pre>
 </section>
 
 <section id="system" class="tab">
   <p class="muted">The bridge is a passenger: it only reads FC arm state and writes OSD text. It never touches arming, RC, PIDs, or navigation.</p>
+  <label>Advanced mode<input type="checkbox" id="advmode"></label>
+  <p class="muted">Reveals the Clock tab, diagnostics counters, the MSP link debug, camera test actions, and low-level link settings (baud, pin swap, Wi-Fi channel). Stored in this browser only.</p>
   <h3>DJI GPS position push</h3>
   <label>Send aircraft GPS position to the camera<input type="checkbox" name="gps_push.enabled"></label>
   <label>Push rate &mdash; Hz (1&ndash;2)
