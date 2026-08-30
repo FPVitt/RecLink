@@ -84,6 +84,34 @@ body.dirty footer{border-top-color:var(--acc)}
 body.dirty footer #msg::before{content:"unsaved changes";color:var(--warn)}
 body:not(.dirty) footer #save{opacity:.6}
 
+/* OSD chip editor + preview */
+#osdgrid{white-space:pre;overflow-x:auto;background:#0b0e12;border:1px solid var(--line);
+  border-radius:6px;padding:8px;color:var(--fg);line-height:1.3;font-size:13px}
+#osdclip,#osdnote{font-size:12px;margin:6px 0 0}
+.palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.pchip{display:inline-flex;align-items:center;gap:6px;background:#11151b;border:1px solid var(--line);
+  color:var(--fg);border-radius:6px;padding:8px 10px;font-size:13px;min-height:40px}
+.pchip i,.chip i{font-style:normal;color:var(--mut);font-size:11px;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+.oline{border:1px solid var(--line);border-radius:8px;padding:8px;margin:8px 0}
+.oline.foc{border-color:var(--acc)}
+.olh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.rawtog{background:transparent;border:1px solid var(--line);color:var(--mut);
+  padding:4px 10px;min-height:32px;font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;min-height:40px}
+.chips .empty{color:var(--mut);font-size:13px;padding:9px 4px}
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--card);
+  border:1px solid var(--line);border-radius:6px;padding:3px 4px 3px 9px}
+.chip b{font-weight:600;font-size:13px}
+.chip.lit input{min-width:0;width:9ch;min-height:32px;padding:4px 6px;font-size:13px}
+.chip .x{background:transparent;border:0;color:var(--mut);min-width:0;min-height:32px;padding:2px 5px;font-size:13px}
+.rawrow{display:block;padding:0}
+.rawrow input{width:100%;margin-top:6px}
+.corner{display:grid;grid-template-columns:44px 44px;gap:6px}
+.corner button{background:#11151b;border:1px solid var(--line);color:var(--fg);
+  min-width:44px;font-size:18px;padding:0}
+.corner button.on{border-color:var(--acc);color:var(--acc)}
+
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important}
   button:active{transform:none}

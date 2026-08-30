@@ -44,6 +44,7 @@
     <div class="kv"><span>AUX channels (&micro;s)</span><span id="aux" class="mono">&mdash;</span></div>
     <div id="flags" class="flags"></div>
     <pre id="counters" class="mono"></pre>
+    <details id="mspdbgwrap"><summary>MSP link debug</summary><pre id="mspdbg" class="mono"></pre></details>
   </div>
 </section>
 
@@ -70,8 +71,6 @@
       <input type="number" inputmode="numeric" name="record.switch.channel" min="0" max="14" step="1"></label>
     <label>On above &mdash; &micro;s (900&ndash;2100)
       <input type="number" inputmode="numeric" name="record.switch.threshold_us" min="900" max="2100" step="25"></label>
-    <label>Debounce &mdash; ms (0&ndash;2000)
-      <input type="number" inputmode="numeric" name="record.switch.debounce_ms" min="0" max="2000" step="50"></label>
     <p class="muted">Use Status &rarr; AUX channels, or Network &rarr; "Scan AUX now", to find the channel and its &micro;s values.</p>
   </fieldset>
 </section>
@@ -97,14 +96,47 @@
 </section>
 
 <section id="osd" class="tab">
-  <p class="muted">Text the bridge writes to the Betaflight OSD. Unconfirmed camera values render blank, never as 0.</p>
+  <p class="muted">Build the four lines of text the bridge writes to the Betaflight OSD. Each line is clamped to 16 characters after tokens expand. Unconfirmed camera values render blank, never as 0.</p>
+
+  <div class="card" id="osdprev">
+    <h3>Preview</h3>
+    <pre id="osdgrid" class="mono"></pre>
+    <p id="osdclip" class="warn-inline"></p>
+    <p id="osdnote" class="muted"></p>
+    <label>Simulate a connected camera<input type="checkbox" id="osdsim"></label>
+  </div>
+
+  <div class="card">
+    <h3>On-screen corner</h3>
+    <p class="muted">Positions the preview block only. The real position of OSD elements 0&ndash;3 is set in Betaflight&rsquo;s OSD layout, not here.</p>
+    <div class="corner" id="corner">
+      <button type="button" data-c="0">&#8598;</button><button type="button" data-c="1">&#8599;</button>
+      <button type="button" data-c="2">&#8601;</button><button type="button" data-c="3">&#8600;</button>
+    </div>
+    <input type="hidden" name="osd.corner">
+  </div>
+
+  <div class="card" id="osdedit">
+    <h3>Lines</h3>
+    <p class="muted" id="palhint">Tap a chip to add it to Line 1</p>
+    <div id="palette" class="palette"></div>
+    <div id="olines">
+      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"><label class="rawrow" hidden>template <input id="raw-0" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"><label class="rawrow" hidden>template <input id="raw-1" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"><label class="rawrow" hidden>template <input id="raw-2" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"><label class="rawrow" hidden>template <input id="raw-3" class="mono" maxlength="23"></label></div>
+    </div>
+  </div>
+
+  <details id="tokwrap"><summary>Token reference</summary><div id="tokens" class="muted mono"></div></details>
+
   <label>Update rate &mdash; Hz (1&ndash;10)
     <input type="number" inputmode="numeric" name="osd.refresh_hz" min="1" max="10" step="1"></label>
-  <label>Line 1 <input name="osd.lines.0" maxlength="23"></label>
-  <label>Line 2 <input name="osd.lines.1" maxlength="23"></label>
-  <label>Line 3 <input name="osd.lines.2" maxlength="23"></label>
-  <label>Line 4 <input name="osd.lines.3" maxlength="23"></label>
-  <details id="tokwrap"><summary>Token reference</summary><div id="tokens" class="muted mono"></div></details>
+  <label>Speed units (used by %sp)
+    <select name="osd.units">
+      <option value="0">Metric &mdash; km/h</option>
+      <option value="1">Imperial &mdash; mph</option>
+    </select></label>
   <fieldset>
     <legend>Warnings</legend>
     <label>Camera battery low below &mdash; % (0&ndash;100)
