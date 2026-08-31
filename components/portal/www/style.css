@@ -81,10 +81,10 @@ button.reveal,button#mspscan,button.ghost{background:transparent;border:1px soli
 #setup-err:empty{display:none}
 #pair-msg:empty{display:none}
 .modal-card ol.steps{margin:0 0 12px;padding-left:20px;font-size:14px;line-height:1.6}
-.qrbox{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#11151b;
-  border:1px solid var(--line);border-radius:8px;padding:12px;margin:0 0 12px}
-.qrbox .qr{width:120px;height:120px;flex:none;display:block;border-radius:4px}
-.qrbox p{margin:0;font-size:12px;flex:1;min-width:150px}
+.qrbox{display:flex;flex-direction:column;gap:10px;align-items:center;background:#11151b;
+  border:1px solid var(--line);border-radius:8px;padding:14px;margin:0 0 12px}
+.qrbox .qr{width:min(220px,60vw);height:auto;display:block;border-radius:4px;image-rendering:pixelated}
+.qrbox p{margin:0;font-size:12px;text-align:center}
 #pair-list{margin:0 0 10px}
 #pair-list:empty{display:none}
 #pair-list button{display:block;width:100%;text-align:left;margin:6px 0;background:#11151b;
