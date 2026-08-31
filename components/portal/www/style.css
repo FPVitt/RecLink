@@ -91,6 +91,10 @@ button.reveal,button#mspscan,button.ghost{background:transparent;border:1px soli
   border:1px solid var(--line);color:var(--fg);padding:10px 12px;line-height:1.35}
 #pair-list button b{font-weight:600}
 #pair-list button small{color:var(--mut);font-size:12px;display:block;font-family:ui-monospace,Menlo,Consolas,monospace}
+.pair-done{text-align:center;padding:22px 8px}
+.pair-done .check{width:58px;height:58px;line-height:58px;margin:0 auto 14px;border-radius:50%;
+  background:var(--acc);color:#fff;font-size:34px;font-weight:700}
+.pair-done p{color:var(--fg);font-size:15px;margin:0}
 progress{width:100%;height:14px;margin:2px 0 4px;border:0;border-radius:7px;overflow:hidden;
   background:#11151b;-webkit-appearance:none;appearance:none}
 progress::-webkit-progress-bar{background:#11151b}

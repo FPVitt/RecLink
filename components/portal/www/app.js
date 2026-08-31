@@ -693,9 +693,12 @@ function renderFound(list) {
     if (!b) {
       b = el('button'); b.type = 'button'; b.dataset.addr = f.addr;
       b.onclick = () => pairPick(f.addr, f.name);
+      b.appendChild(el('b')); b.appendChild(el('small'));
       w.appendChild(b);
     }
-    b.innerHTML = '<b>' + (f.name || 'GoPro') + '</b><small>' + f.addr + '  ·  ' + f.rssi + ' dBm</small>';
+    const nm = f.name || 'GoPro', sig = f.addr + '  ·  ' + f.rssi + ' dBm';
+    if (b.firstChild.textContent !== nm) b.firstChild.textContent = nm;
+    if (b.lastChild.textContent !== sig) b.lastChild.textContent = sig;
   });
 }
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera…' : 'failed');
@@ -837,8 +840,14 @@ async function poll() {
     } else if (pairPhase === 'bonding') {
       if (link === 'READY') {
         pairPhase = '';
-        $('#pair-msg').textContent = 'Paired with ' + pairPicked + '.';
-        setTimeout(() => { $('#pair').hidden = true; }, 1600);
+        const card = $('#pair .modal-card');
+        card.textContent = '';
+        const d = el('div', 'pair-done');
+        const ck = el('div', 'check'); ck.textContent = '✓';
+        const p = el('p'); p.textContent = (pairPicked || 'Camera') + ' paired and connected';
+        d.appendChild(ck); d.appendChild(p);
+        card.appendChild(d);
+        setTimeout(() => { $('#pair').hidden = true; }, 2600);
       } else if (Date.now() - pairStart > 60000) {
         pairPhase = '';
         $('#pair-msg').textContent = 'Could not pair with ' + pairPicked + '. Try again.';
