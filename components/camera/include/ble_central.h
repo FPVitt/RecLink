@@ -46,5 +46,6 @@ void   ble_central_disconnect(void);
 bool   ble_central_connected(void);
 int8_t ble_central_last_rssi(void);
 esp_err_t ble_central_forget_bond(const uint8_t addr[6], uint8_t addr_type);
+esp_err_t ble_central_forget_bond_any(const uint8_t addr[6]);  // try public + random
 esp_err_t ble_central_erase_all_bonds(void);
 int       ble_central_bond_count(void);     // stored peer security records

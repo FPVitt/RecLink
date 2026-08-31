@@ -67,6 +67,17 @@
   </div>
 </div>
 
+<div id="ask" class="modal" hidden>
+  <div class="modal-card">
+    <h3 id="ask-h"></h3>
+    <p id="ask-b"></p>
+    <div class="row">
+      <button type="button" id="ask-yes"></button>
+      <button type="button" id="ask-cancel" class="ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="flash" class="modal" hidden>
   <div class="modal-card">
     <h3>Flash firmware</h3>
@@ -248,20 +259,18 @@
 </section>
 
 <section id="camera" class="tab">
-  <h3>Camera binding</h3>
-  <div class="card"><div id="camlive" class="mono muted">&mdash;</div></div>
-  <div class="row">
+  <h3>Paired cameras</h3>
+  <div class="card">
+    <div id="camlist"></div>
+    <p class="muted" id="camhint">The bridge keeps up to 4 cameras paired and connects to whichever one has the strongest signal &mdash; one at a time.</p>
+  </div>
+  <div class="row" id="pairrow">
     <button type="button" data-pair="gopro">Pair GoPro</button>
     <button type="button" data-pair="dji">Pair DJI</button>
   </div>
-  <div class="row">
-    <button type="button" id="camtest">3 s test recording</button>
-  </div>
-  <fieldset class="danger-zone">
-    <legend>Danger</legend>
-    <button type="button" id="camforget" class="danger">Forget paired camera</button>
-    <p class="muted">Erases the pairing &mdash; re-pair to reconnect.</p>
-  </fieldset>
+  <p class="muted warn-inline" id="pairfull" hidden>Maximum of 4 cameras &mdash; forget one to add another.</p>
+  <div class="row"><button type="button" id="camtest" class="ghost">3&nbsp;s test recording</button></div>
+  <div class="row"><button type="button" id="forgetall" hidden>Forget all cameras</button></div>
 </section>
 
 <section id="network" class="tab">

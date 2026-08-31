@@ -648,11 +648,31 @@ $('#setup-save').onclick = async () => {
     '<h3>Rebooting…</h3><p>Reconnect to the RecLink Wi-Fi with the new password in ~10 s.</p>';
 };
 
+// ---- generic confirm modal (#ask) ----
+let askCb = null;
+function ask(h, body, yesLabel, cb, danger) {
+  $('#ask-h').textContent = h;
+  $('#ask-b').textContent = body;
+  const y = $('#ask-yes');
+  y.textContent = yesLabel;
+  y.className = danger ? 'danger' : '';
+  askCb = cb;
+  $('#ask').hidden = false;
+}
+function askClose() { $('#ask').hidden = true; askCb = null; }
+$('#ask-cancel').onclick = askClose;
+$('#ask').onclick = e => { if (e.target.id === 'ask') askClose(); };
+$('#ask-yes').onclick = () => { const cb = askCb; askClose(); if (cb) cb(); };
+
 // GoPro: guided pairing modal with a discovered-camera list. DJI: inline request.
 let pairPhase = '';       // '' | 'discover' | 'bonding'
 let pairStart = 0, pairPicked = '';
-$$('[data-pair]').forEach(b => b.onclick = async () => {
-  if (b.dataset.pair === 'gopro') {
+const pairCardHTML = $('#pair .modal-card').innerHTML;   // restored on reopen (success panel replaces it)
+function startPair(brand) {
+  if (brand === 'gopro') {
+    if (!$('#pair-ask')) $('#pair .modal-card').innerHTML = pairCardHTML;
+    $('#pair-cancel').onclick = pairClose;
+    $('#pair-go').onclick = pairGo;
     pairPhase = '';
     pairPicked = '';
     $('#pair-msg').textContent = '';
@@ -661,13 +681,26 @@ $$('[data-pair]').forEach(b => b.onclick = async () => {
     $('#pair').hidden = false;
     return;
   }
-  const r = await post('/api/camera/pair', {brand:b.dataset.pair});
-  msg(r.ok ? 'pairing… put the DJI into pairing mode now' : 'pair request failed');
+  post('/api/camera/pair', {brand}).then(r =>
+    msg(r.ok ? 'pairing… put the DJI into pairing mode now' : 'pair request failed'));
+}
+$$('[data-pair]').forEach(b => b.onclick = () => {
+  const cam = lastStatus && lastStatus.camera;
+  const count = cam ? (cam.count | 0) : 0;
+  if (count >= 4) return;
+  if (count >= 1) {
+    ask('Pair another camera?',
+        'Your other camera' + (count > 1 ? 's stay' : ' stays') + ' paired. '
+        + 'The current camera disconnects while pairing.',
+        'Continue', () => startPair(b.dataset.pair));
+  } else {
+    startPair(b.dataset.pair);
+  }
 });
 function pairClose() { $('#pair').hidden = true; pairPhase = ''; }
 $('#pair-cancel').onclick = pairClose;
 $('#pair').onclick = e => { if (e.target.id === 'pair') pairClose(); };
-$('#pair-go').onclick = async () => {
+async function pairGo() {
   const r = await post('/api/camera/pair', {brand:'gopro'});
   if (!r.ok) { $('#pair-msg').textContent = 'Pair request failed.'; return; }
   pairPicked = '';
@@ -675,7 +708,8 @@ $('#pair-go').onclick = async () => {
   pairPhase = 'discover';
   pairStart = Date.now();
   $('#pair-msg').textContent = 'Searching for GoPros in pairing mode…';
-};
+}
+$('#pair-go').onclick = pairGo;
 function pairPick(addr, name) {
   pairPicked = name || addr;
   pairPhase = 'bonding';
@@ -707,10 +741,74 @@ $$('[data-preset]').forEach(b => b.onclick = async () => {
   msg(r.ok ? ('applied zone ' + (+b.dataset.preset + 1)) : ('failed: ' + (r.error || '')));
 });
 $('#camtest').onclick = async () => msg((await post('/api/camera/test')).ok ? 'recording 3 s…' : 'failed');
-$('#camforget').onclick = async () => {
-  if (!confirm('Forget the paired camera? The pairing is erased and the camera must be re-paired manually.')) return;
-  msg((await post('/api/camera/forget')).ok ? 'camera forgotten' : 'failed');
-};
+
+// ---- Binding tab: paired-camera list ----
+const brandTag = b => b === 'gopro' ? 'GoPro' : b === 'dji' ? 'DJI' : (b || 'Camera');
+const camLabel = c => c.name || (brandTag(c.brand) + ' ' + (c.addr || '').slice(-8));
+const setText = (e, t) => { if (e && e.textContent !== t) e.textContent = t; };
+
+function askForget(cam) {
+  ask('Forget ' + camLabel(cam) + '?',
+      'Erases the pairing for this camera only — your other cameras stay paired. Re-pair to reconnect it.',
+      'Forget', async () => {
+        msg('forgetting…');
+        const r = await post('/api/camera/forget', {addr: cam.addr});
+        msg(r.ok ? 'camera forgotten' : 'could not forget camera');
+        poll();
+      }, true);
+}
+$('#forgetall').onclick = () => ask('Forget all cameras?',
+  'Erases every pairing. The bridge has no camera until you pair one again.',
+  'Forget all', async () => {
+    msg('forgetting…');
+    const r = await post('/api/camera/forget');
+    msg(r.ok ? 'all cameras forgotten' : 'failed');
+    poll();
+  }, true);
+
+function renderCams(c) {
+  const cams = (c && c.cameras) || [];
+  const count = c ? (c.count | 0) : cams.length;
+  $$('#pairrow [data-pair]').forEach(b => b.disabled = count >= 4);
+  $('#pairfull').hidden = count < 4;
+  $('#camtest').disabled = !cams.some(x => x.connected);
+  $('#forgetall').hidden = count < 2;
+
+  const wrap = $('#camlist');
+  if (!cams.length) {
+    if (!wrap.querySelector('.camempty'))
+      wrap.innerHTML = '<p class="muted camempty">No cameras paired yet.</p>';
+    return;
+  }
+  const gone = wrap.querySelector('.camempty'); if (gone) gone.remove();
+  const keep = new Set(cams.map(x => x.addr));
+  [...wrap.children].forEach(r => { if (!keep.has(r.dataset.addr)) r.remove(); });
+
+  cams.forEach(cam => {
+    let r = wrap.querySelector('[data-addr="' + cam.addr + '"]');
+    if (!r) {
+      r = el('div', 'camrow');
+      r.dataset.addr = cam.addr;
+      r.innerHTML = '<div class="caminfo"><div class="camtop">'
+        + '<b class="camname"></b><span class="tag"></span></div>'
+        + '<div class="cammeta mono"></div></div>'
+        + '<div class="camright"><span class="badge"></span>'
+        + '<button type="button" class="forget">Forget</button></div>';
+      wrap.appendChild(r);
+    }
+    r.querySelector('.forget').onclick = () => askForget(cam);
+    setText(r.querySelector('.camname'), camLabel(cam));
+    setText(r.querySelector('.tag'), brandTag(cam.brand));
+    setText(r.querySelector('.cammeta'), cam.addr);
+    const badge = r.querySelector('.badge');
+    let txt = 'Standby', cls = 'badge';
+    if (cam.connected) { txt = 'Connected · ' + c.rssi + ' dBm'; cls = 'badge ok'; }
+    else if (cam.active) { txt = 'Connecting…'; cls = 'badge warn'; }
+    setText(badge, txt);
+    if (badge.className !== cls) badge.className = cls;
+    wrap.appendChild(r);   // keep DOM order matching cameras[]
+  });
+}
 $('#syncnow').onclick = async () => {
   msg('syncing…');
   const r = await post('/api/clock/sync');
@@ -960,10 +1058,7 @@ async function poll() {
       'Last   : ' + (ls ? ls.age_s + ' s ago · ' + ls.result : 'never');
   }
   renderPreview();
-
-  $('#camlive').textContent = paired
-    ? (c.brand.toUpperCase() + '  ' + c.link + '  ' + (c.name || '') + '  ' + (c.addr || '') + '  bonded:' + c.bonded)
-    : 'no camera paired';
+  renderCams(c);
 }
 
 async function pollLog() {

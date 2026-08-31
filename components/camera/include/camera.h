@@ -91,7 +91,8 @@ esp_err_t cam_submit_gps(const gps_fix_t *fix, int64_t utc_ms);
 // Portal actions.
 esp_err_t cam_pair_begin(const char *brand);   // start discovery (scan, list, don't connect)
 esp_err_t cam_pair_select(const char *brand, const uint8_t addr[6]);  // bond to a discovered camera
-esp_err_t cam_forget(void);                    // delete bond + cfg + go IDLE
+esp_err_t cam_forget(void);                    // delete ALL bonds + cfg + go IDLE
+esp_err_t cam_forget_one(const uint8_t addr[6]);  // delete one bond; keep the rest
 
 // Discovered-camera list (populated while cam_pair_begin discovery is running).
 typedef struct { uint8_t addr[6]; uint8_t addr_type; int8_t rssi; char name[20]; } cam_found_t;

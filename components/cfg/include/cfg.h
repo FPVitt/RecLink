@@ -13,7 +13,11 @@
 #include "esp_err.h"
 
 #define CFG_MAGIC   0x43424247u   // "CBBG"
-#define CFG_VERSION 1u
+#define CFG_VERSION 2u
+
+// Max simultaneously-bonded cameras (spec 7.1). One connected at a time; the
+// rest are candidates the reconnect scan picks from by RSSI.
+#define CAM_MAX_BONDS 4
 
 #define CFG_DEFAULT_WIFI_PW "reclinkfpv"   // AP password on factory defaults
 
@@ -38,6 +42,14 @@ enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3 };
 // -------- portal trigger ----------------------------------------------------
 enum { PORTAL_TRIG_BUTTON = 0, PORTAL_TRIG_ALWAYS_DISARMED = 1 };
 
+// One stored camera bond.
+typedef struct __attribute__((packed)) {
+    char     brand[6];       // "gopro" | "dji"; "" = empty slot
+    uint8_t  addr[6];
+    char     name[32];
+    uint32_t dji_device_id;
+} cam_bond_t;
+
 // ---------------------------------------------------------------------------
 // The blob. Layout is frozen per CFG_VERSION; changes require a bump + migration.
 // __attribute__((packed)) so the on-flash image is portable across compilers.
@@ -47,12 +59,15 @@ typedef struct __attribute__((packed)) {
     uint16_t version;
     uint16_t size;
 
+    // The *active* camera: the one currently connected, or the one the reconnect
+    // scan should prefer. Mirrors one entry of cams[] (below). `bonded` == "an
+    // active camera is set". Kept at this offset so v1 blobs stay CRC-valid.
     struct {
         char     brand[6];        // "gopro" | "dji" | ""
         uint8_t  bonded;
         uint8_t  addr[6];
         char     name[32];
-        uint32_t dji_device_id;   // persistent DUML controller id
+        uint32_t dji_device_id;   // persistent DUML controller id (active cam)
     } camera;
 
     struct {
@@ -131,6 +146,11 @@ typedef struct __attribute__((packed)) {
 
     uint8_t  led_brightness;
     uint32_t crc32;              // over [magic .. led_brightness]
+
+    // ---- v2+ tail: appended AFTER crc32, so v1 blobs still validate and just
+    // migrate. Not covered by crc32 -- a corrupt entry only costs a failed
+    // connect attempt, and the real bond keys live in the nimble_bond store.
+    cam_bond_t cams[CAM_MAX_BONDS];
 } cfg_t;
 
 // -------- OSD token bit positions for cfg.osd.fields_mask --------------------
@@ -166,10 +186,24 @@ esp_err_t cfg_validate(cfg_t *cand, char *err_buf, size_t err_len);
 // -> nvs_commit -> swap into RAM. Returns only after the write is durable.
 esp_err_t cfg_commit(const cfg_t *cand);
 
-// Camera metadata helpers -- each is a synchronous commit.
+// Camera bond helpers -- each is a synchronous commit.
+//
+// Add or update a bond and make it the active camera. If addr already known,
+// its entry is refreshed. Returns ESP_ERR_NO_MEM when all CAM_MAX_BONDS slots
+// are full and addr is new.
 esp_err_t cfg_set_camera_bond(const char *brand, const uint8_t addr[6],
                               const char *name, uint32_t dji_device_id);
-esp_err_t cfg_clear_camera(void);          // forget: zero camera.* + commit
+// Forget one bond by address; packs the list. If it was the active camera, the
+// active slot moves to cams[0] (or clears when the list is now empty).
+esp_err_t cfg_forget_camera(const uint8_t addr[6]);
+esp_err_t cfg_clear_camera(void);          // forget ALL bonds + clear active
+// Make an already-bonded camera the active one (reconnect picked it). No-op if
+// addr is not in the list. Cheap commit.
+esp_err_t cfg_set_active_camera(const uint8_t addr[6]);
+
+// Bond list access. Copies slot i into *out; returns false if oob/empty.
+int  cfg_cam_count(void);                         // number of non-empty slots
+bool cfg_cam_at(int i, cam_bond_t *out);
 
 // Factory reset: erase cfg + caller erases nimble_bond, then reboot.
 esp_err_t cfg_factory_erase(void);

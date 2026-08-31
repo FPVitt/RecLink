@@ -41,6 +41,7 @@ typedef struct {
         struct { uint16_t handle; uint16_t len; uint8_t data[256]; } notify;
         ble_adv_t adv;                    // full advert; cam_task does the matching
         struct { char brand[6]; uint8_t addr[6]; uint8_t has_addr; } pair;
+        struct { uint8_t addr[6]; uint8_t has_addr; } forget;   // has_addr=0 -> forget all
         struct { uint8_t on; } flag;
     };
 } iq_item_t;
@@ -63,6 +64,39 @@ static uint8_t  s_target_addr[6];
 static uint8_t  s_target_addr_type;
 static int      s_backoff_idx;
 static uint32_t s_state_since_ms;
+
+// ---- multi-camera reconnect (spec 7.1) -----------------------------
+// Up to CAM_MAX_BONDS cameras can be bonded. On a cold reconnect the scan
+// matches ANY bonded address; among the bonded cameras seen within a short
+// window it connects to the strongest signal. Once a link is up the scan
+// stops (only one camera connected at a time). s_bonds is a snapshot of the
+// cfg bond list, refreshed at boot and after every pair/forget.
+static cam_bond_t s_bonds[CAM_MAX_BONDS];
+static int        s_bond_n;
+static bool       s_recon_have;          // a bonded camera has been seen this scan
+static uint8_t    s_recon_addr[6];
+static uint8_t    s_recon_addr_type;
+static int8_t     s_recon_rssi;
+static const camera_driver_t *s_recon_drv;
+static uint32_t   s_recon_since_ms;      // when the first candidate appeared (0 = none)
+#define RECON_PICK_MS 2500               // gather candidates this long before choosing
+
+static void load_bonds(void)
+{
+    s_bond_n = 0;
+    for (int i = 0; i < CAM_MAX_BONDS; i++) {
+        cam_bond_t b;
+        if (cfg_cam_at(i, &b)) { s_bonds[s_bond_n++] = b; }
+    }
+}
+
+static int bond_match(const uint8_t addr[6])
+{
+    for (int i = 0; i < s_bond_n; i++) {
+        if (memcmp(s_bonds[i].addr, addr, 6) == 0) { return i; }
+    }
+    return -1;
+}
 // spec 3.5 / FMEA row 3: "camera stack hang (connected, silent)" -- the link
 // reaches READY, then the camera falls silent and we hit the RX timeout,
 // repeatedly. Count ONLY that failure mode (not RF dropouts / power-off, which
@@ -146,7 +180,11 @@ static void cb_ack(cam_op_t op, bool ok)
 static void cb_paired(const uint8_t addr[6], const char *name, uint32_t dji_id)
 {
     // spec 6.1 / 7.3 / 11.0: persist synchronously BEFORE we report READY.
-    cfg_set_camera_bond(s_drv->name, addr, name, dji_id);
+    esp_err_t pe = cfg_set_camera_bond(s_drv->name, addr, name, dji_id);
+    if (pe == ESP_ERR_NO_MEM) {
+        applog_note("camera bond list full (%d) -- forget one before pairing another", CAM_MAX_BONDS);
+    }
+    load_bonds();
     memcpy(s_target_addr, addr, 6);
     cam_event_t e = { .type = CAM_EV_PAIRED };
     xQueueSend(s_evq, &e, 0);
@@ -268,7 +306,13 @@ static void found_add(const ble_adv_t *a)
 }
 esp_err_t cam_forget(void)
 {
-    iq_item_t it = { .kind = IQ_CMD_FORGET };
+    iq_item_t it = { .kind = IQ_CMD_FORGET };   // has_addr = 0 -> forget all
+    return xQueueSend(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE ? ESP_OK : ESP_FAIL;
+}
+esp_err_t cam_forget_one(const uint8_t addr[6])
+{
+    iq_item_t it = { .kind = IQ_CMD_FORGET, .forget = { .has_addr = 1 } };
+    memcpy(it.forget.addr, addr, 6);
     return xQueueSend(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE ? ESP_OK : ESP_FAIL;
 }
 esp_err_t cam_refresh(void) { return cam_submit(CAM_OP_REFRESH, 0); }
@@ -316,16 +360,19 @@ bool cam_reconcile_bonds(bool erase_orphan_bond)
         ble_central_erase_all_bonds();
         return false;
     }
-    const cfg_t *c = cfg_get();
+    int cams  = cfg_cam_count();
     int bonds = ble_central_bond_count();
-    if (c->camera.bonded && bonds == 0) {
-        applog_note("cfg says bonded but no BLE bond -> REPAIR_NEEDED");
+    if (cams > 0 && bonds == 0) {
+        applog_note("cfg has %d camera(s) but no BLE bond -> REPAIR_NEEDED", cams);
         return true;                          // caller sets flag; cam stays IDLE-ish
     }
-    if (!c->camera.bonded && bonds > 0) {
-        applog_note("orphan BLE bond, no cfg camera -> erasing");
+    if (cams == 0 && bonds > 0) {
+        applog_note("orphan BLE bond(s), no cfg camera -> erasing");
         ble_central_erase_all_bonds();
     }
+    // A partial mismatch (cfg 2, bonds 1) is left alone: the camera with a live
+    // NimBLE bond still reconnects; one without hits the stale-bond path and
+    // self-heals into FLAG_REPAIR_NEEDED.
     return false;
 }
 
@@ -366,9 +413,28 @@ static bool scan_allowed(void)
 static void begin_scan(void)
 {
     invalidate_cam_values();
+    s_recon_have = false;
+    s_recon_since_ms = 0;
     set_link(CAM_LINK_SCAN);
     if (scan_allowed()) { ble_central_scan(true); }
     else { ble_central_scan(false); }
+}
+
+// Lock onto one advertiser and start connecting. `d` is the driver for that
+// camera's brand. On a reconnect (not first_pair) this also records which
+// bonded camera is now active so ctrl/osd/driver code sees the right brand.
+static void connect_now(const uint8_t addr[6], uint8_t addr_type,
+                        const char *name, const camera_driver_t *d)
+{
+    memcpy(s_target_addr, addr, 6);
+    s_target_addr_type = addr_type;
+    memcpy(s_cs.addr, addr, 6);
+    if (name && name[0]) { strlcpy(s_cs.name, name, sizeof(s_cs.name)); }
+    s_drv = d;
+    if (!s_first_pair) { cfg_set_active_camera(addr); }   // sync commit, rare
+    ble_central_scan(false);
+    set_link(CAM_LINK_CONNECTING);
+    ble_central_connect(s_target_addr, s_target_addr_type);
 }
 
 // `silent_hang` = the loss was an RX-silence timeout on an established link
@@ -481,15 +547,22 @@ static void cam_task(void *arg)
     ble_central_set_cbs(h_scan, h_evt, h_notify);
 
     const cfg_t *cfg = cfg_get();
+    load_bonds();
     if (bridge_flag_get(FLAG_REPAIR_NEEDED)) {
         ESP_LOGW(TAG, "REPAIR_NEEDED: staying IDLE until re-pair");
         set_link(CAM_LINK_IDLE);
-    } else if (cfg && cfg->camera.bonded && cfg->camera.brand[0]) {
-        s_drv = camera_by_name(cfg->camera.brand);
+    } else if (s_bond_n > 0) {
+        // Provisional driver: the reconnect scan picks the actual camera (and
+        // its driver) by RSSI. Prefer the last-active brand for slot 0.
+        const char *b0 = (cfg && cfg->camera.bonded && cfg->camera.brand[0])
+                         ? cfg->camera.brand : s_bonds[0].brand;
+        s_drv = camera_by_name(b0);
+        if (!s_drv) { s_drv = camera_by_name(s_bonds[0].brand); }
         if (s_drv) {
-            memcpy(s_target_addr, cfg->camera.addr, 6);
+            memcpy(s_target_addr, s_bonds[0].addr, 6);   // provisional
             s_target_addr_type = 0;   // public; VERIFY per camera (GoPro random?)
             s_first_pair = false;
+            ESP_LOGI(TAG, "boot: %d bonded camera(s) -> reconnect scan", s_bond_n);
             begin_scan();
         }
     } else {
@@ -520,18 +593,45 @@ static void cam_task(void *arg)
                     if (s_drv->adv_match && s_drv->adv_match(&it.adv)) { found_add(&it.adv); }
                     break;                       // never connect while listing
                 }
-                bool want = (s_first_pair && !s_pair_target_set)
-                    ? (s_drv->adv_match && s_drv->adv_match(&it.adv))
-                    : (memcmp(it.adv.addr, s_target_addr, 6) == 0);
-                if (!want) { break; }
-                ESP_LOGI(TAG, "match: %s '%s' -> connecting", s_drv->name, it.adv.name);
-                memcpy(s_target_addr, it.adv.addr, 6);
-                s_target_addr_type = it.adv.addr_type;
-                memcpy(s_cs.addr, it.adv.addr, 6);
-                if (it.adv.name[0]) { strlcpy(s_cs.name, it.adv.name, sizeof(s_cs.name)); }
-                ble_central_scan(false);
-                set_link(CAM_LINK_CONNECTING);
-                ble_central_connect(s_target_addr, s_target_addr_type);
+
+                if (s_first_pair && !s_pair_target_set) {
+                    // Brand-match pairing (DJI): connect to the first match.
+                    if (s_drv->adv_match && s_drv->adv_match(&it.adv)) {
+                        ESP_LOGI(TAG, "match: %s '%s' -> connecting", s_drv->name, it.adv.name);
+                        connect_now(it.adv.addr, it.adv.addr_type, it.adv.name, s_drv);
+                    }
+                    break;
+                }
+                if (s_pair_target_set) {
+                    // User picked a specific camera in the discovery list.
+                    if (memcmp(it.adv.addr, s_target_addr, 6) == 0) {
+                        ESP_LOGI(TAG, "pair target '%s' -> connecting", it.adv.name);
+                        connect_now(it.adv.addr, it.adv.addr_type, it.adv.name, s_drv);
+                    }
+                    break;
+                }
+
+                // Reconnect: match any bonded camera, prefer the strongest.
+                int bi = bond_match(it.adv.addr);
+                if (bi < 0) { break; }
+                const camera_driver_t *bd = camera_by_name(s_bonds[bi].brand);
+                if (!bd) { break; }
+                if (s_bond_n == 1) {
+                    ESP_LOGI(TAG, "reconnect '%s' -> connecting", it.adv.name);
+                    connect_now(it.adv.addr, it.adv.addr_type,
+                                it.adv.name[0] ? it.adv.name : s_bonds[bi].name, bd);
+                    break;
+                }
+                if (!s_recon_have || it.adv.rssi > s_recon_rssi) {
+                    s_recon_have = true;
+                    memcpy(s_recon_addr, it.adv.addr, 6);
+                    s_recon_addr_type = it.adv.addr_type;
+                    s_recon_rssi = it.adv.rssi;
+                    s_recon_drv = bd;
+                    strlcpy(s_cs.name, it.adv.name[0] ? it.adv.name : s_bonds[bi].name,
+                            sizeof(s_cs.name));
+                }
+                if (!s_recon_since_ms) { s_recon_since_ms = now_ms(); }
                 break;
             }
             case IQ_BLE_EVT:
@@ -545,6 +645,11 @@ static void cam_task(void *arg)
                 break;
             case IQ_CMD_PAIR: {
                 const camera_driver_t *d = camera_by_name(it.pair.brand);
+                if (d && cfg_cam_count() >= CAM_MAX_BONDS &&
+                    !(it.pair.has_addr && bond_match(it.pair.addr) >= 0)) {
+                    applog_note("pair refused: bond list full (%d)", CAM_MAX_BONDS);
+                    d = NULL;
+                }
                 if (d) {
                     if (ble_central_connected()) { ble_central_disconnect(); }
                     s_drv = d;
@@ -587,19 +692,41 @@ static void cam_task(void *arg)
                 }
                 break;
             }
-            case IQ_CMD_FORGET:
-                ble_central_disconnect();
-                if (cfg_get()->camera.bonded) {
-                    ble_central_forget_bond(cfg_get()->camera.addr, s_target_addr_type);
+            case IQ_CMD_FORGET: {
+                bool forget_all = !it.forget.has_addr;
+                bool hit_active = forget_all ||
+                    memcmp(it.forget.addr, s_target_addr, 6) == 0 ||
+                    memcmp(it.forget.addr, s_cs.addr, 6) == 0;
+
+                if (forget_all) {
+                    ble_central_disconnect();
+                    ble_central_erase_all_bonds();
+                    cfg_clear_camera();
+                } else {
+                    ble_central_forget_bond_any(it.forget.addr);
+                    cfg_forget_camera(it.forget.addr);
                 }
-                cfg_clear_camera();
-                s_drv = NULL;
+                load_bonds();
                 s_pair_discover = s_pair_target_set = false;
-                memset(s_target_addr, 0, 6);
-                invalidate_cam_values();
-                set_link(CAM_LINK_IDLE);
-                applog_note("camera forgotten");
+
+                if (hit_active || s_bond_n == 0) {
+                    if (!forget_all) { ble_central_disconnect(); }
+                    invalidate_cam_values();
+                    if (s_bond_n > 0) {
+                        s_drv = camera_by_name(s_bonds[0].brand);
+                        s_backoff_idx = 0;
+                        memcpy(s_target_addr, s_bonds[0].addr, 6);
+                        s_first_pair = false;
+                        begin_scan();
+                    } else {
+                        s_drv = NULL;
+                        memset(s_target_addr, 0, 6);
+                        set_link(CAM_LINK_IDLE);
+                    }
+                }
+                applog_note(forget_all ? "all cameras forgotten" : "camera forgotten");
                 break;
+            }
             case IQ_CMD_SUSPEND:
                 // OTA in progress: drop BLE so it doesn't contend with Wi-Fi +
                 // flash writes on the single core. A reboot restores it.
@@ -674,6 +801,16 @@ static void cam_task(void *arg)
             }
 
             publish_dirty();
+        }
+
+        // ---- multi-camera reconnect: commit to the best candidate ----------
+        // Gather bonded-camera adverts for RECON_PICK_MS, then connect to the
+        // strongest (or immediately once one is very close).
+        if (s_cs.link == CAM_LINK_SCAN && s_recon_have && s_recon_since_ms &&
+            (now - s_recon_since_ms >= RECON_PICK_MS || s_recon_rssi >= -50)) {
+            ESP_LOGI(TAG, "reconnect: %d cams in range, best %d dBm -> connecting",
+                     s_bond_n, s_recon_rssi);
+            connect_now(s_recon_addr, s_recon_addr_type, s_cs.name, s_recon_drv);
         }
 
         // ---- connect / sync timeout -----------------------------

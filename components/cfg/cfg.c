@@ -112,6 +112,26 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     c->camera.brand[sizeof(c->camera.brand) - 1] = '\0';
     c->camera.name[sizeof(c->camera.name) - 1] = '\0';
 
+    // Bond list: sanitise silently (recoverable data, not CRC-protected). Clear
+    // any slot whose brand is not exactly gopro|dji, then compact.
+    for (int i = 0; i < CAM_MAX_BONDS; i++) {
+        cam_bond_t *b = &c->cams[i];
+        b->brand[sizeof(b->brand) - 1] = '\0';
+        b->name[sizeof(b->name) - 1]   = '\0';
+        if (b->brand[0] &&
+            strcmp(b->brand, "gopro") != 0 && strcmp(b->brand, "dji") != 0) {
+            memset(b, 0, sizeof(*b));
+        }
+    }
+    for (int i = 0, w = 0; i < CAM_MAX_BONDS; i++) {
+        if (c->cams[i].brand[0]) {
+            if (w != i) { c->cams[w] = c->cams[i]; memset(&c->cams[i], 0, sizeof(c->cams[i])); }
+            w++;
+        }
+    }
+    // Keep camera.bonded consistent with whether an active brand is set.
+    c->camera.bonded = c->camera.brand[0] ? 1 : 0;
+
     return ESP_OK;
 }
 
@@ -151,15 +171,70 @@ esp_err_t cfg_commit(const cfg_t *cand)
     return ESP_OK;
 }
 
+static int bond_index_of(const cfg_t *c, const uint8_t addr[6])
+{
+    for (int i = 0; i < CAM_MAX_BONDS; i++) {
+        if (c->cams[i].brand[0] && memcmp(c->cams[i].addr, addr, 6) == 0) { return i; }
+    }
+    return -1;
+}
+
+// Copy a bond entry into camera.* (the active slot).
+static void set_active_from(cfg_t *c, const cam_bond_t *b)
+{
+    strlcpy(c->camera.brand, b->brand, sizeof(c->camera.brand));
+    memcpy(c->camera.addr, b->addr, 6);
+    strlcpy(c->camera.name, b->name, sizeof(c->camera.name));
+    c->camera.dji_device_id = b->dji_device_id;
+    c->camera.bonded = b->brand[0] ? 1 : 0;
+}
+
 esp_err_t cfg_set_camera_bond(const char *brand, const uint8_t addr[6],
                               const char *name, uint32_t dji_device_id)
 {
     cfg_t c = s_live;
-    strlcpy(c.camera.brand, brand, sizeof(c.camera.brand));
-    memcpy(c.camera.addr, addr, 6);
-    strlcpy(c.camera.name, name ? name : "", sizeof(c.camera.name));
-    c.camera.bonded = 1;
-    if (dji_device_id) { c.camera.dji_device_id = dji_device_id; }
+    int i = bond_index_of(&c, addr);
+    if (i < 0) {
+        for (i = 0; i < CAM_MAX_BONDS && c.cams[i].brand[0]; i++) { }
+        if (i >= CAM_MAX_BONDS) { return ESP_ERR_NO_MEM; }
+        memset(&c.cams[i], 0, sizeof(c.cams[i]));
+    }
+    cam_bond_t *b = &c.cams[i];
+    strlcpy(b->brand, brand, sizeof(b->brand));
+    memcpy(b->addr, addr, 6);
+    strlcpy(b->name, name ? name : "", sizeof(b->name));
+    if (dji_device_id)   { b->dji_device_id = dji_device_id; }
+    else if (!b->dji_device_id && s_live.camera.dji_device_id &&
+             memcmp(s_live.camera.addr, addr, 6) == 0) {
+        b->dji_device_id = s_live.camera.dji_device_id;
+    }
+    set_active_from(&c, b);            // newly paired camera becomes active
+    return cfg_commit(&c);
+}
+
+esp_err_t cfg_set_active_camera(const uint8_t addr[6])
+{
+    cfg_t c = s_live;
+    int i = bond_index_of(&c, addr);
+    if (i < 0) { return ESP_ERR_NOT_FOUND; }
+    if (memcmp(c.camera.addr, addr, 6) == 0 && c.camera.bonded) { return ESP_OK; }
+    set_active_from(&c, &c.cams[i]);
+    return cfg_commit(&c);
+}
+
+esp_err_t cfg_forget_camera(const uint8_t addr[6])
+{
+    cfg_t c = s_live;
+    int i = bond_index_of(&c, addr);
+    if (i >= 0) {
+        memset(&c.cams[i], 0, sizeof(c.cams[i]));
+        for (int k = i; k + 1 < CAM_MAX_BONDS; k++) { c.cams[k] = c.cams[k + 1]; }
+        memset(&c.cams[CAM_MAX_BONDS - 1], 0, sizeof(c.cams[CAM_MAX_BONDS - 1]));
+    }
+    if (memcmp(c.camera.addr, addr, 6) == 0) {
+        if (c.cams[0].brand[0]) { set_active_from(&c, &c.cams[0]); }
+        else                    { memset(&c.camera, 0, sizeof(c.camera)); }
+    }
     return cfg_commit(&c);
 }
 
@@ -167,9 +242,22 @@ esp_err_t cfg_clear_camera(void)
 {
     cfg_t c = s_live;
     memset(&c.camera, 0, sizeof(c.camera));
-    // dji_device_id is intentionally kept? spec 11.0: forget zeroes cfg.camera.*
-    // -> the id is regenerated on next first-ever pair. Zero it.
+    memset(c.cams, 0, sizeof(c.cams));
     return cfg_commit(&c);
+}
+
+int cfg_cam_count(void)
+{
+    int n = 0;
+    for (int i = 0; i < CAM_MAX_BONDS; i++) { if (s_live.cams[i].brand[0]) { n++; } }
+    return n;
+}
+
+bool cfg_cam_at(int i, cam_bond_t *out)
+{
+    if (i < 0 || i >= CAM_MAX_BONDS || !s_live.cams[i].brand[0]) { return false; }
+    if (out) { *out = s_live.cams[i]; }
+    return true;
 }
 
 esp_err_t cfg_factory_erase(void)
@@ -201,9 +289,11 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
     cfg_t disk;
     size_t sz = sizeof(disk);
     nvs_handle_t h;
-    bool good = false;
+    bool good = false, migrated = false;
 
     if (nvs_open(NS_CFG, NVS_READONLY, &h) == ESP_OK) {
+        // The blob may be smaller than sizeof(cfg_t) if written by older firmware.
+        memset(&disk, 0, sizeof(disk));
         if (nvs_get_blob(h, KEY_BLOB, &disk, &sz) == ESP_OK &&
             sz >= offsetof(cfg_t, crc32) + sizeof(uint32_t) &&
             disk.magic == CFG_MAGIC) {
@@ -212,9 +302,13 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
                 good = (disk.crc32 == blob_crc(&disk));
                 if (!good) { ESP_LOGE(TAG, "cfg CRC mismatch"); }
             } else if (disk.version < CFG_VERSION) {
-                // Older schema: accept, migrate, re-commit below.
-                if (cfg_migrate_chain(&disk)) {
-                    good = true;
+                // Older schema. Every field up to crc32 is unchanged across
+                // versions, so the stored CRC still validates the head; the
+                // v2+ tail (cams[]) was zeroed above and is filled by migration.
+                if (disk.crc32 != blob_crc(&disk)) {
+                    ESP_LOGE(TAG, "cfg v%u CRC mismatch -- not migrating", disk.version);
+                } else if (cfg_migrate_chain(&disk)) {
+                    good = migrated = true;
                     ESP_LOGW(TAG, "cfg migrated to v%u", CFG_VERSION);
                 }
             } else {
@@ -227,8 +321,8 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
     if (good) {
         s_live = disk;
         s_ready = true;
-        // Re-commit if we migrated (version/size/crc now current but flash old).
-        if (s_live.crc32 != blob_crc(&s_live) || s_live.version != CFG_VERSION) {
+        // Re-commit if we migrated (tail now present but flash still has old size).
+        if (migrated || s_live.crc32 != blob_crc(&s_live) || s_live.version != CFG_VERSION) {
             s_live.version = CFG_VERSION;
             s_live.size = sizeof(cfg_t);
             s_live.crc32 = blob_crc(&s_live);

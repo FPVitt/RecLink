@@ -160,6 +160,26 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddBoolToObject(c, "bonded", cfg->camera.bonded);
     cJSON_AddNumberToObject(c, "last_rx_ms", (double)(now_ms() - cam.last_rx_ms));
 
+    // All bonded cameras (spec 7.1). `active` = the one we connect to / just
+    // connected; `connected` = link is up right now.
+    bool link_up_now = (cam.link == CAM_LINK_READY);
+    cJSON_AddNumberToObject(c, "count", cfg_cam_count());
+    cJSON *cams = cJSON_AddArrayToObject(c, "cameras");
+    for (int i = 0; i < CAM_MAX_BONDS; i++) {
+        cam_bond_t b;
+        if (!cfg_cam_at(i, &b)) { continue; }
+        cJSON *ce = cJSON_CreateObject();
+        cJSON_AddStringToObject(ce, "brand", b.brand);
+        cJSON_AddStringToObject(ce, "name", b.name);
+        char bad[20]; snprintf(bad, sizeof(bad), "%02X:%02X:%02X:%02X:%02X:%02X",
+                               b.addr[0],b.addr[1],b.addr[2],b.addr[3],b.addr[4],b.addr[5]);
+        cJSON_AddStringToObject(ce, "addr", bad);
+        bool is_active = memcmp(b.addr, cfg->camera.addr, 6) == 0 && cfg->camera.bonded;
+        cJSON_AddBoolToObject(ce, "active", is_active);
+        cJSON_AddBoolToObject(ce, "connected", is_active && link_up_now);
+        cJSON_AddItemToArray(cams, ce);
+    }
+
     // Cameras found during pairing discovery (empty otherwise).
     cam_found_t fcams[6];
     int fn = cam_found_list(fcams, 6);
@@ -302,7 +322,20 @@ static esp_err_t h_cam_pair(httpd_req_t *r)
 static esp_err_t h_cam_forget(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
-    esp_err_t e = cam_forget();
+    // Optional {"addr":"AA:BB:.."} -> forget just that camera; no body -> forget all.
+    char *body = read_body(r, 128);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *ad = j ? cJSON_GetObjectItem(j, "addr") : NULL;
+    esp_err_t e;
+    uint8_t a[6];
+    if (cJSON_IsString(ad) && sscanf(ad->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                                     &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) == 6) {
+        e = cam_forget_one(a);
+    } else {
+        e = cam_forget();
+    }
+    cJSON_Delete(j);
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
     return send_json(r, resp, NULL);

@@ -237,6 +237,18 @@ esp_err_t ble_central_forget_bond(const uint8_t addr[6], uint8_t addr_type)
     return ble_store_util_delete_peer(&a) == 0 ? ESP_OK : ESP_FAIL;
 }
 
+esp_err_t ble_central_forget_bond_any(const uint8_t addr[6])
+{
+    ble_addr_t a;
+    memcpy(a.val, addr, 6);
+    bool ok = false;
+    for (uint8_t t = 0; t <= 1; t++) {
+        a.type = t;
+        if (ble_store_util_delete_peer(&a) == 0) { ok = true; }
+    }
+    return ok ? ESP_OK : ESP_FAIL;
+}
+
 esp_err_t ble_central_erase_all_bonds(void)
 {
     int rc = ble_store_clear();
