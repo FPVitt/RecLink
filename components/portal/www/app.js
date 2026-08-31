@@ -695,6 +695,7 @@ function fmtUp(s) { s = s|0; const d = s/86400|0, h = (s%86400)/3600|0, m = (s%3
   return d ? d+'d '+h+'h' : h ? h+'h '+m+'m' : m+'m'; }
 
 let lastFlags = '', lastCounters = '', lastDbg = '';
+let cfgResetPrompted = false;
 function setOffline(off) {
   document.body.classList.toggle('offline', off);
   $('#conn').hidden = !off;
@@ -774,6 +775,21 @@ async function poll() {
         : `<span>${names[f] || f}</span>`).join('');
     const af = $('#flags').querySelector('.ackflag');
     if (af) af.onclick = async () => { await post('/api/flags/ack'); poll(); };
+  }
+
+  // Fresh install: offer to set a Wi-Fi password (default is public knowledge).
+  if (!cfgResetPrompted && (s.flags || []).includes('CFG_RESET')) {
+    cfgResetPrompted = true;
+    let pw = prompt('Settings were reset to defaults.\n\nSet a new Wi-Fi password now (8+ characters)?\nType one and press OK, or Cancel to keep the default.', '');
+    while (pw !== null && pw.trim().length < 8) {
+      pw = prompt('Too short — the Wi-Fi password needs at least 8 characters.\nTry again, or Cancel to keep the default.', pw.trim());
+    }
+    if (pw !== null) {
+      msg('saving Wi-Fi password…');
+      const r = await post('/api/config', { wifi: { password: pw.trim() } });
+      if (r.ok) { await post('/api/reboot'); msg('password set — rebooting. Reconnect with the new password in ~10 s.'); }
+      else { msg('could not save: ' + (r.errors ? r.errors.join(', ') : 'server rejected it')); cfgResetPrompted = false; }
+    }
   }
 
   const cj = JSON.stringify(s.errors || []);
