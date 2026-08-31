@@ -698,7 +698,7 @@ let lastFlags = '', lastCounters = '', lastDbg = '';
 function setOffline(off) {
   document.body.classList.toggle('offline', off);
   $('#conn').hidden = !off;
-  if (off) { $('#fw').textContent = 'offline'; updateCursors(null); }
+  if (off) { $('#fw').textContent = 'offline'; updateCursors(null); document.body.classList.remove('rec'); }
 }
 
 async function poll() {
@@ -726,6 +726,7 @@ async function poll() {
     : cs.recording === 'true' ? 'REC ' + (cs.elapsed_s != null ? fmtT(cs.elapsed_s) : '') + (cs.hot ? ' ⚠ HOT' : '')
     : cs.recording === 'false' ? 'stopped' : 'unknown';
   put('rec', recTxt, cs && cs.recording === 'true' ? (cs.hot ? 'bad' : 'ok') : '');
+  document.body.classList.toggle('rec', !!(cs && cs.recording === 'true'));
 
   const w = [];
   if (paired) {
