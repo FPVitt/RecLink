@@ -45,7 +45,8 @@ body:not(.adv) .adv-only{display:none}
 label{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;
   gap:8px 12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
 label:last-child{border-bottom:0}
-label input[type=checkbox]{margin-left:auto;width:22px;height:22px}
+input[type=checkbox]{width:16px;height:16px;min-width:0;min-height:0;accent-color:var(--acc)}
+label input[type=checkbox]{margin-left:auto}
 
 input,select{background:#11151b;color:var(--fg);border:1px solid var(--line);
   border-radius:6px;padding:9px 10px;min-width:130px;min-height:40px;font-size:15px}
@@ -66,7 +67,17 @@ button{background:var(--acc);color:var(--acc-fg);border:0;border-radius:6px;
   padding:10px 16px;font-size:14px;min-height:40px;cursor:pointer}
 button:active{transform:translateY(1px)}
 button.danger{background:var(--dng)}
-button.reveal,button#mspscan{background:transparent;border:1px solid var(--line);color:var(--fg)}
+button.reveal,button#mspscan,button.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
+
+/* fresh-install Wi-Fi password modal */
+.modal{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+  padding:16px;background:rgba(0,0,0,.62)}
+.modal[hidden]{display:none}
+.modal-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:18px 18px 16px;width:100%;max-width:360px}
+.modal-card h3{margin:0 0 8px;font-size:15px;color:var(--fg);text-transform:none;letter-spacing:0}
+.modal-card p{margin:0 0 12px;font-size:14px;color:var(--mut)}
+#setup-err:empty{display:none}
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 
 .grid{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}

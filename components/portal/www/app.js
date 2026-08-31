@@ -601,7 +601,9 @@ $('#rebootnow').onclick = () => { if (confirm('Reboot the bridge now?')) post('/
 
 // ---- password reveal ----
 $$('.reveal').forEach(b => b.onclick = () => {
-  const el = document.querySelector(`[name="${CSS.escape(b.dataset.for)}"]`);
+  const t = b.dataset.for;
+  const el = /^[.#]/.test(t) ? document.querySelector(t)
+                             : document.querySelector(`[name="${CSS.escape(t)}"]`);
   const show = el.type === 'password';
   el.type = show ? 'text' : 'password';
   b.textContent = show ? 'hide' : 'show';
@@ -610,6 +612,30 @@ $$('.reveal').forEach(b => b.onclick = () => {
 // ---- actions ----
 const post = (u, body) => fetch(u, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}
                                         : {method:'POST'}).then(r => r.json()).catch(()=>({ok:false}));
+
+// ---- fresh-install Wi-Fi password modal (shown from poll() on CFG_RESET) ----
+$('#setup-no').onclick = () => { $('#setup').hidden = true; };
+$('#setup').onclick = e => { if (e.target.id === 'setup') $('#setup').hidden = true; };
+$('#setup-yes').onclick = () => {
+  $('#setup-ask').hidden = true;
+  $('#setup-form').hidden = false;
+  $('#setup-pw').focus();
+};
+$('#setup-save').onclick = async () => {
+  const pw = $('#setup-pw').value;
+  if (pw.length < 8) { $('#setup-err').textContent = 'At least 8 characters.'; return; }
+  $('#setup-err').textContent = '';
+  $('#setup-save').disabled = true;
+  const r = await post('/api/config', { wifi: { password: pw } });
+  if (!r.ok) {
+    $('#setup-save').disabled = false;
+    $('#setup-err').textContent = 'Could not save: ' + (r.errors ? r.errors.join(', ') : 'server rejected it');
+    return;
+  }
+  await post('/api/reboot');
+  $('#setup .modal-card').innerHTML =
+    '<h3>Rebooting…</h3><p>Reconnect to the RecLink Wi-Fi with the new password in ~10 s.</p>';
+};
 
 $$('[data-pair]').forEach(b => b.onclick = async () => {
   const r = await post('/api/camera/pair', {brand:b.dataset.pair});
@@ -777,19 +803,10 @@ async function poll() {
     if (af) af.onclick = async () => { await post('/api/flags/ack'); poll(); };
   }
 
-  // Fresh install: offer to set a Wi-Fi password (default is public knowledge).
+  // Fresh install: offer to set a Wi-Fi password (the default is documented).
   if (!cfgResetPrompted && (s.flags || []).includes('CFG_RESET')) {
     cfgResetPrompted = true;
-    let pw = prompt('Settings were reset to defaults.\n\nSet a new Wi-Fi password now (8+ characters)?\nType one and press OK, or Cancel to keep the default.', '');
-    while (pw !== null && pw.trim().length < 8) {
-      pw = prompt('Too short — the Wi-Fi password needs at least 8 characters.\nTry again, or Cancel to keep the default.', pw.trim());
-    }
-    if (pw !== null) {
-      msg('saving Wi-Fi password…');
-      const r = await post('/api/config', { wifi: { password: pw.trim() } });
-      if (r.ok) { await post('/api/reboot'); msg('password set — rebooting. Reconnect with the new password in ~10 s.'); }
-      else { msg('could not save: ' + (r.errors ? r.errors.join(', ') : 'server rejected it')); cfgResetPrompted = false; }
-    }
+    $('#setup').hidden = false;
   }
 
   const cj = JSON.stringify(s.errors || []);

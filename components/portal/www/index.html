@@ -27,6 +27,24 @@
 
 <div id="conn" hidden>RecLink offline &ndash; reconnecting&hellip; <span class="muted">(showing last known values)</span></div>
 
+<div id="setup" class="modal" hidden>
+  <div class="modal-card">
+    <h3>Wi-Fi password</h3>
+    <p>Settings were reset to defaults. Change the Wi-Fi password now?</p>
+    <div class="row" id="setup-ask">
+      <button type="button" id="setup-yes">Yes, change it</button>
+      <button type="button" id="setup-no" class="ghost">Keep default</button>
+    </div>
+    <div id="setup-form" hidden>
+      <label>New password (8&ndash;31 characters)
+        <input type="password" id="setup-pw" minlength="8" maxlength="31" autocomplete="new-password">
+        <button type="button" class="reveal" data-for="#setup-pw">show</button></label>
+      <p class="warn-inline" id="setup-err"></p>
+      <div class="row"><button type="button" id="setup-save">Save &amp; reboot</button></div>
+    </div>
+  </div>
+</div>
+
 <nav id="tabs">
   <button data-t="status" class="on">Status</button>
   <button data-t="cam-control">Cam control</button>
