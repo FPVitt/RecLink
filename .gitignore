@@ -18,4 +18,5 @@ dependencies.lock
 # Portal asset build intermediates
 components/portal/www/*.gz
 components/portal/www/*.h
-TODO.md.claude/worktrees/
+TODO.md
+.claude/worktrees/

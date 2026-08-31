@@ -3,19 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FC-Cam Bridge</title>
+<title>RecLink</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20180%20180'%3E%3Crect%20width='180'%20height='180'%20rx='24'%20fill='%230f1216'/%3E%3Cg%20transform='translate(6,50)'%20fill='%232ea043'%3E%3Crect%20x='6'%20y='6'%20width='30'%20height='12'/%3E%3Crect%20x='6'%20y='6'%20width='12'%20height='68'/%3E%3Crect%20x='6'%20y='62'%20width='30'%20height='12'/%3E%3Crect%20x='132'%20y='6'%20width='30'%20height='12'/%3E%3Crect%20x='150'%20y='6'%20width='12'%20height='68'/%3E%3Crect%20x='132'%20y='62'%20width='30'%20height='12'/%3E%3Ccircle%20cx='84'%20cy='40'%20r='21'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
-  <div>
-    <h1>FC&nbsp;&#8644;&nbsp;Cam Bridge</h1>
-    <p class="sub">Bench setup &amp; diagnostics. Not available in flight.</p>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 168 80" fill="currentColor" aria-hidden="true">
+      <title>RecLink</title>
+      <rect x="6" y="6" width="30" height="12"/>
+      <rect x="6" y="6" width="12" height="68"/>
+      <rect x="6" y="62" width="30" height="12"/>
+      <rect x="132" y="6" width="30" height="12"/>
+      <rect x="150" y="6" width="12" height="68"/>
+      <rect x="132" y="62" width="30" height="12"/>
+      <circle cx="84" cy="40" r="21"/>
+    </svg>
+    <span class="wordmark">RecLink</span>
   </div>
   <span id="fw" class="muted mono"></span>
 </header>
 
-<div id="conn" hidden>Bridge offline &ndash; reconnecting&hellip; <span class="muted">(showing last known values)</span></div>
+<div id="conn" hidden>RecLink offline &ndash; reconnecting&hellip; <span class="muted">(showing last known values)</span></div>
 
 <nav id="tabs">
   <button data-t="status" class="on">Status</button>
