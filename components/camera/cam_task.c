@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 
 static const char *TAG = "cam";
 
@@ -39,7 +40,7 @@ typedef struct {
         struct { int ev; int status; } ble;
         struct { uint16_t handle; uint16_t len; uint8_t data[256]; } notify;
         ble_adv_t adv;                    // full advert; cam_task does the matching
-        struct { char brand[6]; } pair;
+        struct { char brand[6]; uint8_t addr[6]; uint8_t has_addr; } pair;
         struct { uint8_t on; } flag;
     };
 } iq_item_t;
@@ -79,6 +80,16 @@ static int      s_bond_fails;
 // Portal scan-pause exemption: set when the link reaches READY, re-armed at the
 // start of each portal session (see cam_ble_pause_scan / scan_allowed).
 static bool     s_connected_this_session;
+// Pairing discovery: collect brand-matching adverts into a list for the portal
+// instead of bonding to the first one. Cleared when the user picks one.
+#define FOUND_MAX 6
+static bool        s_pair_discover;      // in SCAN: list, don't connect
+static bool        s_pair_target_set;    // s_target_addr is a user-chosen camera
+static uint32_t    s_discover_until;     // stop the discovery scan at this uptime
+static cam_found_t s_found[FOUND_MAX];
+static int         s_found_n;
+static SemaphoreHandle_t s_found_mux;
+static StaticSemaphore_t s_found_mux_buf;
 // The one shared camera-state scratch (spec 3.4). cam_task + the driver
 // callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
 #define s_cs (*cam_scratch())
@@ -217,6 +228,43 @@ esp_err_t cam_pair_begin(const char *brand)
     iq_item_t it = { .kind = IQ_CMD_PAIR };
     strlcpy(it.pair.brand, brand, sizeof(it.pair.brand));
     return xQueueSend(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE ? ESP_OK : ESP_FAIL;
+}
+esp_err_t cam_pair_select(const char *brand, const uint8_t addr[6])
+{
+    iq_item_t it = { .kind = IQ_CMD_PAIR, .pair = { .has_addr = 1 } };
+    strlcpy(it.pair.brand, brand, sizeof(it.pair.brand));
+    memcpy(it.pair.addr, addr, 6);
+    return xQueueSend(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE ? ESP_OK : ESP_FAIL;
+}
+int cam_found_list(cam_found_t *out, int max)
+{
+    if (!s_found_mux || !(s_pair_discover || s_pair_target_set)) { return 0; }
+    xSemaphoreTake(s_found_mux, portMAX_DELAY);
+    int n = s_found_n < max ? s_found_n : max;
+    for (int i = 0; i < n; i++) { out[i] = s_found[i]; }
+    xSemaphoreGive(s_found_mux);
+    return n;
+}
+// cam_task ctx: add/refresh a discovered advert (best RSSI wins).
+static void found_add(const ble_adv_t *a)
+{
+    xSemaphoreTake(s_found_mux, portMAX_DELAY);
+    for (int i = 0; i < s_found_n; i++) {
+        if (memcmp(s_found[i].addr, a->addr, 6) == 0) {
+            if (a->rssi > s_found[i].rssi) { s_found[i].rssi = a->rssi; }
+            if (a->name[0]) { strlcpy(s_found[i].name, a->name, sizeof(s_found[i].name)); }
+            xSemaphoreGive(s_found_mux);
+            return;
+        }
+    }
+    if (s_found_n < FOUND_MAX) {
+        cam_found_t *f = &s_found[s_found_n++];
+        memcpy(f->addr, a->addr, 6);
+        f->addr_type = a->addr_type;
+        f->rssi = a->rssi;
+        strlcpy(f->name, a->name[0] ? a->name : "GoPro", sizeof(f->name));
+    }
+    xSemaphoreGive(s_found_mux);
 }
 esp_err_t cam_forget(void)
 {
@@ -411,9 +459,10 @@ static void handle_ble_evt(int ev, int status)
         s_backoff_idx = 0;
         s_cs.last_rx_ms = now_ms();
         if (s_first_pair) {
-            // driver's on_paired persisted cfg; clear the first-pair flag
+            // driver's on_paired persisted cfg; clear the pairing flags
             s_first_pair = false;
         }
+        s_pair_discover = s_pair_target_set = false;
         break;
     }
     case BLE_EVT_DISC_FAIL:
@@ -467,7 +516,11 @@ static void cam_task(void *arg)
                              it.adv.mfg_len ? it.adv.mfg[0] : 0,
                              it.adv.mfg_len > 1 ? it.adv.mfg[1] : 0);
                 }
-                bool want = s_first_pair
+                if (s_pair_discover) {
+                    if (s_drv->adv_match && s_drv->adv_match(&it.adv)) { found_add(&it.adv); }
+                    break;                       // never connect while listing
+                }
+                bool want = (s_first_pair && !s_pair_target_set)
                     ? (s_drv->adv_match && s_drv->adv_match(&it.adv))
                     : (memcmp(it.adv.addr, s_target_addr, 6) == 0);
                 if (!want) { break; }
@@ -493,13 +546,43 @@ static void cam_task(void *arg)
             case IQ_CMD_PAIR: {
                 const camera_driver_t *d = camera_by_name(it.pair.brand);
                 if (d) {
-                    ESP_LOGI(TAG, "pairing: %s", it.pair.brand);
                     if (ble_central_connected()) { ble_central_disconnect(); }
                     s_drv = d;
                     s_first_pair = true;
                     s_backoff_idx = 0;
                     s_bond_fails = 0;
                     bridge_flag_clear(FLAG_REPAIR_NEEDED);
+                    if (it.pair.has_addr) {
+                        // User picked a discovered camera -> bond to that address.
+                        s_pair_discover = false;
+                        s_pair_target_set = true;
+                        memcpy(s_target_addr, it.pair.addr, 6);
+                        s_target_addr_type = 0;
+                        xSemaphoreTake(s_found_mux, portMAX_DELAY);
+                        for (int i = 0; i < s_found_n; i++) {
+                            if (memcmp(s_found[i].addr, it.pair.addr, 6) == 0) {
+                                s_target_addr_type = s_found[i].addr_type; break;
+                            }
+                        }
+                        xSemaphoreGive(s_found_mux);
+                        ESP_LOGI(TAG, "pair select: %s %02x:%02x:%02x:%02x:%02x:%02x",
+                                 it.pair.brand, it.pair.addr[0], it.pair.addr[1], it.pair.addr[2],
+                                 it.pair.addr[3], it.pair.addr[4], it.pair.addr[5]);
+                    } else if (strcmp(it.pair.brand, "gopro") == 0) {
+                        // Start discovery: list brand matches, don't connect.
+                        s_pair_discover = true;
+                        s_pair_target_set = false;
+                        s_discover_until = now_ms() + 45000;
+                        xSemaphoreTake(s_found_mux, portMAX_DELAY);
+                        s_found_n = 0;
+                        xSemaphoreGive(s_found_mux);
+                        ESP_LOGI(TAG, "pair discover: %s", it.pair.brand);
+                    } else {
+                        // Legacy first-match pairing (DJI).
+                        s_pair_discover = false;
+                        s_pair_target_set = false;
+                        ESP_LOGI(TAG, "pairing: %s", it.pair.brand);
+                    }
                     begin_scan();
                 }
                 break;
@@ -511,6 +594,7 @@ static void cam_task(void *arg)
                 }
                 cfg_clear_camera();
                 s_drv = NULL;
+                s_pair_discover = s_pair_target_set = false;
                 memset(s_target_addr, 0, 6);
                 invalidate_cam_values();
                 set_link(CAM_LINK_IDLE);
@@ -578,7 +662,9 @@ static void cam_task(void *arg)
             // and NimBLE dropping discovery on its own. Held off while the
             // portal AP is up (unless pairing) so Wi-Fi association isn't
             // starved on the single C3 radio.
-            if (s_cs.link == CAM_LINK_SCAN && s_drv) {
+            if (s_pair_discover && (int32_t)(now - s_discover_until) >= 0) {
+                ble_central_scan(false);   // discovery window closed; list stays for the portal
+            } else if (s_cs.link == CAM_LINK_SCAN && s_drv) {
                 if (scan_allowed()) {
                     esp_err_t sr = ble_central_scan(true);
                     if (sr != ESP_OK) { ESP_LOGW(TAG, "scan re-arm: %s", esp_err_to_name(sr)); }
@@ -622,6 +708,7 @@ static void cam_task(void *arg)
 void cam_start(void)
 {
     cam_state_init();
+    s_found_mux = xSemaphoreCreateMutexStatic(&s_found_mux_buf);
     s_iq   = xQueueCreateStatic(IQ_DEPTH, sizeof(iq_item_t), s_iq_buf, &s_iq_s);
     s_cmdq = xQueueCreateStatic(16, sizeof(cam_cmd_t), s_cmdq_buf, &s_cmdq_s);
     s_evq  = xQueueCreateStatic(16, sizeof(cam_event_t), s_evq_buf, &s_evq_s);

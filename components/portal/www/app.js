@@ -648,30 +648,56 @@ $('#setup-save').onclick = async () => {
     '<h3>Rebooting…</h3><p>Reconnect to the RecLink Wi-Fi with the new password in ~10 s.</p>';
 };
 
-// GoPro: guided pairing modal. DJI: keep the simple inline request for now.
-let pairing = false, pairStart = 0;
+// GoPro: guided pairing modal with a discovered-camera list. DJI: inline request.
+let pairPhase = '';       // '' | 'discover' | 'bonding'
+let pairStart = 0, pairPicked = '';
 $$('[data-pair]').forEach(b => b.onclick = async () => {
   if (b.dataset.pair === 'gopro') {
-    pairing = false;
+    pairPhase = '';
+    pairPicked = '';
     $('#pair-msg').textContent = '';
+    $('#pair-list').textContent = '';
     $('#pair-ask').hidden = false;
-    $('#pair-go').disabled = false;
     $('#pair').hidden = false;
     return;
   }
   const r = await post('/api/camera/pair', {brand:b.dataset.pair});
   msg(r.ok ? 'pairing… put the DJI into pairing mode now' : 'pair request failed');
 });
-$('#pair-cancel').onclick = () => { $('#pair').hidden = true; pairing = false; };
-$('#pair').onclick = e => { if (e.target.id === 'pair') { $('#pair').hidden = true; pairing = false; } };
+function pairClose() { $('#pair').hidden = true; pairPhase = ''; }
+$('#pair-cancel').onclick = pairClose;
+$('#pair').onclick = e => { if (e.target.id === 'pair') pairClose(); };
 $('#pair-go').onclick = async () => {
-  $('#pair-go').disabled = true;
   const r = await post('/api/camera/pair', {brand:'gopro'});
-  if (!r.ok) { $('#pair-msg').textContent = 'Pair request failed.'; $('#pair-go').disabled = false; return; }
-  pairing = true;
+  if (!r.ok) { $('#pair-msg').textContent = 'Pair request failed.'; return; }
+  pairPicked = '';
+  $('#pair-list').textContent = '';
+  pairPhase = 'discover';
   pairStart = Date.now();
-  $('#pair-msg').textContent = 'Searching… keep the camera in pairing mode.';
+  $('#pair-msg').textContent = 'Searching for GoPros in pairing mode…';
 };
+function pairPick(addr, name) {
+  pairPicked = name || addr;
+  pairPhase = 'bonding';
+  pairStart = Date.now();
+  $('#pair-list').textContent = '';
+  $('#pair-msg').textContent = 'Pairing with ' + pairPicked + '…';
+  post('/api/camera/pair', {brand:'gopro', addr});
+}
+function renderFound(list) {
+  const w = $('#pair-list');
+  const keep = new Set((list || []).map(f => f.addr));
+  [...w.children].forEach(b => { if (!keep.has(b.dataset.addr)) b.remove(); });
+  (list || []).forEach(f => {
+    let b = w.querySelector('[data-addr="' + f.addr + '"]');
+    if (!b) {
+      b = el('button'); b.type = 'button'; b.dataset.addr = f.addr;
+      b.onclick = () => pairPick(f.addr, f.name);
+      w.appendChild(b);
+    }
+    b.innerHTML = '<b>' + (f.name || 'GoPro') + '</b><small>' + f.addr + '  ·  ' + f.rssi + ' dBm</small>';
+  });
+}
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera…' : 'failed');
 $$('[data-preset]').forEach(b => b.onclick = async () => {
   const r = await post('/api/camera/preset', {slot: +b.dataset.preset});
@@ -797,19 +823,28 @@ async function poll() {
   const fcUp = m && m.connected;
   const paired = !!(c && c.brand);
 
-  // GoPro pairing modal progress
-  if (pairing && !$('#pair').hidden) {
+  // GoPro pairing modal
+  if (pairPhase && !$('#pair').hidden) {
     const link = c ? c.link : '';
-    if (link === 'READY') {
-      pairing = false;
-      $('#pair-msg').textContent = 'Paired — camera connected.';
-      setTimeout(() => { $('#pair').hidden = true; }, 1600);
-    } else if (Date.now() - pairStart > 75000) {
-      pairing = false;
-      $('#pair-msg').textContent = 'Not found. Make sure the camera is in pairing mode, then press Pair now again.';
-      $('#pair-go').disabled = false;
-    } else {
-      $('#pair-msg').textContent = 'Pairing… (' + (link ? link.toLowerCase() : 'searching') + ')';
+    if (pairPhase === 'discover') {
+      renderFound(c && c.found);
+      const n = (c && c.found) ? c.found.length : 0;
+      $('#pair-msg').textContent = n ? 'Tap the camera to pair:' : 'Searching for GoPros in pairing mode…';
+      if (!n && Date.now() - pairStart > 50000) {
+        pairPhase = '';
+        $('#pair-msg').textContent = 'No GoPro found. Make sure it is in remote-pairing mode, then press Pair now again.';
+      }
+    } else if (pairPhase === 'bonding') {
+      if (link === 'READY') {
+        pairPhase = '';
+        $('#pair-msg').textContent = 'Paired with ' + pairPicked + '.';
+        setTimeout(() => { $('#pair').hidden = true; }, 1600);
+      } else if (Date.now() - pairStart > 60000) {
+        pairPhase = '';
+        $('#pair-msg').textContent = 'Could not pair with ' + pairPicked + '. Try again.';
+      } else {
+        $('#pair-msg').textContent = 'Pairing with ' + pairPicked + '… (' + (link ? link.toLowerCase() : 'connecting') + ')';
+      }
     }
   }
 

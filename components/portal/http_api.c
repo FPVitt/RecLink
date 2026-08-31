@@ -160,6 +160,22 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddBoolToObject(c, "bonded", cfg->camera.bonded);
     cJSON_AddNumberToObject(c, "last_rx_ms", (double)(now_ms() - cam.last_rx_ms));
 
+    // Cameras found during pairing discovery (empty otherwise).
+    cam_found_t fcams[6];
+    int fn = cam_found_list(fcams, 6);
+    if (fn) {
+        cJSON *fa = cJSON_AddArrayToObject(c, "found");
+        for (int i = 0; i < fn; i++) {
+            cJSON *fe = cJSON_CreateObject();
+            cJSON_AddStringToObject(fe, "name", fcams[i].name);
+            char fad[20]; snprintf(fad, sizeof(fad), "%02X:%02X:%02X:%02X:%02X:%02X",
+                                   fcams[i].addr[0],fcams[i].addr[1],fcams[i].addr[2],fcams[i].addr[3],fcams[i].addr[4],fcams[i].addr[5]);
+            cJSON_AddStringToObject(fe, "addr", fad);
+            cJSON_AddNumberToObject(fe, "rssi", fcams[i].rssi);
+            cJSON_AddItemToArray(fa, fe);
+        }
+    }
+
     cJSON *cs = cJSON_AddObjectToObject(j, "cam_state");
     #define VU(name, field) do { cJSON *o = cJSON_AddObjectToObject(cs, name); \
         cJSON_AddNumberToObject(o, "v", cam.field.v); cJSON_AddBoolToObject(o, "valid", cam.field.valid); } while (0)
@@ -266,8 +282,17 @@ static esp_err_t h_cam_pair(httpd_req_t *r)
     cJSON *j = body ? cJSON_Parse(body) : NULL;
     free(body);
     const cJSON *br = j ? cJSON_GetObjectItem(j, "brand") : NULL;
+    const cJSON *ad = j ? cJSON_GetObjectItem(j, "addr") : NULL;   // "AA:BB:CC:DD:EE:FF" -> bond to it
     esp_err_t e = ESP_ERR_INVALID_ARG;
-    if (cJSON_IsString(br)) { e = cam_pair_begin(br->valuestring); }
+    if (cJSON_IsString(br)) {
+        uint8_t a[6];
+        if (cJSON_IsString(ad) && sscanf(ad->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                                         &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) == 6) {
+            e = cam_pair_select(br->valuestring, a);
+        } else {
+            e = cam_pair_begin(br->valuestring);
+        }
+    }
     cJSON_Delete(j);
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
