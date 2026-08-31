@@ -835,7 +835,7 @@ async function poll() {
       $('#pair-msg').textContent = n ? 'Tap the camera to pair:' : 'Searching for GoPros in pairing mode…';
       if (!n && Date.now() - pairStart > 50000) {
         pairPhase = '';
-        $('#pair-msg').textContent = 'No GoPro found. Make sure it is in remote-pairing mode, then press Pair now again.';
+        $('#pair-msg').textContent = 'No GoPro found. Make sure it is in remote-pairing mode, then press Scan now again.';
       }
     } else if (pairPhase === 'bonding') {
       if (link === 'READY') {
