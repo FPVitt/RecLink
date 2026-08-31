@@ -510,7 +510,7 @@ static esp_err_t serve_gz(httpd_req_t *r, const uint8_t *s, const uint8_t *e, co
 {
     httpd_resp_set_type(r, ct);
     httpd_resp_set_hdr(r, "Content-Encoding", "gzip");
-    httpd_resp_set_hdr(r, "Cache-Control", "max-age=600");
+    httpd_resp_set_hdr(r, "Cache-Control", "no-cache");   // bench tool; always show the flashed UI
     return httpd_resp_send(r, (const char *)s, e - s);
 }
 

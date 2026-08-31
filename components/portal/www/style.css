@@ -83,7 +83,7 @@ button.reveal,button#mspscan,button.ghost{background:transparent;border:1px soli
 .modal-card ol.steps{margin:0 0 12px;padding-left:20px;font-size:14px;line-height:1.6}
 .qrbox{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#11151b;
   border:1px solid var(--line);border-radius:8px;padding:12px;margin:0 0 12px}
-.qrbox .qr{width:116px;height:116px;flex:none;display:block;background:#fff;border-radius:4px}
+.qrbox .qr{width:120px;height:120px;flex:none;display:block;border-radius:4px}
 .qrbox p{margin:0;font-size:12px;flex:1;min-width:150px}
 progress{width:100%;height:14px;margin:2px 0 4px;border:0;border-radius:7px;overflow:hidden;
   background:#11151b;-webkit-appearance:none;appearance:none}
