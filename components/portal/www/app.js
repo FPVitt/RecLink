@@ -648,10 +648,30 @@ $('#setup-save').onclick = async () => {
     '<h3>Rebooting…</h3><p>Reconnect to the RecLink Wi-Fi with the new password in ~10 s.</p>';
 };
 
+// GoPro: guided pairing modal. DJI: keep the simple inline request for now.
+let pairing = false, pairStart = 0;
 $$('[data-pair]').forEach(b => b.onclick = async () => {
+  if (b.dataset.pair === 'gopro') {
+    pairing = false;
+    $('#pair-msg').textContent = '';
+    $('#pair-ask').hidden = false;
+    $('#pair-go').disabled = false;
+    $('#pair').hidden = false;
+    return;
+  }
   const r = await post('/api/camera/pair', {brand:b.dataset.pair});
-  msg(r.ok ? ('pairing… put the ' + b.dataset.pair.toUpperCase() + ' into pairing mode now') : 'pair request failed');
+  msg(r.ok ? 'pairing… put the DJI into pairing mode now' : 'pair request failed');
 });
+$('#pair-cancel').onclick = () => { $('#pair').hidden = true; pairing = false; };
+$('#pair').onclick = e => { if (e.target.id === 'pair') { $('#pair').hidden = true; pairing = false; } };
+$('#pair-go').onclick = async () => {
+  $('#pair-go').disabled = true;
+  const r = await post('/api/camera/pair', {brand:'gopro'});
+  if (!r.ok) { $('#pair-msg').textContent = 'Pair request failed.'; $('#pair-go').disabled = false; return; }
+  pairing = true;
+  pairStart = Date.now();
+  $('#pair-msg').textContent = 'Searching… keep the camera in pairing mode.';
+};
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera…' : 'failed');
 $$('[data-preset]').forEach(b => b.onclick = async () => {
   const r = await post('/api/camera/preset', {slot: +b.dataset.preset});
@@ -776,6 +796,22 @@ async function poll() {
   const m = s.msp, c = s.camera, cs = s.cam_state;
   const fcUp = m && m.connected;
   const paired = !!(c && c.brand);
+
+  // GoPro pairing modal progress
+  if (pairing && !$('#pair').hidden) {
+    const link = c ? c.link : '';
+    if (link === 'READY') {
+      pairing = false;
+      $('#pair-msg').textContent = 'Paired — camera connected.';
+      setTimeout(() => { $('#pair').hidden = true; }, 1600);
+    } else if (Date.now() - pairStart > 75000) {
+      pairing = false;
+      $('#pair-msg').textContent = 'Not found. Make sure the camera is in pairing mode, then press Pair now again.';
+      $('#pair-go').disabled = false;
+    } else {
+      $('#pair-msg').textContent = 'Pairing… (' + (link ? link.toLowerCase() : 'searching') + ')';
+    }
+  }
 
   // primary
   if (!fcUp) put('armed', 'FC offline', 'warn');
