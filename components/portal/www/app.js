@@ -651,10 +651,13 @@ $('#otago').onclick = () => {
   const f = $('#otafile').files[0];
   if (!f) return msg('choose a .bin file first');
   if (f.size < 500000) return msg('that file looks too small — use build/fc_cam_bridge.bin');
-  if (!confirm('Flash ' + (f.size/1024|0) + ' KB now? The bridge reboots when done.')) return;
+  const erase = $('#otaerase').checked;
+  if (!confirm('Flash ' + (f.size/1024|0) + ' KB now?'
+      + (erase ? ' ALL settings and camera pairing will be erased.' : '')
+      + ' The bridge reboots when done.')) return;
   msg('uploading 0 %…');
   const x = new XMLHttpRequest();
-  x.open('POST', '/api/ota');
+  x.open('POST', '/api/ota' + (erase ? '?erase=1' : ''));
   let last = 0;
   x.upload.onprogress = e => {
     if (!e.lengthComputable) return;
@@ -663,7 +666,7 @@ $('#otago').onclick = () => {
   };
   x.onload = () => {
     let r = {}; try { r = JSON.parse(x.responseText); } catch (_) {}
-    msg(r.ok ? 'flashed OK — rebooting, reconnect to Wi-Fi in ~10 s'
+    msg(r.ok ? ('flashed OK' + (r.erased ? ' + settings erased' : '') + ' — rebooting, reconnect to Wi-Fi in ~10 s')
              : 'OTA failed: ' + (r.error || ('HTTP ' + x.status)) + ' — current firmware kept');
   };
   x.onerror = () => msg('OTA upload error (connection dropped) — current firmware kept');

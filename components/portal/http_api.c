@@ -409,6 +409,8 @@ static esp_err_t h_msp_scan(httpd_req_t *r)
 static esp_err_t h_ota(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    char q[24] = {0};
+    bool erase = (httpd_req_get_url_query_str(r, q, sizeof(q)) == ESP_OK) && strstr(q, "erase=1");
     int total = r->content_len;
     ESP_LOGW("api", "OTA POST: content-len %d, free heap %u", total,
              (unsigned)esp_get_free_heap_size());
@@ -484,8 +486,15 @@ static esp_err_t h_ota(httpd_req_t *r)
         httpd_resp_sendstr(r, msg);
         return ESP_OK;
     }
+    if (erase) {
+        // Wipe cfg + BLE bonds so the new firmware boots on factory defaults.
+        cfg_factory_erase();
+        cam_erase_all_bonds();
+        ESP_LOGW("api", "OTA: settings + bonds erased -> factory defaults");
+    }
     ESP_LOGW("api", "OTA ok (%u bytes) -- rebooting", (unsigned)written);
-    httpd_resp_sendstr(r, "{\"ok\":true,\"rebooting\":true}");
+    httpd_resp_sendstr(r, erase ? "{\"ok\":true,\"rebooting\":true,\"erased\":true}"
+                                : "{\"ok\":true,\"rebooting\":true}");
     // Give the TCP stack time to flush the response over the (slow) SoftAP link
     // before the reboot kills the socket -- else the client's fetch rejects and
     // the UI shows "failed" for a successful update.
