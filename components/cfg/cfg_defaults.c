@@ -68,8 +68,8 @@ void cfg_load_defaults(cfg_t *d)
     d->ui_advanced   = 0;       // portal starts in basic mode
 
     // wifi
-    d->wifi.ssid[0]           = '\0';    // auto: CAMBRIDGE-XXXX
-    strcpy(d->wifi.password, "cambridge");   // >= 8 chars; user must change
+    d->wifi.ssid[0]           = '\0';    // auto: RECLINK-XXXX
+    strcpy(d->wifi.password, "reclink-fpv");  // >= 8 chars; user must change
     d->wifi.channel           = 0;
     d->wifi.portal_trigger    = PORTAL_TRIG_BUTTON;
     d->wifi.portal_timeout_min = 15;

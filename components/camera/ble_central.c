@@ -289,7 +289,7 @@ void ble_central_init(void)
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
 
     ble_svc_gap_init();
-    ble_svc_gap_device_name_set("CamBridge");
+    ble_svc_gap_device_name_set("RecLink");
 
     // Wire up the NVS-backed bond-key store (CONFIG_BT_NIMBLE_NVS_PERSIST). The
     // IDF NimBLE port does NOT call this for you -- without it sm_bonding has

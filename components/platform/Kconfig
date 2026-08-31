@@ -1,4 +1,4 @@
-menu "FC-Cam Bridge board"
+menu "RecLink board"
 
     config BRIDGE_UART_PORT
         int "FC MSP UART port number"

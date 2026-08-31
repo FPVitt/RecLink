@@ -1,4 +1,4 @@
-# FC ⇄ Action-Cam Bridge — firmware
+# RecLink — FC ⇄ action-cam bridge firmware
 
 ESP32-C3 (production) / ESP32-S3 (dev) firmware that bridges a Betaflight flight
 controller (MSP over UART) and one action camera (BLE — GoPro HERO 11+ or DJI

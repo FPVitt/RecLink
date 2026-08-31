@@ -30,7 +30,7 @@ void housekeeping_start(void);
 void app_main(void)
 {
     applog_init();
-    ESP_LOGI(TAG, "FC-Cam Bridge starting");
+    ESP_LOGI(TAG, "RecLink starting");
 
     platform_init();                       // samples boot button, RTC counters, LED
     led_request(LED_BOOT);                 // solid = booting (spec 3.6 step 2)

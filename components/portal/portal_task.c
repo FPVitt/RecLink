@@ -50,7 +50,7 @@ static void wifi_ap_up(void)
     if (c->wifi.ssid[0]) {
         strlcpy((char *)wc.ap.ssid, c->wifi.ssid, sizeof(wc.ap.ssid));
     } else {
-        snprintf((char *)wc.ap.ssid, sizeof(wc.ap.ssid), "CAMBRIDGE-%02X%02X", mac[4], mac[5]);
+        snprintf((char *)wc.ap.ssid, sizeof(wc.ap.ssid), "RECLINK-%02X%02X", mac[4], mac[5]);
     }
     wc.ap.ssid_len = strlen((char *)wc.ap.ssid);
     strlcpy((char *)wc.ap.password, c->wifi.password, sizeof(wc.ap.password));
