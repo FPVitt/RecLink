@@ -15,6 +15,8 @@
 #define CFG_MAGIC   0x43424247u   // "CBBG"
 #define CFG_VERSION 1u
 
+#define CFG_DEFAULT_WIFI_PW "reclinkfpv"   // AP password on factory defaults
+
 // -------- status flags (spec 3.6). Runtime, surfaced in /api/status.flags -----
 typedef enum {
     FLAG_CFG_RESET        = 1u << 0,
@@ -113,7 +115,7 @@ typedef struct __attribute__((packed)) {
     // was `interlock` -- removed (passenger-only, spec 1.2.1). One byte reclaimed
     // for msp.swap_pins; layout/offsets unchanged so old blobs stay CRC-valid.
     uint8_t  msp_swap_pins;      // 1 = feed TX_GPIO as RX and RX_GPIO as TX
-    uint8_t  ui_advanced;        // portal: show advanced/diagnostic controls (device-persisted)
+    uint8_t  ui_flags;           // portal prefs: bit0 advanced mode, bit1 suppress default-password nag
 
     struct {
         uint32_t baud;

@@ -11,24 +11,28 @@ function showTab(name) {
 }
 $$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
 
-// ---- advanced mode (gates .adv-only elements) ----
-// Persisted on the DEVICE (cfg.ui_advanced) so it survives the captive-portal
-// webview clearing localStorage; localStorage is just a fast local cache.
+// ---- portal prefs: cfg.ui_flags (bit0 advanced mode, bit1 suppress pw nag) ----
+// Device-persisted so it survives the captive-portal webview clearing
+// localStorage; localStorage is just a fast local cache for the paint.
+let uiFlags = 0;
 const advmode = $('#advmode');
+function persistFlags() {
+  fetch('/api/config', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ui_flags: uiFlags})
+  }).catch(() => {});
+}
 function applyAdv(on) {
   document.body.classList.toggle('adv', on);
-  // if the active tab just got hidden, fall back to Status
   const cur = $('#tabs button.on');
   if (cur && cur.classList.contains('adv-only') && !on) showTab('status');
 }
 function setAdv(on, persist) {
+  uiFlags = on ? (uiFlags | 1) : (uiFlags & ~1);
   advmode.checked = on;
   localStorage.setItem('advmode', on ? '1' : '0');
   applyAdv(on);
-  if (persist) fetch('/api/config', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ui_advanced: on ? 1 : 0})
-  }).catch(() => {});
+  if (persist) persistFlags();
 }
 setAdv(localStorage.getItem('advmode') === '1', false);
 advmode.onchange = () => setAdv(advmode.checked, true);
@@ -540,7 +544,7 @@ async function loadConfig() {
   const c = await fetch('/api/config').then(r => r.json());
   fillConfig(c);
   osdLoad();
-  if (c.ui_advanced != null) setAdv(!!c.ui_advanced, false);   // device value wins
+  if (c.ui_flags != null) { uiFlags = c.ui_flags | 0; setAdv(!!(uiFlags & 1), false); }
   cfgBrand = (c.camera && c.camera.brand) || '';
   rebootBaseline = getField('msp.baud') + '/' + getField('msp.swap_pins');
   applyGates();
@@ -613,9 +617,16 @@ $$('.reveal').forEach(b => b.onclick = () => {
 const post = (u, body) => fetch(u, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}
                                         : {method:'POST'}).then(r => r.json()).catch(()=>({ok:false}));
 
-// ---- fresh-install Wi-Fi password modal (shown from poll() on CFG_RESET) ----
-$('#setup-no').onclick = () => { $('#setup').hidden = true; };
-$('#setup').onclick = e => { if (e.target.id === 'setup') $('#setup').hidden = true; };
+// ---- default-password modal (shown from poll() while the AP password is still
+// the factory default and the nag hasn't been suppressed) ----
+let setupDismissed = false;   // per-session: don't re-pop after a plain dismiss
+function setupClose() {
+  $('#setup').hidden = true;
+  setupDismissed = true;
+  if ($('#setup-nomore').checked && !(uiFlags & 2)) { uiFlags |= 2; persistFlags(); }
+}
+$('#setup-no').onclick = setupClose;
+$('#setup').onclick = e => { if (e.target.id === 'setup') setupClose(); };
 $('#setup-yes').onclick = () => {
   $('#setup-ask').hidden = true;
   $('#setup-form').hidden = false;
@@ -673,29 +684,55 @@ $('#mspscan').onclick = async () => {
   } catch (e) { $('#scanout').textContent = 'scan failed (FC offline?)'; }
 };
 
+// ---- firmware flash modal ----
+$('#flash-cancel').onclick = () => { $('#flash').hidden = true; };
 $('#otago').onclick = () => {
   const f = $('#otafile').files[0];
   if (!f) return msg('choose a .bin file first');
   if (f.size < 500000) return msg('that file looks too small — use build/fc_cam_bridge.bin');
   const erase = $('#otaerase').checked;
-  if (!confirm('Flash ' + (f.size/1024|0) + ' KB now?'
-      + (erase ? ' ALL settings and camera pairing will be erased.' : '')
-      + ' The bridge reboots when done.')) return;
-  msg('uploading 0 %…');
+  $('#flash-info').innerHTML = 'Flash <b>' + (f.size / 1024 | 0) + ' KB</b> now?'
+    + (erase ? ' <span class="warn-inline">All settings and camera pairing will be erased.</span>' : '')
+    + ' The bridge reboots when done.';
+  $('#flash-ask').hidden = false;
+  $('#flash-progress').hidden = true;
+  $('#flash-bar').value = 0;
+  $('#flash').hidden = false;
+};
+$('#flash-go').onclick = () => {
+  const f = $('#otafile').files[0];
+  if (!f) { $('#flash').hidden = true; return; }
+  const erase = $('#otaerase').checked;
+  $('#flash-ask').hidden = true;
+  $('#flash-progress').hidden = false;
+  $('#flash-msg').textContent = 'Uploading… 0 %';
   const x = new XMLHttpRequest();
   x.open('POST', '/api/ota' + (erase ? '?erase=1' : ''));
-  let last = 0;
   x.upload.onprogress = e => {
     if (!e.lengthComputable) return;
     const p = Math.round(100 * e.loaded / e.total);
-    if (p !== last) { last = p; msg('uploading ' + p + ' %…'); }
+    $('#flash-bar').value = p;
+    $('#flash-msg').textContent = p < 100 ? ('Uploading… ' + p + ' %') : 'Writing to flash…';
   };
   x.onload = () => {
     let r = {}; try { r = JSON.parse(x.responseText); } catch (_) {}
-    msg(r.ok ? ('flashed OK' + (r.erased ? ' + settings erased' : '') + ' — rebooting, reconnect to Wi-Fi in ~10 s')
-             : 'OTA failed: ' + (r.error || ('HTTP ' + x.status)) + ' — current firmware kept');
+    if (r.ok) {
+      $('#flash-bar').value = 100;
+      $('#flash .modal-card').innerHTML = '<h3>Flashed</h3><p>'
+        + (r.erased ? 'Settings erased. ' : '')
+        + 'Rebooting — reconnect to the RecLink Wi-Fi in ~10 s.</p>';
+    } else {
+      $('#flash-progress').hidden = true;
+      $('#flash-ask').hidden = false;
+      $('#flash-info').innerHTML = '<span class="warn-inline">Flash failed: '
+        + (r.error || ('HTTP ' + x.status)) + '</span> — current firmware kept.';
+    }
   };
-  x.onerror = () => msg('OTA upload error (connection dropped) — current firmware kept');
+  x.onerror = () => {
+    $('#flash-progress').hidden = true;
+    $('#flash-ask').hidden = false;
+    $('#flash-info').innerHTML = '<span class="warn-inline">Upload dropped</span> — current firmware kept.';
+  };
   x.send(f);
 };
 
@@ -721,7 +758,6 @@ function fmtUp(s) { s = s|0; const d = s/86400|0, h = (s%86400)/3600|0, m = (s%3
   return d ? d+'d '+h+'h' : h ? h+'h '+m+'m' : m+'m'; }
 
 let lastFlags = '', lastCounters = '', lastDbg = '';
-let cfgResetPrompted = false;
 function setOffline(off) {
   document.body.classList.toggle('offline', off);
   $('#conn').hidden = !off;
@@ -803,9 +839,8 @@ async function poll() {
     if (af) af.onclick = async () => { await post('/api/flags/ack'); poll(); };
   }
 
-  // Fresh install: offer to set a Wi-Fi password (the default is documented).
-  if (!cfgResetPrompted && (s.flags || []).includes('CFG_RESET')) {
-    cfgResetPrompted = true;
+  // AP still on the factory password: nag to change it (unless suppressed).
+  if (s.wifi && s.wifi.default_pw && !s.wifi.pw_nag_off && !setupDismissed && $('#setup').hidden) {
     $('#setup').hidden = false;
   }
 

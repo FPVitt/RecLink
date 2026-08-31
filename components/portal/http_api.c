@@ -187,6 +187,8 @@ static esp_err_t h_status(httpd_req_t *r)
 
     cJSON *wifi = cJSON_AddObjectToObject(j, "wifi");
     cJSON_AddBoolToObject(wifi, "portal", portal_active());
+    cJSON_AddBoolToObject(wifi, "default_pw", strcmp(cfg->wifi.password, CFG_DEFAULT_WIFI_PW) == 0);
+    cJSON_AddBoolToObject(wifi, "pw_nag_off", (cfg->ui_flags & 2) != 0);
 
     cJSON *errs = cJSON_AddArrayToObject(j, "errors");
     cfg_stats_t st; cfg_stats_load(&st);

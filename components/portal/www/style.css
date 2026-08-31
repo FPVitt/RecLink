@@ -77,7 +77,13 @@ button.reveal,button#mspscan,button.ghost{background:transparent;border:1px soli
   padding:18px 18px 16px;width:100%;max-width:360px}
 .modal-card h3{margin:0 0 8px;font-size:15px;color:var(--fg);text-transform:none;letter-spacing:0}
 .modal-card p{margin:0 0 12px;font-size:14px;color:var(--mut)}
+.modal-foot{border:0;padding:12px 0 0;margin-top:8px;border-top:1px solid var(--line);font-size:13px;color:var(--mut)}
 #setup-err:empty{display:none}
+progress{width:100%;height:14px;margin:2px 0 4px;border:0;border-radius:7px;overflow:hidden;
+  background:#11151b;-webkit-appearance:none;appearance:none}
+progress::-webkit-progress-bar{background:#11151b}
+progress::-webkit-progress-value{background:var(--acc)}
+progress::-moz-progress-bar{background:var(--acc)}
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
 
 .grid{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}
