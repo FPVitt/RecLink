@@ -71,7 +71,7 @@ void cfg_load_defaults(cfg_t *d)
     d->wifi.ssid[0]           = '\0';    // auto: RECLINK-XXXX
     strcpy(d->wifi.password, "reclinkfpv");   // >= 8 chars; user must change
     d->wifi.channel           = 0;
-    d->wifi.portal_trigger    = PORTAL_TRIG_BUTTON;
+    d->wifi.portal_trigger    = PORTAL_TRIG_ALWAYS_DISARMED;
     d->wifi.portal_timeout_min = 15;
 
     d->led_brightness = 128;
