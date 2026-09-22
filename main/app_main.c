@@ -56,6 +56,7 @@ void app_main(void)
 
     // --- BLE host up, then reconcile cfg vs bond store ---------------
     ble_central_init();
+    ble_central_set_tx_power(cfg_get()->ble_tx_power);
     vTaskDelay(pdMS_TO_TICKS(100));         // let the host sync
     camera_register(gopro_driver());
     camera_register(dji_driver());

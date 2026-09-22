@@ -21,12 +21,34 @@ static void migrate_1_to_2(cfg_t *c)
     c->version = 2;
 }
 
+// v2 -> v3: per-camera BLE poll interval (cam_poll_ds[]) appended at the very end,
+// after cams[]. cams[] layout is unchanged so nothing needs re-spacing; the
+// caller zeroed the tail, so just fill in the default and bump the version.
+static void migrate_2_to_3(cfg_t *c)
+{
+    for (int i = 0; i < CAM_MAX_BONDS; i++) {
+        if (c->cam_poll_ds[i] == 0) { c->cam_poll_ds[i] = CAM_POLL_DS_DEFAULT; }
+    }
+    c->version = 3;
+}
+
+// v3 -> v4: RF transmit power presets (wifi_tx_power / ble_tx_power) appended at
+// the very end. RF_PWR_LOW == 0, so the zeroed tail can't be told apart from an
+// explicit "Low" choice -- set both to MAX explicitly to match the prior
+// (implicit, unconfigurable) always-max behaviour.
+static void migrate_3_to_4(cfg_t *c)
+{
+    c->wifi_tx_power = RF_PWR_MAX;
+    c->ble_tx_power  = RF_PWR_MAX;
+    c->version = 4;
+}
+
 typedef void (*migrate_fn)(cfg_t *);
 
-// index 0 -> migrate v1 to v2, etc.
-#define N_MIGRATIONS 1
+// index 0 -> migrate v1 to v2, index 1 -> v2 to v3, etc.
+#define N_MIGRATIONS 3
 #if N_MIGRATIONS > 0
-static const migrate_fn k_chain[N_MIGRATIONS] = { migrate_1_to_2 };
+static const migrate_fn k_chain[N_MIGRATIONS] = { migrate_1_to_2, migrate_2_to_3, migrate_3_to_4 };
 #endif
 
 // Returns true if the blob is now at CFG_VERSION; false if no path exists.

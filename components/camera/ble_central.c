@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include "esp_log.h"
+#include "esp_bt.h"
 #include "nvs_flash.h"
 
 #include "nimble/nimble_port.h"
@@ -27,6 +28,7 @@ static ble_notify_cb_t s_notify_cb;
 
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static int8_t   s_rssi;
+static uint16_t s_mtu;
 static bool     s_host_synced;
 
 #define MAX_CHRS 24
@@ -91,6 +93,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         s_conn = BLE_HS_CONN_HANDLE_NONE;
         s_chr_n = 0;
+        s_mtu = 0;
         emit(BLE_EVT_DISCONNECTED, event->disconnect.reason);
         break;
     case BLE_GAP_EVENT_ENC_CHANGE:
@@ -98,6 +101,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
              event->enc_change.status);
         break;
     case BLE_GAP_EVENT_MTU:
+        s_mtu = event->mtu.value;
         emit(BLE_EVT_MTU_DONE, event->mtu.value);
         break;
     case BLE_GAP_EVENT_NOTIFY_RX:
@@ -158,21 +162,33 @@ uint16_t ble_central_val_handle(const ble_uuid_t *u)
 }
 
 // ---- ops --------------------------------------------------------
+// "gentle" = low-duty passive scan for a bonded reconnect while the Wi-Fi portal
+// AP is up: ~11% radio, no scan-request TX, so it coexists with Wi-Fi
+// association / HTTP instead of starving it. Reconnect matches on address only,
+// so the scan response (which carries the GoPro name) is not needed. Pairing and
+// in-flight reconnect use the aggressive active scan.
+static bool s_scan_gentle;
+static bool s_scan_gentle_running;
+void ble_central_scan_gentle(bool on) { s_scan_gentle = on; }
+
 esp_err_t ble_central_scan(bool enable)
 {
     if (!s_host_synced) { return ESP_ERR_INVALID_STATE; }
     if (!enable) { ble_gap_disc_cancel(); return ESP_OK; }
-    if (ble_gap_disc_active()) { return ESP_OK; }
+    if (ble_gap_disc_active()) {
+        if (s_scan_gentle_running == s_scan_gentle) { return ESP_OK; }
+        ble_gap_disc_cancel();          // mode changed -> restart with new params
+    }
 
     uint8_t own = BLE_OWN_ADDR_PUBLIC;
     ble_hs_id_infer_auto(0, &own);
-    // Active scan (to get GoPro's name from the scan response) and NO duplicate
-    // filtering -- some controllers suppress scan responses when it's on.
-    struct ble_gap_disc_params p = {
-        .itvl = 0x0060, .window = 0x0050, .passive = 0, .filter_duplicates = 0,
-    };
+    // No duplicate filtering -- some controllers suppress scan responses with it.
+    struct ble_gap_disc_params p = s_scan_gentle
+        ? (struct ble_gap_disc_params){ .itvl = 0x0140, .window = 0x0024, .passive = 1, .filter_duplicates = 0 }
+        : (struct ble_gap_disc_params){ .itvl = 0x0060, .window = 0x0050, .passive = 0, .filter_duplicates = 0 };
     int rc = ble_gap_disc(own, BLE_HS_FOREVER, &p, gap_event, NULL);
-    return (rc == 0 || rc == BLE_HS_EALREADY) ? ESP_OK : ESP_FAIL;
+    if (rc == 0 || rc == BLE_HS_EALREADY) { s_scan_gentle_running = s_scan_gentle; return ESP_OK; }
+    return ESP_FAIL;
 }
 
 esp_err_t ble_central_connect(const uint8_t addr[6], uint8_t addr_type)
@@ -229,6 +245,7 @@ int8_t ble_central_last_rssi(void)
     if (s_conn != BLE_HS_CONN_HANDLE_NONE) { ble_gap_conn_rssi(s_conn, &s_rssi); }
     return s_rssi;
 }
+uint16_t ble_central_mtu(void) { return s_mtu; }
 
 esp_err_t ble_central_forget_bond(const uint8_t addr[6], uint8_t addr_type)
 {
@@ -309,4 +326,21 @@ void ble_central_init(void)
     ble_store_config_init();
 
     nimble_port_freertos_init(host_task);
+}
+
+// RF_PWR_LOW/MEDIUM/MAX (cfg.h) -> esp_power_level_t. Sets the default for
+// every BLE role (adv/scan/connections) that hasn't been given its own level.
+// Call after ble_central_init(); takes effect immediately, but since NimBLE
+// itself is only ever brought up once at boot, changing cfg.ble_tx_power needs
+// a reboot to actually re-apply.
+void ble_central_set_tx_power(uint8_t preset)
+{
+    static const esp_power_level_t k_levels[] = {
+        ESP_PWR_LVL_N12,   // RF_PWR_LOW    -12 dBm
+        ESP_PWR_LVL_N0,    // RF_PWR_MEDIUM   0 dBm
+        ESP_PWR_LVL_P9,    // RF_PWR_MAX     +9 dBm (matches the NimBLE/BT default)
+    };
+    if (preset > 2) { preset = 2; }
+    esp_err_t e = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, k_levels[preset]);
+    if (e != ESP_OK) { ESP_LOGW(TAG, "ble tx power: %s", esp_err_to_name(e)); }
 }

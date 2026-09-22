@@ -56,7 +56,7 @@ static const camera_cbs_t *CB;
 static uint16_t h_cmd, h_set, h_qry;      // write value handles
 static uint16_t vh_cmd_rsp, vh_set_rsp, vh_qry_rsp;
 static gopro_reasm_t rz_cmd, rz_set, rz_qry;
-static uint8_t  keepalive_div;
+static uint32_t last_keepalive_ms;
 static uint32_t rec_start_ms;
 static uint8_t  getall_retry;
 static uint32_t last_getall_ms;      // get-all-settings poll
@@ -164,11 +164,15 @@ static esp_err_t gp_hilight(void)
     return ESP_OK;
 }
 
+// Called by cam_task at ~4 Hz (see cam_task driver-poll cadence); every action
+// below rate-limits itself off now_ms(), so the call frequency only bounds how
+// fine the per-camera poll interval can be.
 static esp_err_t gp_tick_1s(void)
 {
+    uint32_t t0 = now_ms();
     // keepalive every 3 s (spec 6.4: must be < 10 s).
-    if (++keepalive_div >= 3) {
-        keepalive_div = 0;
+    if (t0 - last_keepalive_ms >= 3000) {
+        last_keepalive_ms = t0;
         uint8_t b[3] = { 0x5B, 0x01, 0x42 };
         wr(h_set, b, 3);
     }
@@ -176,14 +180,16 @@ static esp_err_t gp_tick_1s(void)
     // Polling fallback -- this firmware does not appear to honour our async-push
     // registration (0x52/0x53), so nothing the user changes ON the camera
     // (record, resolution, mode) ever pushes to us. Poll instead:
-    //   get-all-STATUS   (0x13, small: encoding/battery/SD/busy) every ~2 s
-    //   get-all-SETTINGS  (0x12, res/fps/lens)                   every ~5 s
-    uint32_t t = now_ms();
-    if (t - last_status_poll_ms > 1000) {
+    //   get-all-STATUS   (0x13, small: encoding/battery/SD/busy) -- per-camera rate
+    //   get-all-SETTINGS  (0x12, res/fps/lens)                   -- 3x that, min 3 s
+    uint32_t t = t0;
+    uint32_t status_iv = cfg_active_poll_ms();          // clamped [0.5s, 5s]
+    uint32_t setting_iv = status_iv * 3 < 3000 ? 3000 : status_iv * 3;
+    if (t - last_status_poll_ms >= status_iv) {
         last_status_poll_ms = t;
         uint8_t g[1] = { 0x13 }; wr(h_qry, g, 1);
     }
-    if (t - last_getall_ms > 3000) {
+    if (t - last_getall_ms >= setting_iv) {
         last_getall_ms = t;
         uint8_t g[1] = { 0x12 }; wr(h_qry, g, 1);
     }
@@ -228,7 +234,7 @@ static esp_err_t gp_link_up(bool first_pair)
     gopro_reasm_reset(&rz_cmd);
     gopro_reasm_reset(&rz_set);
     gopro_reasm_reset(&rz_qry);
-    keepalive_div = 0;
+    last_keepalive_ms = now_ms();
     getall_retry = 0;
     last_getall_ms = now_ms();
     last_status_poll_ms = now_ms();

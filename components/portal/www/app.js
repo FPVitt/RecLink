@@ -1,4 +1,7 @@
 'use strict';
+// Drop the ?v=<ts> cache-buster the post-flash reload adds (see #flash handler)
+// so it doesn't linger in the address bar.
+if (location.search) { try { history.replaceState({}, '', location.pathname); } catch (e) {} }
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const msg = t => { $('#msg').textContent = t; };
@@ -784,17 +787,26 @@ function renderCams(c) {
   const keep = new Set(cams.map(x => x.addr));
   [...wrap.children].forEach(r => { if (!keep.has(r.dataset.addr)) r.remove(); });
 
-  cams.forEach(cam => {
+  cams.forEach((cam, idx) => {
     let r = wrap.querySelector('[data-addr="' + cam.addr + '"]');
     if (!r) {
       r = el('div', 'camrow');
       r.dataset.addr = cam.addr;
-      r.innerHTML = '<div class="caminfo"><div class="camtop">'
+      const opts = '<option value="5">Fast (0.5 s)</option>'
+                 + '<option value="10">Normal (1 s)</option>'
+                 + '<option value="15">Slow (1.5 s)</option>';
+      r.innerHTML = '<div class="camtop-wrap"><div class="caminfo"><div class="camtop">'
         + '<b class="camname"></b><span class="tag"></span></div>'
         + '<div class="cammeta mono"></div></div>'
         + '<div class="camright"><span class="badge"></span>'
-        + '<button type="button" class="forget">Forget</button></div>';
-      wrap.appendChild(r);
+        + '<button type="button" class="forget">Forget</button></div></div>'
+        + '<div class="camadv adv-only"><span>Telemetry poll</span>'
+        + '<select class="pollsel" aria-label="Telemetry poll interval">' + opts + '</select></div>';
+      const ps = r.querySelector('.pollsel');
+      ps.onchange = async () => {
+        const res = await post('/api/camera/poll', { addr: r.dataset.addr, poll_ds: +ps.value });
+        msg(res.ok ? 'poll interval saved' : 'could not save');
+      };
     }
     r.querySelector('.forget').onclick = () => askForget(cam);
     setText(r.querySelector('.camname'), camLabel(cam));
@@ -806,7 +818,13 @@ function renderCams(c) {
     else if (cam.active) { txt = 'Connecting…'; cls = 'badge warn'; }
     setText(badge, txt);
     if (badge.className !== cls) badge.className = cls;
-    wrap.appendChild(r);   // keep DOM order matching cameras[]
+    // Telemetry poll: GoPro only (DJI pushes status on its own schedule).
+    r.querySelector('.camadv').hidden = cam.brand !== 'gopro';
+    const ps = r.querySelector('.pollsel');
+    if (document.activeElement !== ps && cam.poll_ds) ps.value = cam.poll_ds;
+    // Insert only when out of place -- re-parenting a node closes an open
+    // <select> dropdown inside it (that's why it kept snapping shut).
+    if (wrap.children[idx] !== r) wrap.insertBefore(r, wrap.children[idx] || null);
   });
 }
 $('#syncnow').onclick = async () => {
@@ -865,9 +883,33 @@ $('#flash-go').onclick = () => {
     let r = {}; try { r = JSON.parse(x.responseText); } catch (_) {}
     if (r.ok) {
       $('#flash-bar').value = 100;
-      $('#flash .modal-card').innerHTML = '<h3>Flashed</h3><p>'
+      $('#flash .modal-card').innerHTML = '<h3>Flashed</h3><p id="flash-done">'
         + (r.erased ? 'Settings erased. ' : '')
-        + 'Rebooting — reconnect to the RecLink Wi-Fi in ~10 s.</p>';
+        + 'Rebooting on the new firmware…</p>';
+      // Wait out the reboot, then hard-reload the portal so the browser fetches
+      // the new index.html/app.js/style.css instead of the cached ones. The
+      // server also sent Clear-Site-Data: "cache"; the query string below is the
+      // fallback for browsers that ignore it.
+      const reloadFresh = () => location.replace(
+        location.pathname + '?v=' + Date.now());
+      let tries = 0;
+      const waitForDevice = () => {
+        tries++;
+        fetch('/api/status?_=' + Date.now(), { cache: 'no-store' })
+          .then(res => { if (res.ok) { reloadFresh(); } else { throw 0; } })
+          .catch(() => {
+            const p = $('#flash-done');
+            if (tries > 30) {
+              if (p) p.textContent = r.erased
+                ? 'Rebooted with default settings — reconnect to the RecLink Wi-Fi (password: reclinkfpv), then reload this page.'
+                : 'Still rebooting — reconnect to the RecLink Wi-Fi and reload this page.';
+              return;
+            }
+            if (p) p.textContent = 'Rebooting on the new firmware… (' + tries + ')';
+            setTimeout(waitForDevice, 2000);
+          });
+      };
+      setTimeout(waitForDevice, 5000);
     } else {
       $('#flash-progress').hidden = true;
       $('#flash-ask').hidden = false;
@@ -904,7 +946,7 @@ function fmtT(s) { s = s|0; return s >= 3600 ? (s/3600|0)+'h'+((s%3600/60)|0)+'m
 function fmtUp(s) { s = s|0; const d = s/86400|0, h = (s%86400)/3600|0, m = (s%3600)/60|0;
   return d ? d+'d '+h+'h' : h ? h+'h '+m+'m' : m+'m'; }
 
-let lastFlags = '', lastCounters = '', lastDbg = '';
+let lastFlags = '', lastCounters = '', lastDbg = '', lastRecDbg = '', lastBleDbg = '';
 function setOffline(off) {
   document.body.classList.toggle('offline', off);
   $('#conn').hidden = !off;
@@ -1045,6 +1087,43 @@ async function poll() {
       'Armed (raw bit) : ' + (g.armed_raw ? 'ARMED' : 'disarmed'),
       'BOXARM bit index: ' + (g.arm_bit_resolved ? g.arm_bit : 'not resolved (waiting for MSP_BOXIDS)'),
       'Arming-disable  : ' + (armFlags ? '0x' + armFlags.toString(16).toUpperCase() : '0 (armable)')
+    ].join('\n') : 'FC offline — no MSP data';
+  }
+
+  const bl = s.ble || {};
+  const blj = JSON.stringify(bl);
+  if (blj !== lastBleDbg) {
+    lastBleDbg = blj;
+    const rdy = bl.link === 'READY';
+    $('#bledbg').textContent = [
+      'Link state      : ' + (bl.link || '—') + '  (' + (bl.state_age_s || 0) + ' s)',
+      'Scan            : ' + (bl.scan || '—'),
+      'Signal          : ' + (rdy ? bl.rssi + ' dBm' : '—'),
+      'Last data       : ' + (rdy ? bl.last_rx_ms + ' ms ago' : '—'),
+      'ATT MTU         : ' + (rdy && bl.mtu ? bl.mtu : '—'),
+      'Poll interval   : ' + (rdy && bl.poll_ms ? (bl.poll_ms / 1000) + ' s' : '—'),
+      'Bonds cfg/stack : ' + (bl.cfg_bonds || 0) + ' / ' + (bl.stack_bonds || 0),
+      'Notify drops    : ' + (bl.notify_drops || 0),
+      'Re-pair needed  : ' + (bl.repair_needed ? 'YES' : 'no')
+    ].join('\n');
+  }
+
+  const rd = s.record || {};
+  const rj = JSON.stringify(rd);
+  if (rj !== lastRecDbg) {
+    lastRecDbg = rj;
+    const modeNames = ['off', 'on arm', 'on switch', 'armed + switch'];
+    const recTriggerNames = ['switch', 'button'];
+    $('#recdbg').textContent = fcUp ? [
+      'Record mode      : ' + (modeNames[rd.mode] || rd.mode),
+      'Trigger type     : ' + (recTriggerNames[rd.sw_mode] || rd.sw_mode),
+      'AUX vs threshold : ' + (rd.raw_active ? 'above' : 'below'),
+      'Switch/button    : ' + (rd.sw_active ? 'on' : 'off')
+        + (recTriggerNames[rd.sw_mode] === 'button' ? ' (latched — press again to flip)' : ''),
+      'Desired recording: ' + (rd.desired ? 'YES' : 'no'),
+      'Last cmd to cam  : ' + (rd.last_cmd || '—'),
+      'Camera reports   : ' + (cs && cs.recording ? cs.recording : 'unknown'),
+      'Trigger phase    : ' + (rd.phase || '—')
     ].join('\n') : 'FC offline — no MSP data';
   }
 

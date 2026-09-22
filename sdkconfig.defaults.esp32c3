@@ -18,15 +18,17 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 
-# --- Board: ESP32-C3 SuperMini -------------------------------------------
-# FC MSP UART on GPIO6 (TX -> FC RX) / GPIO7 (RX <- FC TX). UART1 via GPIO matrix.
-CONFIG_BRIDGE_UART_PORT=1
-CONFIG_BRIDGE_UART_TX_GPIO=6
-CONFIG_BRIDGE_UART_RX_GPIO=7
+# --- Board: final RecLink board -------------------------------------------
+# FC MSP UART on UART0's native pins: GPIO21 = U0TXD (TX -> FC RX, via a 470R
+# series resistor on this board), GPIO20 = U0RXD (RX <- FC TX, direct).
+CONFIG_BRIDGE_UART_PORT=0
+CONFIG_BRIDGE_UART_TX_GPIO=21
+CONFIG_BRIDGE_UART_RX_GPIO=20
 # BOOT button on GPIO9 (active-low) -- Kconfig default, kept explicit.
 CONFIG_BRIDGE_BUTTON_GPIO=9
 CONFIG_BRIDGE_BUTTON_ACTIVE_LOW=y
-# Onboard blue LED: plain GPIO8, active-low (no WS2812 on the SuperMini).
+# Status LED: plain GPIO10, active-high (final board wiring differs from the
+# SuperMini's onboard LED).
 CONFIG_BRIDGE_LED_GPIO=y
-CONFIG_BRIDGE_LED_GPIO_NUM=8
-CONFIG_BRIDGE_LED_ACTIVE_LOW=y
+CONFIG_BRIDGE_LED_GPIO_NUM=10
+CONFIG_BRIDGE_LED_ACTIVE_LOW=n

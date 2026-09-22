@@ -13,11 +13,20 @@
 #include "esp_err.h"
 
 #define CFG_MAGIC   0x43424247u   // "CBBG"
-#define CFG_VERSION 2u
+#define CFG_VERSION 4u
 
 // Max simultaneously-bonded cameras (spec 7.1). One connected at a time; the
 // rest are candidates the reconnect scan picks from by RSSI.
 #define CAM_MAX_BONDS 4
+
+// Per-camera BLE telemetry poll interval, in DECISECONDS (100 ms units). The
+// driver re-pulls camera status (recording / battery / SD / ...) this often
+// while connected. Portal offers three presets: fast 0.5 s / normal 1 s /
+// slow 1.5 s. Faster congests the BLE link + notify queue; slower makes the
+// OSD stale.
+#define CAM_POLL_DS_MIN     5u    // 0.5 s ("fast")
+#define CAM_POLL_DS_MAX     15u   // 1.5 s ("slow")
+#define CAM_POLL_DS_DEFAULT 10u   // 1.0 s ("normal")
 
 #define CFG_DEFAULT_WIFI_PW "reclinkfpv"   // AP password on factory defaults
 
@@ -39,8 +48,20 @@ uint32_t bridge_flags_all(void);
 
 // -------- record modes -------------------------------------------------------
 enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3 };
+// record.sw.mode: how the assigned AUX channel drives the record trigger.
+//   SWITCH -- a real 2-position switch. Above threshold = recording, below =
+//             not, mirrored live (spec 8.2 hysteresis). Release stops the clip.
+//   BUTTON -- a momentary / spring-loaded control. Each press (crossing the
+//             threshold) TOGGLES the desired state once; letting go does
+//             nothing, so a non-latching control can still start AND stop.
+enum { RECSW_SWITCH = 0, RECSW_BUTTON = 1 };
 // -------- portal trigger ----------------------------------------------------
 enum { PORTAL_TRIG_BUTTON = 0, PORTAL_TRIG_ALWAYS_DISARMED = 1 };
+// -------- RF transmit power presets (wifi_tx_power / ble_tx_power) ----------
+// Applied to esp_wifi_set_max_tx_power() / esp_ble_tx_power_set() -- see
+// portal_task.c / ble_central.c for the actual dBm mapping per radio. Default
+// is MAX on both, matching the prior (implicit, unconfigurable) behaviour.
+enum { RF_PWR_LOW = 0, RF_PWR_MEDIUM = 1, RF_PWR_MAX = 2 };
 
 // One stored camera bond.
 typedef struct __attribute__((packed)) {
@@ -79,7 +100,10 @@ typedef struct __attribute__((packed)) {
         struct {
             uint8_t  channel;     // AUX 1..14 (0 = none)
             uint16_t threshold_us;
-            uint16_t _rsvd_debounce_ms;   // removed: RC switch debounce (owner decision 2026-08-30)
+            uint8_t  mode;        // RECSW_* -- was the low byte of a removed
+                                   // debounce_ms (2026-08-30); same 2-byte size,
+                                   // so old blobs load as mode=0 (switch).
+            uint8_t  _rsvd;
         } sw;
     } record;
 
@@ -151,6 +175,15 @@ typedef struct __attribute__((packed)) {
     // migrate. Not covered by crc32 -- a corrupt entry only costs a failed
     // connect attempt, and the real bond keys live in the nimble_bond store.
     cam_bond_t cams[CAM_MAX_BONDS];
+
+    // ---- v3+ tail: per-camera BLE poll interval (deciseconds), indexed like
+    // cams[]. 0 == use default. Appended at the very end; cams[] layout is
+    // unchanged so v2 blobs migrate without re-spacing.
+    uint8_t  cam_poll_ds[CAM_MAX_BONDS];
+
+    // ---- v4+ tail: RF transmit power presets (RF_PWR_*), one per radio.
+    uint8_t  wifi_tx_power;      // portal AP -- applied every time it comes up
+    uint8_t  ble_tx_power;       // camera link -- applied at boot; reboot to change
 } cfg_t;
 
 // -------- OSD token bit positions for cfg.osd.fields_mask --------------------
@@ -201,9 +234,16 @@ esp_err_t cfg_clear_camera(void);          // forget ALL bonds + clear active
 // addr is not in the list. Cheap commit.
 esp_err_t cfg_set_active_camera(const uint8_t addr[6]);
 
-// Bond list access. Copies slot i into *out; returns false if oob/empty.
+// Set the BLE telemetry poll interval (deciseconds) for a bonded camera. Clamped
+// to [CAM_POLL_DS_MIN, CAM_POLL_DS_MAX]. ESP_ERR_NOT_FOUND if addr is not bonded.
+esp_err_t cfg_cam_set_poll(const uint8_t addr[6], uint8_t poll_ds);
+// Poll interval (ms) for the *active* camera, always clamped/defaulted. For drivers.
+uint16_t  cfg_active_poll_ms(void);
+
+// Bond list access. Copies slot i into *out (and *poll_ds if non-NULL); returns
+// false if oob/empty.
 int  cfg_cam_count(void);                         // number of non-empty slots
-bool cfg_cam_at(int i, cam_bond_t *out);
+bool cfg_cam_at(int i, cam_bond_t *out, uint8_t *poll_ds);
 
 // Factory reset: erase cfg + caller erases nimble_bond, then reboot.
 esp_err_t cfg_factory_erase(void);

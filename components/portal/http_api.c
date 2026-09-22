@@ -10,6 +10,7 @@
 #include "fc_state.h"
 #include "cam_state.h"
 #include "camera.h"
+#include "ble_central.h"
 #include "control.h"
 #include "msp.h"
 #include "platform.h"
@@ -166,8 +167,8 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddNumberToObject(c, "count", cfg_cam_count());
     cJSON *cams = cJSON_AddArrayToObject(c, "cameras");
     for (int i = 0; i < CAM_MAX_BONDS; i++) {
-        cam_bond_t b;
-        if (!cfg_cam_at(i, &b)) { continue; }
+        cam_bond_t b; uint8_t poll_ds = 0;
+        if (!cfg_cam_at(i, &b, &poll_ds)) { continue; }
         cJSON *ce = cJSON_CreateObject();
         cJSON_AddStringToObject(ce, "brand", b.brand);
         cJSON_AddStringToObject(ce, "name", b.name);
@@ -177,6 +178,7 @@ static esp_err_t h_status(httpd_req_t *r)
         bool is_active = memcmp(b.addr, cfg->camera.addr, 6) == 0 && cfg->camera.bonded;
         cJSON_AddBoolToObject(ce, "active", is_active);
         cJSON_AddBoolToObject(ce, "connected", is_active && link_up_now);
+        cJSON_AddNumberToObject(ce, "poll_ds", poll_ds);   // deciseconds
         cJSON_AddItemToArray(cams, ce);
     }
 
@@ -195,6 +197,39 @@ static esp_err_t h_status(httpd_req_t *r)
             cJSON_AddItemToArray(fa, fe);
         }
     }
+
+    // Record-trigger diagnostics (spec 8.1/8.2): what the switch/button decode
+    // currently sees and intends, independent of whether the camera has caught
+    // up yet. Lets a "why won't it stop" report be settled from the portal.
+    cJSON *rd = cJSON_AddObjectToObject(j, "record");
+    bool r_raw = false, r_sw = false, r_desired = false; uint8_t r_phase = 0, r_cmd = 0;
+    ctrl_record_status(&r_raw, &r_sw, &r_desired, &r_phase, &r_cmd);
+    static const char *phase_names[] = {
+        "idle", "start_delay", "verify_start", "stop_delay", "verify_stop" };
+    static const char *cmd_names[] = { "none", "stop", "start" };   // tribool_t order
+    cJSON_AddNumberToObject(rd, "mode", cfg->record.mode);
+    cJSON_AddNumberToObject(rd, "sw_mode", cfg->record.sw.mode);   // 0 switch, 1 button
+    cJSON_AddBoolToObject(rd, "raw_active", r_raw);       // AUX channel vs threshold, right now
+    cJSON_AddBoolToObject(rd, "sw_active", r_sw);         // after switch/button decode (latch in button mode)
+    cJSON_AddBoolToObject(rd, "desired", r_desired);      // what the trigger wants recording to be
+    cJSON_AddStringToObject(rd, "phase", phase_names[r_phase <= 4 ? r_phase : 0]);
+    cJSON_AddStringToObject(rd, "last_cmd", cmd_names[r_cmd <= 2 ? r_cmd : 0]);  // last START/STOP we sent
+
+    // BLE link diagnostics (Status tab).
+    cJSON *bd = cJSON_AddObjectToObject(j, "ble");
+    cJSON_AddStringToObject(bd, "link", ls_names[cam.link <= CAM_LINK_LOST ? cam.link : 0]);
+    cJSON_AddNumberToObject(bd, "state_age_s", cam_link_age_ms() / 1000);
+    cJSON_AddStringToObject(bd, "scan", cam_scan_state());
+    if (cam.link == CAM_LINK_READY) {
+        cJSON_AddNumberToObject(bd, "rssi", cam.rssi);
+        cJSON_AddNumberToObject(bd, "last_rx_ms", (double)(now_ms() - cam.last_rx_ms));
+        cJSON_AddNumberToObject(bd, "mtu", ble_central_mtu());
+        cJSON_AddNumberToObject(bd, "poll_ms", cfg_active_poll_ms());
+    }
+    cJSON_AddNumberToObject(bd, "cfg_bonds", cfg_cam_count());
+    cJSON_AddNumberToObject(bd, "stack_bonds", ble_central_bond_count());
+    cJSON_AddNumberToObject(bd, "notify_drops", (double)cam_notify_drops());
+    cJSON_AddBoolToObject(bd, "repair_needed", (bridge_flags_all() & FLAG_REPAIR_NEEDED) != 0);
 
     cJSON *cs = cJSON_AddObjectToObject(j, "cam_state");
     #define VU(name, field) do { cJSON *o = cJSON_AddObjectToObject(cs, name); \
@@ -347,6 +382,31 @@ static esp_err_t h_cam_refresh(httpd_req_t *r)
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", true);
     return send_json(r, resp, NULL);
+}
+
+// {"addr":"AA:BB:..","poll_ds":N} -> per-camera BLE telemetry poll interval (deciseconds).
+static esp_err_t h_cam_poll(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    char *body = read_body(r, 128);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *ad = j ? cJSON_GetObjectItem(j, "addr") : NULL;
+    const cJSON *ps = j ? cJSON_GetObjectItem(j, "poll_ds") : NULL;
+    esp_err_t e = ESP_ERR_INVALID_ARG;
+    uint8_t a[6];
+    if (cJSON_IsString(ad) && cJSON_IsNumber(ps) &&
+        sscanf(ad->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) == 6) {
+        int v = (int)ps->valuedouble;
+        if (v < CAM_POLL_DS_MIN) { v = CAM_POLL_DS_MIN; }
+        if (v > CAM_POLL_DS_MAX) { v = CAM_POLL_DS_MAX; }
+        e = cfg_cam_set_poll(a, (uint8_t)v);
+    }
+    cJSON_Delete(j);
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
+    return send_json(r, resp, e == ESP_OK ? NULL : "400 Bad Request");
 }
 
 static esp_err_t h_cam_preset(httpd_req_t *r)
@@ -553,6 +613,11 @@ static esp_err_t h_ota(httpd_req_t *r)
         ESP_LOGW("api", "OTA: settings + bonds erased -> factory defaults");
     }
     ESP_LOGW("api", "OTA ok (%u bytes) -- rebooting", (unsigned)written);
+    // Tell the browser to drop its cached copy of the portal -- the new firmware
+    // ships new index.html/app.js/style.css and the client will hard-reload once
+    // the device is back up. Chromium/Firefox honour this; Safari ignores it, so
+    // the client also reloads with a cache-busting query (see app.js).
+    httpd_resp_set_hdr(r, "Clear-Site-Data", "\"cache\"");
     httpd_resp_sendstr(r, erase ? "{\"ok\":true,\"rebooting\":true,\"erased\":true}"
                                 : "{\"ok\":true,\"rebooting\":true}");
     // Give the TCP stack time to flush the response over the (slow) SoftAP link
@@ -621,6 +686,7 @@ void http_api_register(httpd_handle_t s)
         { "/api/camera/pair",   HTTP_POST, h_cam_pair,    NULL },
         { "/api/camera/forget", HTTP_POST, h_cam_forget,  NULL },
         { "/api/camera/refresh", HTTP_POST, h_cam_refresh, NULL },
+        { "/api/camera/poll",   HTTP_POST, h_cam_poll,    NULL },
         { "/api/camera/preset", HTTP_POST, h_cam_preset,  NULL },
         { "/api/camera/test",   HTTP_POST, h_cam_test,    NULL },
         { "/api/clock/sync",    HTTP_POST, h_clock_sync,  NULL },

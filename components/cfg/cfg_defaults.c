@@ -12,6 +12,7 @@ void cfg_load_defaults(cfg_t *d)
     // camera: unbonded
     d->camera.brand[0] = '\0';
     d->camera.bonded   = 0;
+    for (int i = 0; i < CAM_MAX_BONDS; i++) { d->cam_poll_ds[i] = CAM_POLL_DS_DEFAULT; }
 
     // record (spec 8.1)
     d->record.mode              = REC_ARM;
@@ -21,6 +22,7 @@ void cfg_load_defaults(cfg_t *d)
     d->record.retry_count       = 3;
     d->record.sw.channel        = 0;      // none
     d->record.sw.threshold_us   = 1700;
+    d->record.sw.mode           = RECSW_SWITCH;
 
     // preset (spec 8.3) -- 3-pos switch band edges
     d->preset.enabled             = 0;
@@ -33,7 +35,7 @@ void cfg_load_defaults(cfg_t *d)
 
     // osd (spec 9.2 default layout)
     d->osd.refresh_hz  = 4;
-    d->osd.type        = 0;      // analog / full character set
+    d->osd.type        = 1;      // digital -- DJI-goggle-safe glyph subset (default)
     d->osd.corner      = 1;
     strcpy(d->osd.line[0], "%st %et");
     strcpy(d->osd.line[1], "BAT %bt %wr");
@@ -66,6 +68,8 @@ void cfg_load_defaults(cfg_t *d)
     d->msp.baud = 115200;
     d->msp_swap_pins = 0;       // board wired TX=BRIDGE_UART_TX_GPIO, RX=..._RX_GPIO
     d->ui_flags      = 0;       // portal: basic mode, password nag on
+    d->wifi_tx_power = RF_PWR_MAX;
+    d->ble_tx_power  = RF_PWR_MAX;
 
     // wifi
     d->wifi.ssid[0]           = '\0';    // auto: RECLINK-XXXX

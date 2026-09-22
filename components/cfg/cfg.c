@@ -59,6 +59,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     CLAMP(c->record.retry_count, 0, 10);
     CLAMP(c->record.sw.channel, 0, 14);
     CLAMP(c->record.sw.threshold_us, 900, 2100);
+    CLAMP(c->record.sw.mode, RECSW_SWITCH, RECSW_BUTTON);
 
     CLAMP(c->preset.channel, 0, 14);
     CLAMP(c->preset.dwell_ms, 50, 5000);
@@ -94,9 +95,12 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     CLAMP(c->gps_push.rate_hz, 1, 2);
 
     CLAMP(c->msp_swap_pins, 0, 1);
+    CLAMP(c->wifi_tx_power, RF_PWR_LOW, RF_PWR_MAX);
+    CLAMP(c->ble_tx_power, RF_PWR_LOW, RF_PWR_MAX);
     c->ui_flags &= 0x03;
 
-    if (c->msp.baud != 115200 && c->msp.baud != 230400 &&
+    if (c->msp.baud != 9600 && c->msp.baud != 19200 && c->msp.baud != 38400 &&
+        c->msp.baud != 57600 && c->msp.baud != 115200 && c->msp.baud != 230400 &&
         c->msp.baud != 250000 && c->msp.baud != 460800) {
         c->msp.baud = 115200;
     }
@@ -113,7 +117,8 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     c->camera.name[sizeof(c->camera.name) - 1] = '\0';
 
     // Bond list: sanitise silently (recoverable data, not CRC-protected). Clear
-    // any slot whose brand is not exactly gopro|dji, then compact.
+    // any slot whose brand is not exactly gopro|dji, then compact cams[] and the
+    // parallel cam_poll_ds[] together.
     for (int i = 0; i < CAM_MAX_BONDS; i++) {
         cam_bond_t *b = &c->cams[i];
         b->brand[sizeof(b->brand) - 1] = '\0';
@@ -121,11 +126,19 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
         if (b->brand[0] &&
             strcmp(b->brand, "gopro") != 0 && strcmp(b->brand, "dji") != 0) {
             memset(b, 0, sizeof(*b));
+            c->cam_poll_ds[i] = 0;
+        }
+        if (b->brand[0]) {
+            if (c->cam_poll_ds[i] == 0) { c->cam_poll_ds[i] = CAM_POLL_DS_DEFAULT; }
+            CLAMP(c->cam_poll_ds[i], CAM_POLL_DS_MIN, CAM_POLL_DS_MAX);
         }
     }
     for (int i = 0, w = 0; i < CAM_MAX_BONDS; i++) {
         if (c->cams[i].brand[0]) {
-            if (w != i) { c->cams[w] = c->cams[i]; memset(&c->cams[i], 0, sizeof(c->cams[i])); }
+            if (w != i) {
+                c->cams[w] = c->cams[i];       memset(&c->cams[i], 0, sizeof(c->cams[i]));
+                c->cam_poll_ds[w] = c->cam_poll_ds[i]; c->cam_poll_ds[i] = 0;
+            }
             w++;
         }
     }
@@ -198,6 +211,7 @@ esp_err_t cfg_set_camera_bond(const char *brand, const uint8_t addr[6],
         for (i = 0; i < CAM_MAX_BONDS && c.cams[i].brand[0]; i++) { }
         if (i >= CAM_MAX_BONDS) { return ESP_ERR_NO_MEM; }
         memset(&c.cams[i], 0, sizeof(c.cams[i]));
+        c.cam_poll_ds[i] = CAM_POLL_DS_DEFAULT;   // new slot: default poll rate
     }
     cam_bond_t *b = &c.cams[i];
     strlcpy(b->brand, brand, sizeof(b->brand));
@@ -227,9 +241,12 @@ esp_err_t cfg_forget_camera(const uint8_t addr[6])
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
     if (i >= 0) {
-        memset(&c.cams[i], 0, sizeof(c.cams[i]));
-        for (int k = i; k + 1 < CAM_MAX_BONDS; k++) { c.cams[k] = c.cams[k + 1]; }
+        for (int k = i; k + 1 < CAM_MAX_BONDS; k++) {
+            c.cams[k] = c.cams[k + 1];
+            c.cam_poll_ds[k] = c.cam_poll_ds[k + 1];
+        }
         memset(&c.cams[CAM_MAX_BONDS - 1], 0, sizeof(c.cams[CAM_MAX_BONDS - 1]));
+        c.cam_poll_ds[CAM_MAX_BONDS - 1] = 0;
     }
     if (memcmp(c.camera.addr, addr, 6) == 0) {
         if (c.cams[0].brand[0]) { set_active_from(&c, &c.cams[0]); }
@@ -243,7 +260,29 @@ esp_err_t cfg_clear_camera(void)
     cfg_t c = s_live;
     memset(&c.camera, 0, sizeof(c.camera));
     memset(c.cams, 0, sizeof(c.cams));
+    memset(c.cam_poll_ds, 0, sizeof(c.cam_poll_ds));
     return cfg_commit(&c);
+}
+
+esp_err_t cfg_cam_set_poll(const uint8_t addr[6], uint8_t poll_ds)
+{
+    cfg_t c = s_live;
+    int i = bond_index_of(&c, addr);
+    if (i < 0) { return ESP_ERR_NOT_FOUND; }
+    CLAMP(poll_ds, CAM_POLL_DS_MIN, CAM_POLL_DS_MAX);
+    c.cam_poll_ds[i] = poll_ds;
+    return cfg_commit(&c);
+}
+
+uint16_t cfg_active_poll_ms(void)
+{
+    uint8_t p = CAM_POLL_DS_DEFAULT;
+    if (s_live.camera.bonded) {
+        int i = bond_index_of(&s_live, s_live.camera.addr);
+        if (i >= 0) { p = s_live.cam_poll_ds[i]; }
+    }
+    if (p < CAM_POLL_DS_MIN || p > CAM_POLL_DS_MAX) { p = CAM_POLL_DS_DEFAULT; }
+    return (uint16_t)p * 100u;   // deciseconds -> ms
 }
 
 int cfg_cam_count(void)
@@ -253,10 +292,14 @@ int cfg_cam_count(void)
     return n;
 }
 
-bool cfg_cam_at(int i, cam_bond_t *out)
+bool cfg_cam_at(int i, cam_bond_t *out, uint8_t *poll_ds)
 {
     if (i < 0 || i >= CAM_MAX_BONDS || !s_live.cams[i].brand[0]) { return false; }
     if (out) { *out = s_live.cams[i]; }
+    if (poll_ds) {
+        uint8_t p = s_live.cam_poll_ds[i];
+        *poll_ds = (p >= CAM_POLL_DS_MIN && p <= CAM_POLL_DS_MAX) ? p : CAM_POLL_DS_DEFAULT;
+    }
     return true;
 }
 

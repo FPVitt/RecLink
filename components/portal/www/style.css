@@ -204,10 +204,16 @@ details.adv label:first-of-type{border-top:1px solid var(--line)}
 /* Binding tab: paired-camera list */
 button:disabled{opacity:.45;cursor:default}
 #camlist:empty{display:none}
-.camrow{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;
+.camrow{display:flex;flex-direction:column;gap:10px;
   padding:12px 0;border-bottom:1px solid var(--line)}
 .camrow:first-child{padding-top:0}
 .camrow:last-child{border-bottom:0;padding-bottom:0}
+.camtop-wrap{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.camadv{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:12px;color:var(--mut);border-top:1px dashed var(--line);padding-top:9px}
+.camadv[hidden]{display:none}
+.camadv .pollsel{width:auto;min-width:84px;min-height:0;padding:5px 8px;
+  font-size:12px;background:#11151b;border:1px solid var(--line);color:var(--fg)}
 .caminfo{min-width:0}
 .camtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .camname{font-weight:600;font-size:15px;word-break:break-word}

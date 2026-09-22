@@ -31,6 +31,7 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON *sw = cJSON_AddObjectToObject(rec, "switch");
     cJSON_AddNumberToObject(sw, "channel", c->record.sw.channel);
     cJSON_AddNumberToObject(sw, "threshold_us", c->record.sw.threshold_us);
+    cJSON_AddNumberToObject(sw, "mode", c->record.sw.mode);
 
     cJSON *pre = cJSON_AddObjectToObject(r, "preset");
     cJSON_AddBoolToObject(pre, "enabled", c->preset.enabled);
@@ -89,6 +90,10 @@ cJSON *cfg_to_json(const cfg_t *c)
 
     cJSON_AddNumberToObject(r, "led_brightness", c->led_brightness);
     cJSON_AddNumberToObject(r, "ui_flags", c->ui_flags);
+
+    cJSON *radio = cJSON_AddObjectToObject(r, "radio");
+    cJSON_AddNumberToObject(radio, "wifi_power", c->wifi_tx_power);   // RF_PWR_*
+    cJSON_AddNumberToObject(radio, "ble_power", c->ble_tx_power);     // RF_PWR_*, applies after reboot
     return r;
 }
 
@@ -155,6 +160,7 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
         if (sw) {
             mnum_u(sw, "channel", &c->record.sw.channel, 1);
             mnum_u(sw, "threshold_us", &c->record.sw.threshold_us, 2);
+            mnum_u(sw, "mode", &c->record.sw.mode, 1);
         }
     }
     if ((o = J_OBJ(j, "preset"))) {
@@ -224,5 +230,9 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
     }
     mnum_u(j, "led_brightness", &c->led_brightness, 1);
     mnum_u(j, "ui_flags", &c->ui_flags, 1);
+    if ((o = J_OBJ(j, "radio"))) {
+        mnum_u(o, "wifi_power", &c->wifi_tx_power, 1);
+        mnum_u(o, "ble_power", &c->ble_tx_power, 1);
+    }
     return ESP_OK;
 }

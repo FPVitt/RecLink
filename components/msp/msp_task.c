@@ -17,6 +17,7 @@
 #include "platform.h"
 
 #include "driver/uart.h"
+#include "driver/gpio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -157,6 +158,12 @@ static void msp_task(void *arg)
     int tx_pin = swap ? RX_GPIO : TX_GPIO;
     int rx_pin = swap ? TX_GPIO : RX_GPIO;
     ESP_ERROR_CHECK(uart_set_pin(UART_PORT, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    // Max drive strength on TX: some harnesses put a series resistor (board
+    // protection, level shifting) between the ESP and the FC's RX pin, which
+    // combined with any load on the FC side can sag/slow the edge enough for
+    // the FC to misread bytes even though the link "works". Driving harder
+    // costs nothing here and can only help.
+    (void)gpio_set_drive_capability((gpio_num_t)tx_pin, GPIO_DRIVE_CAP_3);
     ESP_LOGI(TAG, "UART%d @ %lu  tx=%d rx=%d%s", UART_PORT, (unsigned long)baud,
              tx_pin, rx_pin, swap ? " (swapped)" : "");
 

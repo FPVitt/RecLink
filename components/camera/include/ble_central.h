@@ -25,6 +25,7 @@ typedef void (*ble_notify_cb_t)(uint16_t val_handle, const uint8_t *data, uint16
 
 // Start the controller + host. Idempotent. Call once from app_main.
 void ble_central_init(void);
+void ble_central_set_tx_power(uint8_t preset);   // RF_PWR_* (cfg.h); reboot to change
 
 // True once the NimBLE host has synced (address ready, stack usable). Bond-store
 // queries before this return garbage -- callers must wait (review H15).
@@ -45,6 +46,10 @@ esp_err_t ble_central_subscribe(uint16_t val_handle, bool enable);
 void   ble_central_disconnect(void);
 bool   ble_central_connected(void);
 int8_t ble_central_last_rssi(void);
+// Gentle mode: low-duty passive scan (Wi-Fi-friendly). Applies to the next
+// ble_central_scan(true) / restarts a running scan with the new params.
+void      ble_central_scan_gentle(bool on);
+uint16_t  ble_central_mtu(void);              // negotiated ATT MTU (0 if not connected)
 esp_err_t ble_central_forget_bond(const uint8_t addr[6], uint8_t addr_type);
 esp_err_t ble_central_forget_bond_any(const uint8_t addr[6]);  // try public + random
 esp_err_t ble_central_erase_all_bonds(void);

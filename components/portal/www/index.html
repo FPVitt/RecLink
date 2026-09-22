@@ -120,6 +120,8 @@
     <div class="kv"><span>AUX channels (&micro;s)</span><span id="aux" class="mono">&mdash;</span></div>
     <pre id="counters" class="mono"></pre>
     <details id="mspdbgwrap"><summary>MSP link debug</summary><pre id="mspdbg" class="mono"></pre></details>
+    <details id="bledbgwrap"><summary>BLE connection debug</summary><pre id="bledbg" class="mono"></pre></details>
+    <details id="recdbgwrap"><summary>Record trigger debug</summary><pre id="recdbg" class="mono"></pre></details>
   </div>
 </section>
 
@@ -135,6 +137,11 @@
       </select></label>
     <fieldset id="rec-switch">
       <legend>Radio switch</legend>
+      <label>Trigger type
+        <select name="record.switch.mode">
+          <option value="0">Switch</option>
+          <option value="1">Button</option>
+        </select></label>
       <label>AUX channel
         <select name="record.switch.channel" data-auxsel></select></label>
       <div class="rangebar" id="rb-record" data-fn="record"></div>
@@ -196,7 +203,7 @@
   <label>OSD type
     <select name="osd.type">
       <option value="0">Analog</option>
-      <option value="1">Digital</option>
+      <option value="1" selected>Digital</option>
     </select></label>
 
   <div class="card" id="osdprev">
@@ -295,6 +302,7 @@
     <h3>Flight controller link (MSP serial)</h3>
     <label>Baud rate
       <select name="msp.baud">
+        <option>9600</option><option>19200</option><option>38400</option><option>57600</option>
         <option>115200</option><option>230400</option><option>250000</option><option>460800</option>
       </select></label>
     <label>Swap TX/RX pins<input type="checkbox" name="msp.swap_pins"></label>
@@ -314,6 +322,24 @@
   <h3>Indicator LED</h3>
   <label>Brightness (16&ndash;255)
     <input type="number" inputmode="numeric" name="led_brightness" min="16" max="255" step="1"></label>
+
+  <div class="adv-only">
+    <h3>Radio power</h3>
+    <label>Wi-Fi (config portal)
+      <select name="radio.wifi_power">
+        <option value="0">Low (2 dBm)</option>
+        <option value="1">Medium (10 dBm)</option>
+        <option value="2">Max (20 dBm)</option>
+      </select></label>
+    <label>Bluetooth (camera link) &mdash; applies after reboot
+      <select name="radio.ble_power">
+        <option value="0">Low (&minus;12 dBm)</option>
+        <option value="1">Medium (0 dBm)</option>
+        <option value="2">Max (+9 dBm)</option>
+      </select></label>
+    <p class="muted">Turn power up if the connection is unreliable, down to use less power.</p>
+  </div>
+
   <h3>Actions</h3>
   <div class="row">
     <button type="button" id="identify">Identify (blink LED)</button>

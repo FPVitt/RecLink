@@ -86,7 +86,7 @@ static void load_bonds(void)
     s_bond_n = 0;
     for (int i = 0; i < CAM_MAX_BONDS; i++) {
         cam_bond_t b;
-        if (cfg_cam_at(i, &b)) { s_bonds[s_bond_n++] = b; }
+        if (cfg_cam_at(i, &b, NULL)) { s_bonds[s_bond_n++] = b; }
     }
 }
 
@@ -112,7 +112,7 @@ static bool     s_was_ready;      // link reached READY since the last go_lost
 // bond and raise FLAG_REPAIR_NEEDED instead of hammering forever.
 static int      s_bond_fails;
 // Portal scan-pause exemption: set when the link reaches READY, re-armed at the
-// start of each portal session (see cam_ble_pause_scan / scan_allowed).
+// start of each portal session (see cam_ble_pause_scan / scan_wanted / apply_scan).
 static bool     s_connected_this_session;
 // Pairing discovery: collect brand-matching adverts into a list for the portal
 // instead of bonding to the first one. Cleared when the user picks one.
@@ -324,13 +324,12 @@ void cam_ble_suspend(void)
 static volatile bool s_throttle;
 void cam_throttle(bool on) { s_throttle = on; }
 
-// Portal Wi-Fi AP is up: on the single-radio C3 a continuous active BLE scan
-// starves the macOS association handshake (auth/assoc/EAPOL/DHCP), so pause the
-// *cold* camera hunt for the portal session. Exceptions (scan_allowed):
-//   - a pairing attempt is in progress (s_first_pair), or
-//   - the camera has connected at least once this portal session
-//     (s_connected_this_session, declared up top) -- reconnecting a camera you
-//     were just using is a brief targeted scan and you're already on Wi-Fi.
+// Portal Wi-Fi AP is up: on the single-radio C3 the aggressive active BLE scan
+// starves the macOS association handshake (auth/assoc/EAPOL/DHCP) and HTTP. See
+// scan_wanted() for the policy -- a *cold* pairing hunt is fully paused, a
+// *bonded reconnect* drops to a gentle low-duty passive scan (Wi-Fi-friendly,
+// runs continuously) since the portal is up at every disarmed boot, and an
+// in-progress pairing or an already-live session keeps the aggressive scan.
 static volatile bool s_scan_paused;
 void cam_ble_pause_scan(bool on)
 {
@@ -403,12 +402,42 @@ static void exec_cmd(const cam_cmd_t *c)
 }
 
 // ---- state machine step --------------------------------------
-// Scanning is paused for the portal session (see cam_ble_pause_scan) unless a
-// pairing attempt is in progress.
-static bool scan_allowed(void)
+// Portal AP up (cam_ble_pause_scan): the aggressive active scan starves Wi-Fi
+// association / HTTP on the single-radio C3. Policy while the AP is up:
+//   - in-progress pairing (s_first_pair / s_pair_discover) -> aggressive active
+//     scan (needs the scan response for the camera name; user tolerates a hiccup)
+//   - already-live session (s_connected_this_session) -> aggressive
+//   - bonded reconnect -> GENTLE: low-duty passive scan (~11% radio, no TX),
+//     which coexists with Wi-Fi. Runs continuously -- no duty cycle -- so a
+//     paired camera reconnects even though the portal is up at every disarmed
+//     boot.
+//   - nothing bonded -> scan off (cold hunt only makes sense from the portal).
+
+// Should the BLE scanner be active right now, and if so, gentle?
+static bool scan_wanted(bool *gentle)
 {
-    return !s_scan_paused || s_first_pair || s_connected_this_session;
+    bool aggressive_ok = !s_scan_paused || s_first_pair || s_pair_discover ||
+                         s_connected_this_session;
+    if (aggressive_ok) { if (gentle) { *gentle = false; } return true; }
+    if (s_bond_n > 0)  { if (gentle) { *gentle = true;  } return true; }
+    if (gentle) { *gentle = false; }
+    return false;
 }
+
+static const char *s_scan_state = "off";   // portal diagnostics: off / active / gentle
+
+static void apply_scan(void)
+{
+    bool gentle = false;
+    bool want = scan_wanted(&gentle);
+    ble_central_scan_gentle(gentle);
+    ble_central_scan(want);
+    s_scan_state = !want ? "off" : gentle ? "gentle" : "active";
+}
+
+// portal BLE diagnostics (Status tab).
+uint32_t cam_link_age_ms(void)   { return now_ms() - s_state_since_ms; }
+const char *cam_scan_state(void) { return s_scan_state; }
 
 static void begin_scan(void)
 {
@@ -416,8 +445,7 @@ static void begin_scan(void)
     s_recon_have = false;
     s_recon_since_ms = 0;
     set_link(CAM_LINK_SCAN);
-    if (scan_allowed()) { ble_central_scan(true); }
-    else { ble_central_scan(false); }
+    apply_scan();
 }
 
 // Lock onto one advertiser and start connecting. `d` is the driver for that
@@ -570,6 +598,7 @@ static void cam_task(void *arg)
     }
 
     uint32_t last_tick = now_ms();
+    uint32_t last_drv_poll = now_ms();
 
     for (;;) {
         iq_item_t it;
@@ -741,13 +770,14 @@ static void cam_task(void *arg)
             case IQ_CMD_SCAN_PAUSE:
                 s_scan_paused = it.flag.on;
                 if (s_scan_paused) {
-                    // New portal session: only a camera already connected right
-                    // now is exempt from the pause (see scan_allowed).
+                    // New portal session: a camera connected right now stays on
+                    // the aggressive scan; a bonded-but-disconnected camera drops
+                    // to the gentle low-duty reconnect scan.
                     s_connected_this_session = (s_cs.link == CAM_LINK_READY);
-                    if (s_cs.link == CAM_LINK_SCAN && !scan_allowed()) {
-                        ble_central_scan(false);
-                    }
-                    applog_note("BLE scan paused (portal AP up)");
+                    if (s_cs.link == CAM_LINK_SCAN) { apply_scan(); }
+                    applog_note(s_bond_n > 0 && !s_connected_this_session
+                                ? "portal AP up: reconnect scan -> gentle (Wi-Fi-friendly)"
+                                : "portal AP up: BLE hunt paused");
                 } else {
                     s_connected_this_session = false;
                     // Portal down: resume promptly if we were hunting.
@@ -763,11 +793,25 @@ static void cam_task(void *arg)
 
         uint32_t now = now_ms();
 
+        // ---- driver poll: call the driver's tick at the configured per-camera
+        // interval so rates down to 0.5 s are reachable. While the portal AP is
+        // up the interval is floored at 1.5 s (single-radio coex headroom; the
+        // portal page only refreshes that fast anyway). In flight it runs at the
+        // configured rate and feeds the OSD directly.
+        {
+            uint32_t drv_iv = cfg_active_poll_ms();
+            if (s_throttle && drv_iv < 1500) { drv_iv = 1500; }
+            if (s_cs.link == CAM_LINK_READY && s_drv && s_drv->tick_1s &&
+                now - last_drv_poll >= drv_iv) {
+                last_drv_poll = now;
+                s_drv->tick_1s();
+            }
+        }
+
         // ---- periodic tick (1 Hz, or 4 s while throttled for the portal) ----
         if (now - last_tick >= (s_throttle ? 4000 : TICK_PERIOD_MS)) {
             last_tick = now;
             if (s_cs.link == CAM_LINK_READY) {
-                if (s_drv && s_drv->tick_1s) { s_drv->tick_1s(); }
                 s_cs.rssi = ble_central_last_rssi();
 
                 // RX-silence timeout (spec 8.5)
@@ -785,19 +829,13 @@ static void cam_task(void *arg)
             }
 
             // Re-arm scanning while in SCAN: covers ble_central_scan() having
-            // been rejected because the host wasn't synced yet (review M10),
-            // and NimBLE dropping discovery on its own. Held off while the
-            // portal AP is up (unless pairing) so Wi-Fi association isn't
-            // starved on the single C3 radio.
+            // been rejected because the host wasn't synced yet (review M10), and
+            // NimBLE dropping discovery on its own. apply_scan() picks the mode
+            // (aggressive / gentle / off) per scan_wanted().
             if (s_pair_discover && (int32_t)(now - s_discover_until) >= 0) {
                 ble_central_scan(false);   // discovery window closed; list stays for the portal
             } else if (s_cs.link == CAM_LINK_SCAN && s_drv) {
-                if (scan_allowed()) {
-                    esp_err_t sr = ble_central_scan(true);
-                    if (sr != ESP_OK) { ESP_LOGW(TAG, "scan re-arm: %s", esp_err_to_name(sr)); }
-                } else {
-                    ble_central_scan(false);
-                }
+                apply_scan();
             }
 
             publish_dirty();
@@ -822,7 +860,9 @@ static void cam_task(void *arg)
         }
 
         // ---- LOST backoff -> rescan ----------------------------
-        if (s_cs.link == CAM_LINK_LOST && scan_allowed()) {
+        // begin_scan()/apply_scan() picks the radio mode (aggressive / gentle /
+        // off); the backoff just paces the re-entry.
+        if (s_cs.link == CAM_LINK_LOST) {
             uint32_t wait_ms = k_backoff_s[s_backoff_idx] * 1000;
             if (now - s_state_since_ms >= wait_ms) {
                 if (s_backoff_idx < (int)(sizeof(k_backoff_s)/sizeof(k_backoff_s[0])) - 1) {

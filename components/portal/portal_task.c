@@ -66,6 +66,15 @@ static void wifi_ap_up(void)
     // HT20 only -- clients complete the association / EAPOL handshake more
     // reliably than on HT40, and the portal needs no bandwidth.
     esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
+    // RF_PWR_* preset -> quarter-dBm units for esp_wifi_set_max_tx_power().
+    // Re-applied every portal session since Wi-Fi is fully deinit/reinit each
+    // time (spec 12.3).
+    {
+        static const int8_t k_wifi_pwr_q_dbm[] = { 8, 40, 80 };   // 2 / 10 / 20 dBm
+        uint8_t p = c->wifi_tx_power > RF_PWR_MAX ? RF_PWR_MAX : c->wifi_tx_power;
+        esp_err_t pe = esp_wifi_set_max_tx_power(k_wifi_pwr_q_dbm[p]);
+        if (pe != ESP_OK) { ESP_LOGW(TAG, "wifi tx power: %s", esp_err_to_name(pe)); }
+    }
     // Portal is bench-only and short-lived: keep the radio fully awake and
     // bias BT/Wi-Fi coexistence toward Wi-Fi so association isn't stalled by
     // the camera BLE link.

@@ -28,6 +28,15 @@ typedef struct {
 // sub-modules
 void ctrl_record_reset(void);
 void ctrl_record_tick(const ctrl_ctx_t *c);
+// record-trigger phases, mirrored here so the portal can name them without
+// duplicating the enum (ctrl_record.c owns the state machine).
+enum { CTRL_REC_IDLE, CTRL_REC_START_DELAY, CTRL_REC_VERIFY_START,
+       CTRL_REC_STOP_DELAY, CTRL_REC_VERIFY_STOP };
+// portal diagnostics (advanced mode): what the record trigger currently sees and
+// intends, independent of whether the camera has caught up. `last_cmd` is the
+// tribool_t of the last START/STOP we sent (0 none / 1 stop / 2 start).
+void ctrl_record_status(bool *raw_active, bool *sw_active, bool *desired,
+                        uint8_t *phase, uint8_t *last_cmd);
 
 void ctrl_preset_reset(void);
 void ctrl_preset_tick(const ctrl_ctx_t *c);
