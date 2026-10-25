@@ -259,8 +259,9 @@ function fmtStatus(id, raw) {
   const v = beInt(raw);
   return d && d.o && d.o[v] !== undefined ? `${d.o[v]} (${v})` : String(v);
 }
-function fmtSetting(id, raw) {
-  const d = OGP.SETTING[id]; const v = beInt(raw);
+function fmtSetting(id, raw) { return fmtSettingVal(id, beInt(raw)); }
+function fmtSettingVal(id, v) {
+  const d = OGP.SETTING[id];
   if (d && d.o && d.o[v] !== undefined) return `${Array.isArray(d.o[v]) ? d.o[v][0] : d.o[v]} (${v})`;
   return String(v);
 }
@@ -334,7 +335,7 @@ function decodeMessage(short, m) {
       }
     }
     if (kind === 'cap' && STATE.cap._fresh) {
-      for (const [id, vals] of Object.entries(STATE.cap._fresh)) { STATE.cap[id] = vals; obj[`${id} ${(OGP.SETTING[id] || {}).n || '?'}`] = vals.map(v => fmtSetting(+id, beBytes(v, 1))).join(', '); }
+      for (const [id, vals] of Object.entries(STATE.cap._fresh)) { STATE.cap[id] = vals; obj[`${id} ${(OGP.SETTING[id] || {}).n || '?'}`] = vals.map(v => fmtSettingVal(+id, v)).join(', '); }
       delete STATE.cap._fresh;
     }
     scheduleTables();

@@ -80,6 +80,8 @@ const se = decodeMessage('0077', H('9200' + '020101' + '030108'));
 eq('setting push decode', se.obj, { status: 'Success (0)', '2 Video Resolution': '4K (1)', '3 Frames Per Second': '30.0 (8)' });
 const cap = decodeMessage('0077', H('3200' + '020101' + '020104' + '030108'));
 eq('capabilities grouped', STATE.cap['2'], [1, 4]);
+// multi-byte capability values (setting 62 bitrates) must not be cut to their low byte
+eq('4-byte capability value kept whole', decodeMessage('0077', H('3200' + '3e040003d090' + '3e0400061a80')).obj['62 ?'], '250000, 400000');
 eq('2-byte status push', Object.keys(decodeMessage('0077', H('9600' + '004601' + '50')).obj)[1], '70 Internal battery percentage');
 
 // --- packetization: same algorithm as dbg_ble.c gp_send() ---
