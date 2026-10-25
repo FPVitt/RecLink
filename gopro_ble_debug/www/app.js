@@ -620,14 +620,18 @@ function camIdx() {
 }
 function renderSettings() {
   if ($('#tab-settings').hidden) return;
-  const ci = camIdx(), only = $('#s-only').checked, q = $('#s-q').value.toLowerCase();
-  const rows = [];
+  const ci = camIdx(), only = $('#s-only').checked, q = $('#s-q').value.toLowerCase(), sec = $('#s-grp').value;
+  const bySec = {};
   for (const [id, d] of Object.entries(OGP.SETTING).sort((a, b) => a[0] - b[0])) {
-    const cur = STATE.setting[id];
+    const cur = STATE.setting[id], g = d.g || 'Setup & other';
+    if (sec && g !== sec) continue;
     if (only && ci >= 0 && d.c && !d.c.includes(ci)) continue;
     if (q && !(id + ' ' + d.n).toLowerCase().includes(q)) continue;
+    const rows = (bySec[g] ??= []);
     const caps = STATE.cap[id];
-    const sel = h('select', {}, ...Object.entries(d.o || {}).map(([v, o]) => {
+    // No reported value yet: select a blank, so Set can't send an option the
+    // camera never showed as current.
+    const sel = h('select', {}, cur ? null : h('option', { value: '', selected: true }, '—'), ...Object.entries(d.o || {}).map(([v, o]) => {
       const nm = Array.isArray(o) ? o[0] : o, cams = Array.isArray(o) ? o[1] : null;
       const ok = (ci < 0 || !cams || cams.includes(ci)) && (!caps || caps.includes(+v));
       return h('option', { value: v, selected: cur && beInt(cur.raw) === +v, class: ok ? '' : 'dim' }, `${nm} (${v})${ok ? '' : ' ✕'}`);
@@ -638,11 +642,16 @@ function renderSettings() {
         h('button', { onclick: () => sendMsg('0076', Uint8Array.of(+id < 256 ? 0x12 : 0x15, ...(+id < 256 ? [+id] : beBytes(+id, 2))), 'Get setting ' + id).catch(e => toast(e.message, true)) }, 'Get'))));
   }
   $('#s-model').textContent = ci >= 0 ? `Camera: ${OGP.CAMS[ci]}` : STATE.hw ? `Camera: ${STATE.hw.model_name} (not in spec DB)` : 'Camera model unknown — run Get Hardware Info to filter options';
-  $('#settings-body').replaceChildren(...rows);
+  const out = [];
+  for (const g of OGP.GROUPS || Object.keys(bySec)) {
+    if (!bySec[g]) continue;
+    out.push(h('tr', { class: 'svc' }, h('td', { colspan: 4 }, g, h('small', {}, ` ${bySec[g].length}`))), ...bySec[g]);
+  }
+  $('#settings-body').replaceChildren(...out);
 }
 // Settings/statuses absent from the Open GoPro spec, named from a camera's
 // gpControl dump: may be rejected or behave differently on other models/firmware.
-const unofficialTag = d => d && d.u ? h('span', { class: 'tag warn', title: `Not in the Open GoPro spec. Name from the ${d.src || 'camera'} gpControl settings dump.` }, 'unofficial') : null;
+const unofficialTag = d => d && d.u ? h('span', { class: 'tag warn', title: `Not in the Open GoPro spec. Name from the ${d.src || 'camera'} gpControl settings dump.${d.nt ? ' Note: ' + d.nt + '.' : ''}` }, d.nt ? 'unofficial ?' : 'unofficial') : null;
 function setSetting(id, v, fmt) {
   if (v === '' || v == null) return toast('pick a value', true);
   const n = fmt === 'int64ub' ? 8 : fmt === 'int32ub' ? 4 : 1;
@@ -851,7 +860,8 @@ window.addEventListener('DOMContentLoaded', () => {
   $('#scan-gp').onchange = () => refreshDevices().catch(() => {});
   $('#op-q').oninput = renderOpList;
   $('#raw-send').onclick = rawSend;
-  $('#s-only').onchange = renderSettings; $('#s-q').oninput = renderSettings; $('#st-q').oninput = renderStatuses;
+  $('#s-grp').append(...(OGP.GROUPS || []).map(g => h('option', { value: g }, g)));
+  $('#s-only').onchange = renderSettings; $('#s-grp').onchange = renderSettings; $('#s-q').oninput = renderSettings; $('#st-q').oninput = renderStatuses;
   $('#s-getall').onclick = () => sendMsg('0076', Uint8Array.of(0x12), 'Get all settings').catch(e => toast(e.message, true));
   $('#s-reg').onclick = () => sendMsg('0076', Uint8Array.of(0x52), 'Register all settings').catch(e => toast(e.message, true));
   $('#s-caps').onclick = () => sendMsg('0076', Uint8Array.of(0x32), 'Get all setting capabilities').catch(e => toast(e.message, true));

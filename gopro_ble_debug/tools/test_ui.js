@@ -84,11 +84,14 @@ eq('capabilities grouped', STATE.cap['2'], [1, 4]);
 eq('4-byte capability value kept whole', decodeMessage('0077', H('3200' + '3e040003d090' + '3e0400061a80')).obj['62 Secondary Stream Bit Rate'], '250 Kbps (250000), 400 Kbps (400000)');
 
 // --- unofficial settings merged from camera gpControl dumps ---
-eq('unofficial setting named (13 ISO Max)', [OGP.SETTING[13].n, OGP.SETTING[13].u, fmtSetting(13, H('04'))], ['ISO Max', 1, '800 (4)']);
+eq('unofficial setting named (13 ISO Max)', [OGP.SETTING[13].n, OGP.SETTING[13].u, fmtSetting(13, H('04'))], ['ISO Max (video)', 1, '800 (4)']);
 eq('Protune shutter options (145)', fmtSetting(145, H('08')), '1/60 (8)');
 eq('wide unofficial setting is int32ub', OGP.SETTING[62].f, 'int32ub');
 eq('official setting not overridden', [OGP.SETTING[2].n, OGP.SETTING[2].u], ['Video Resolution', undefined]);
 eq('official setting gained option name (176)', OGP.SETTING[176].o['0'] !== undefined, true);
+eq('settings sections, Video first', OGP.GROUPS[0], 'Video');
+eq('per-mode duplicates split into sections', [13, 102, 145, 24, 146, 37, 115].map(i => OGP.SETTING[i].g),
+   ['Video', 'Video', 'Video', 'Photo', 'Photo', 'Time lapse & multishot', 'Protune (active preset)']);
 eq('2-byte status push', Object.keys(decodeMessage('0077', H('9600' + '004601' + '50')).obj)[1], '70 Internal battery percentage');
 
 // --- packetization: same algorithm as dbg_ble.c gp_send() ---

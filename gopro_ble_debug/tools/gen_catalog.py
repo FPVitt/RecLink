@@ -135,6 +135,45 @@ def merge_gpcontrol(SETTING, STATUS, gsets, gstats):
     return added_s, added_o, added_st
 
 
+# ---- Settings tab sections + clearer names for per-mode duplicates ---------
+# Cameras keep separate Protune ISO/shutter per capture mode under different
+# IDs, all called "ISO Max"/"Shutter" in the camera's own UI. Mode for video
+# and the shutters is evident from each ID's option list (video shutter =
+# fractions of the frame rate, night = seconds); photo vs multishot ISO pairs
+# have identical options, so that split follows legacy ID numbering ("nt").
+GROUPS = {
+    "Video": [2, 3, 6, 13, 96, 102, 106, 108, 121, 135, 145, 148, 150, 156, 162, 167, 173, 176, 180, 182, 183, 184, 186,
+              232, 234],
+    "Protune (active preset)": [79, 114, 115, 116, 117, 118, 124, 139, 149, 160, 174],
+    "Photo": [19, 24, 75, 105, 122, 125, 126, 133, 146, 147, 151, 171, 177, 181, 191, 227],
+    "Time lapse & multishot": [5, 30, 31, 32, 37, 76, 111, 123, 128, 155, 157, 172, 179, 187, 192, 233],
+    "Streaming & webcam": [41, 42, 43, 44, 45, 47, 48, 60, 61, 62, 64, 65, 66, 67],
+}
+GROUP_ORDER = list(GROUPS) + ["Setup & other"]
+INFERRED = "mode inferred from legacy ID numbering (photo and multishot pairs have identical options)"
+RENAME = {   # unofficial settings only: id -> (name, note)
+    13: ("ISO Max (video)", ""), 102: ("ISO Min (video)", ""), 145: ("Shutter (video)", ""),
+    24: ("ISO Max (photo)", INFERRED), 75: ("ISO Min (photo)", INFERRED),
+    37: ("ISO Max (multishot / time lapse)", INFERRED), 76: ("ISO Min (multishot / time lapse)", INFERRED),
+    146: ("Shutter (photo)", ""), 19: ("Shutter (night photo)", ""), 31: ("Shutter (night lapse)", ""),
+    6: ("Looping Interval", ""), 126: ("Output (photo)", ""), 160: ("Bit Rate (alt, 160)", "second bit-rate setting; mode unknown"),
+    41: ("Resolution (stream)", ""), 47: ("Resolution (stream, alt)", ""), 42: ("Frame Rate (stream)", ""),
+    165: ("Horizon Lock (165)", "two Horizon Lock IDs exist; which mode each controls is unknown"),
+    166: ("Horizon Lock (166)", "two Horizon Lock IDs exist; which mode each controls is unknown"),
+}
+
+
+def apply_groups(SETTING):
+    where = {str(i): g for g, ids in GROUPS.items() for i in ids}
+    for sid, d in SETTING.items():
+        d["g"] = where.get(sid, "Setup & other")
+        r = RENAME.get(int(sid))
+        if r and d.get("u"):
+            d["n"], note = r
+            if note:
+                d["nt"] = note
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--proto", required=True)
@@ -192,8 +231,11 @@ def main():
         s, o, st = merge_gpcontrol(SETTING, STATUS, gsets, gstats)
         extra = f"; gpControl: +{s} unofficial settings, +{o} option names, +{st} statuses"
 
+    apply_groups(SETTING)
+
     data = {
         "REV": a.rev,
+        "GROUPS": GROUP_ORDER,
         "CAMS": cams,
         "STATUS": STATUS,
         "SETTING": SETTING,
