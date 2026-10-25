@@ -87,6 +87,54 @@ def id_table(enums, cls):
     return tbl
 
 
+# ---- unofficial names from camera gpControl dumps -------------------------
+# The camera's own settings JSON (/gp/gpControl) names every setting it has,
+# including the ~40 the Open GoPro spec omits (Protune ISO/shutter/EV/WB,
+# streaming, setup). Dumps from KonradIT/goprowifihack (Apache-2.0). Accepts
+# raw dumps or the trimmed extract written by --write-gpcontrol-extract.
+def load_gpcontrol(paths):
+    """-> (settings {id: {n, o{v: name}, src}}, statuses {id: {n, src}}), first file wins."""
+    sets, stats = {}, {}
+    for p in paths:
+        d = json.loads(Path(p).read_text(encoding="utf-8-sig"))
+        if isinstance(d.get("settings"), dict):          # already an extract
+            for k, v in d["settings"].items():
+                sets.setdefault(k, v)
+            for k, v in d.get("status", {}).items():
+                stats.setdefault(k, v)
+            continue
+        src = (d.get("info") or {}).get("model_name") or Path(p).stem
+        for s in d.get("settings", []):
+            sets.setdefault(str(s["id"]), {"n": s["display_name"], "src": src,
+                                           "o": {str(o["id"]): o["display_name"] for o in s.get("options", [])}})
+        for g in (d.get("status") or {}).get("groups", []):
+            for f in g.get("fields", []):
+                stats.setdefault(str(f["id"]), {"n": f["name"].replace("_", " ").capitalize(), "src": src})
+    return sets, stats
+
+
+def merge_gpcontrol(SETTING, STATUS, gsets, gstats):
+    added_s = added_o = added_st = 0
+    for sid, g in gsets.items():
+        if sid in SETTING:
+            # official setting: only fill option values the spec DB lacks
+            opts = SETTING[sid].setdefault("o", {})
+            for v, name in g["o"].items():
+                if v not in opts:
+                    opts[v] = name
+                    added_o += 1
+            continue
+        wide = any(int(v) > 255 for v in g["o"])
+        SETTING[sid] = {"n": g["n"], "f": "int32ub" if wide else "int8ub", "o": dict(g["o"]),
+                        "u": 1, "src": g.get("src", "")}
+        added_s += 1
+    for sid, g in gstats.items():
+        if sid not in STATUS:
+            STATUS[sid] = {"n": g["n"], "u": 1, "src": g.get("src", "")}
+            added_st += 1
+    return added_s, added_o, added_st
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--proto", required=True)
@@ -95,6 +143,9 @@ def main():
     ap.add_argument("--settings-db")
     ap.add_argument("--extra-status", action="append", default=[],
                     help="ID=Name for statuses documented on the spec site but not yet in the SDK")
+    ap.add_argument("--gpcontrol", action="append", default=[],
+                    help="camera gpControl JSON dump or extract (repeatable, first wins) -> unofficial names")
+    ap.add_argument("--write-gpcontrol-extract", help="write the merged gpControl names to this file")
     ap.add_argument("--rev", default="")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
@@ -131,6 +182,16 @@ def main():
             ent["o"] = opts
             SETTING[sid] = ent
 
+    extra = ""
+    if a.gpcontrol:
+        gsets, gstats = load_gpcontrol(a.gpcontrol)
+        if a.write_gpcontrol_extract:
+            Path(a.write_gpcontrol_extract).write_text(json.dumps(
+                {"_source": "camera /gp/gpControl dumps via github.com/KonradIT/goprowifihack (Apache-2.0)",
+                 "settings": gsets, "status": gstats}, indent=0, sort_keys=True))
+        s, o, st = merge_gpcontrol(SETTING, STATUS, gsets, gstats)
+        extra = f"; gpControl: +{s} unofficial settings, +{o} option names, +{st} statuses"
+
     data = {
         "REV": a.rev,
         "CAMS": cams,
@@ -144,7 +205,7 @@ def main():
           "window.OGP=" + json.dumps(data, separators=(",", ":")) + ";\n")
     Path(a.out).write_text(js)
     print(f"{a.out}: {len(STATUS)} statuses, {len(SETTING)} settings, "
-          f"{len(msgs)} messages, {len(enums)} enums, {len(js)} bytes")
+          f"{len(msgs)} messages, {len(enums)} enums, {len(js)} bytes{extra}")
 
 
 if __name__ == "__main__":

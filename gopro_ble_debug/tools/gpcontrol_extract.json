@@ -1,0 +1,1586 @@
+{
+"_source": "camera /gp/gpControl dumps via github.com/KonradIT/goprowifihack (Apache-2.0)",
+"settings": {
+"102": {
+"n": "ISO Min",
+"o": {
+"0": "6400",
+"1": "1600",
+"2": "400",
+"3": "3200",
+"4": "800",
+"7": "200",
+"8": "100",
+"9": "Auto"
+},
+"src": "HERO11 Black"
+},
+"103": {
+"n": "Auto Lock",
+"o": {
+"100": "On",
+"3": "Off"
+},
+"src": "HERO11 Black"
+},
+"104": {
+"n": "Wake On Voice",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO9 Black"
+},
+"105": {
+"n": "Timer",
+"o": {
+"0": "Off",
+"1": "3 Seconds",
+"2": "10 Seconds"
+},
+"src": "HERO11 Black"
+},
+"106": {
+"n": "Video Compression",
+"o": {
+"1": "HEVC",
+"2": "H.264 + HEVC"
+},
+"src": "HERO10 Black"
+},
+"111": {
+"n": "Speed",
+"o": {
+"0": "15X",
+"1": "30X",
+"10": "Auto",
+"7": "2X",
+"8": "5X",
+"9": "10X"
+},
+"src": "HERO11 Black"
+},
+"112": {
+"n": "Orientation",
+"o": {
+"100": "All",
+"255": "Locked"
+},
+"src": "HERO11 Black"
+},
+"114": {
+"n": "Protune",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO11 Black"
+},
+"115": {
+"n": "White Balance",
+"o": {
+"0": "Auto",
+"10": "3200K",
+"11": "4500K",
+"12": "5000K",
+"2": "5500K",
+"3": "6500K",
+"4": "Native",
+"5": "4000K",
+"7": "6000K",
+"8": "2300K",
+"9": "2800K"
+},
+"src": "HERO11 Black"
+},
+"116": {
+"n": "Color",
+"o": {
+"1": "Flat",
+"100": "Vibrant",
+"2": "Natural"
+},
+"src": "HERO11 Black"
+},
+"117": {
+"n": "Sharpness",
+"o": {
+"0": "High",
+"1": "Medium",
+"2": "Low"
+},
+"src": "HERO11 Black"
+},
+"118": {
+"n": "EV Comp",
+"o": {
+"0": "2.0",
+"1": "1.5",
+"2": "1.0",
+"3": "0.5",
+"4": "0.0",
+"5": "-0.5",
+"6": "-1.0",
+"7": "-1.5",
+"8": "-2.0"
+},
+"src": "HERO11 Black"
+},
+"121": {
+"n": "Lens",
+"o": {
+"0": "Wide",
+"10": "Linear + Horizon Lock",
+"3": "Superview",
+"4": "Linear",
+"7": "Max SuperView",
+"8": "Linear + Horizon Leveling",
+"9": "HyperView"
+},
+"src": "HERO11 Black"
+},
+"122": {
+"n": "Lens",
+"o": {
+"100": "Max SuperView",
+"101": "Wide",
+"102": "Linear"
+},
+"src": "HERO11 Black"
+},
+"123": {
+"n": "Lens",
+"o": {
+"101": "Wide",
+"102": "Linear"
+},
+"src": "HERO11 Black"
+},
+"124": {
+"n": "Bit Rate",
+"o": {
+"1": "High",
+"100": "Standard"
+},
+"src": "HERO11 Black"
+},
+"125": {
+"n": "Output",
+"o": {
+"0": "Standard",
+"1": "Raw",
+"2": "HDR",
+"3": "SuperPhoto"
+},
+"src": "HERO11 Black"
+},
+"126": {
+"n": "Output",
+"o": {
+"0": "Standard",
+"1": "Raw"
+},
+"src": "HERO11 Black"
+},
+"128": {
+"n": "Format",
+"o": {
+"13": "Video",
+"20": "Photo",
+"21": "Photo",
+"26": "Video"
+},
+"src": "HERO11 Black"
+},
+"129": {
+"n": "Lower Left",
+"o": {
+"0": "Off",
+"1": "Zoom",
+"10": "Color",
+"100": "Wind",
+"102": "Duration",
+"103": "Speed Ramp",
+"104": "Scheduled Capture",
+"105": "HindSight",
+"106": "Media Mod",
+"109": "Looping Interval",
+"11": "EV Comp",
+"12": "HyperSmooth",
+"13": "Interval",
+"14": "ISO Min",
+"15": "ISO Max",
+"17": "Output",
+"18": "Raw Audio",
+"19": "Sharpness",
+"2": "Lens",
+"20": "Timer",
+"21": "Speed",
+"24": "Horizon Leveling",
+"28": "10 Bit",
+"3": "Slo-Mo",
+"30": "Trails Length",
+"5": "White Balance",
+"6": "Shutter",
+"7": "Bit Rate",
+"8": "Burst Rate"
+},
+"src": "HERO11 Black"
+},
+"13": {
+"n": "ISO Max",
+"o": {
+"0": "6400",
+"1": "1600",
+"2": "400",
+"3": "3200",
+"4": "800",
+"7": "200",
+"8": "100",
+"9": "Auto"
+},
+"src": "HERO11 Black"
+},
+"130": {
+"n": "Lower Right",
+"o": {
+"0": "Off",
+"1": "Zoom",
+"10": "Color",
+"100": "Wind",
+"102": "Duration",
+"103": "Speed Ramp",
+"104": "Scheduled Capture",
+"105": "HindSight",
+"106": "Media Mod",
+"109": "Looping Interval",
+"11": "EV Comp",
+"12": "HyperSmooth",
+"13": "Interval",
+"14": "ISO Min",
+"15": "ISO Max",
+"17": "Output",
+"18": "Raw Audio",
+"19": "Sharpness",
+"2": "Lens",
+"20": "Timer",
+"21": "Speed",
+"24": "Horizon Leveling",
+"28": "10 Bit",
+"3": "Slo-Mo",
+"30": "Trails Length",
+"5": "White Balance",
+"6": "Shutter",
+"7": "Bit Rate",
+"8": "Burst Rate"
+},
+"src": "HERO11 Black"
+},
+"131": {
+"n": "Upper Left",
+"o": {
+"0": "Off",
+"1": "Zoom",
+"10": "Color",
+"100": "Wind",
+"102": "Duration",
+"103": "Speed Ramp",
+"104": "Scheduled Capture",
+"105": "HindSight",
+"106": "Media Mod",
+"109": "Looping Interval",
+"11": "EV Comp",
+"12": "HyperSmooth",
+"13": "Interval",
+"14": "ISO Min",
+"15": "ISO Max",
+"17": "Output",
+"18": "Raw Audio",
+"19": "Sharpness",
+"2": "Lens",
+"20": "Timer",
+"21": "Speed",
+"24": "Horizon Leveling",
+"28": "10 Bit",
+"3": "Slo-Mo",
+"30": "Trails Length",
+"5": "White Balance",
+"6": "Shutter",
+"7": "Bit Rate",
+"8": "Burst Rate"
+},
+"src": "HERO11 Black"
+},
+"132": {
+"n": "Upper Right",
+"o": {
+"0": "Off",
+"1": "Zoom",
+"10": "Color",
+"100": "Wind",
+"102": "Duration",
+"103": "Speed Ramp",
+"104": "Scheduled Capture",
+"105": "HindSight",
+"106": "Media Mod",
+"109": "Looping Interval",
+"11": "EV Comp",
+"12": "HyperSmooth",
+"13": "Interval",
+"14": "ISO Min",
+"15": "ISO Max",
+"17": "Output",
+"18": "Raw Audio",
+"19": "Sharpness",
+"2": "Lens",
+"20": "Timer",
+"21": "Speed",
+"24": "Horizon Leveling",
+"28": "10 Bit",
+"3": "Slo-Mo",
+"30": "Trails Length",
+"5": "White Balance",
+"6": "Shutter",
+"7": "Bit Rate",
+"8": "Burst Rate"
+},
+"src": "HERO11 Black"
+},
+"133": {
+"n": "MegaPixels",
+"o": {
+"0": "8MP",
+"1": "12MP"
+},
+"src": "HERO9 Black"
+},
+"134": {
+"n": "Anti-Flicker",
+"o": {
+"2": "60Hz",
+"3": "50Hz"
+},
+"src": "HERO11 Black"
+},
+"135": {
+"n": "Hypersmooth",
+"o": {
+"0": "Off",
+"1": "On",
+"3": "Boost",
+"4": "Auto Boost"
+},
+"src": "HERO11 Black"
+},
+"139": {
+"n": "RAW Audio",
+"o": {
+"0": "Low",
+"1": "Medium",
+"2": "High",
+"3": "Off"
+},
+"src": "HERO11 Black"
+},
+"144": {
+"n": "Mode",
+"o": {
+"12": "Video",
+"13": "Time Lapse Video",
+"15": "Looping",
+"16": "Single Photo",
+"18": "Night Photo",
+"19": "Burst Photo",
+"20": "Time Lapse Photo",
+"21": "Night Lapse Photo",
+"24": "Time Warp Video",
+"26": "Night Lapse Video"
+},
+"src": "HERO11 Black"
+},
+"145": {
+"n": "Shutter",
+"o": {
+"0": "Auto",
+"11": "1/96",
+"12": "1/100",
+"13": "1/120",
+"16": "1/192",
+"17": "1/200",
+"18": "1/240",
+"21": "1/400",
+"22": "1/480",
+"23": "1/960",
+"24": "1/1920",
+"25": "1/384",
+"28": "1/800",
+"29": "1/1600",
+"3": "1/24",
+"30": "1/3200",
+"31": "1/3840",
+"4": "1/25",
+"5": "1/30",
+"6": "1/48",
+"7": "1/50",
+"8": "1/60"
+},
+"src": "HERO11 Black"
+},
+"146": {
+"n": "Shutter",
+"o": {
+"0": "Auto",
+"1": "1/125",
+"2": "1/250",
+"3": "1/500",
+"4": "1/1000",
+"5": "1/2000"
+},
+"src": "HERO11 Black"
+},
+"147": {
+"n": "Burst Rate",
+"o": {
+"0": "3 Photos / 1 Second",
+"1": "5 Photos / 1 Second",
+"12": "60 Photos / 6 Seconds",
+"13": "60 Photos / 10 Seconds",
+"2": "10 Photos / 1 Second",
+"4": "10 Photos / 3 Seconds",
+"5": "30 Photos / 1 Second",
+"7": "30 Photos / 3 Seconds",
+"8": "30 Photos / 6 Seconds",
+"9": "Auto"
+},
+"src": "HERO11 Black"
+},
+"148": {
+"n": "Max HyperSmooth",
+"o": {
+"0": "Off",
+"1": "On"
+},
+"src": "HERO11 Black"
+},
+"149": {
+"n": "Wind",
+"o": {
+"0": "Off",
+"2": "Auto",
+"4": "On"
+},
+"src": "HERO11 Black"
+},
+"150": {
+"n": "Horizon Leveling",
+"o": {
+"0": "Off",
+"2": "Locked"
+},
+"src": "HERO11 Black"
+},
+"151": {
+"n": "Horizon Leveling",
+"o": {
+"0": "Off",
+"2": "Locked"
+},
+"src": "HERO11 Black"
+},
+"153": {
+"n": "Mode Button",
+"o": {
+"1": "HiLight",
+"100": "Speed Ramp"
+},
+"src": "HERO11 Black"
+},
+"154": {
+"n": "Front LCD Mode",
+"o": {
+"0": "Screen Off",
+"1": "Status Only",
+"2": "Actual View",
+"3": "Full Screen"
+},
+"src": "HERO11 Black"
+},
+"155": {
+"n": "Speed Ramp",
+"o": {
+"100": "Real Speed",
+"101": "Half Speed"
+},
+"src": "HERO11 Black"
+},
+"156": {
+"n": "Duration",
+"o": {
+"1": "15 Seconds",
+"100": "No Limit",
+"2": "30 Seconds",
+"3": "1 Minute",
+"4": "5 Minutes",
+"5": "15 Minutes",
+"6": "30 Minutes",
+"7": "1 Hour",
+"8": "2 Hours",
+"9": "3 Hours"
+},
+"src": "HERO11 Black"
+},
+"157": {
+"n": "Duration",
+"o": {
+"1": "15 Seconds",
+"100": "No Limit",
+"2": "30 Seconds",
+"3": "1 Minute",
+"4": "5 Minutes",
+"5": "15 Minutes",
+"6": "30 Minutes",
+"7": "1 Hour",
+"8": "2 Hours",
+"9": "3 Hours"
+},
+"src": "HERO11 Black"
+},
+"158": {
+"n": "Screen Saver Front",
+"o": {
+"0": "Never",
+"1": "Match Rear Screen",
+"2": "1 Min",
+"3": "2 Min",
+"4": "3 Min",
+"5": "5 Min"
+},
+"src": "HERO11 Black"
+},
+"159": {
+"n": "Screen Saver Rear",
+"o": {
+"0": "Never",
+"1": "1 Min",
+"2": "2 Min",
+"3": "3 Min",
+"4": "5 Min"
+},
+"src": "HERO11 Black"
+},
+"160": {
+"n": "Bit Rate",
+"o": {
+"0": "Standard",
+"1": "High"
+},
+"src": "HERO11 Black"
+},
+"161": {
+"n": "Default Preset",
+"o": {
+"100": "Last Used Video",
+"101": "Last Used Photo",
+"102": "Last Used Time Lapse",
+"200": "Last Used"
+},
+"src": "HERO11 Black"
+},
+"162": {
+"n": "Max Lens Mod Enable",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO11 Black"
+},
+"163": {
+"n": "Max Lens Mod",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO11 Black"
+},
+"164": {
+"n": "Media Mod",
+"o": {
+"1": "Front",
+"100": "Camera Mics",
+"2": "Back"
+},
+"src": "HERO11 Black"
+},
+"165": {
+"n": "Horizon Lock",
+"o": {
+"0": "Off",
+"1": "On"
+},
+"src": "HERO10 Black"
+},
+"166": {
+"n": "Horizon Lock",
+"o": {
+"0": "Off",
+"1": "On"
+},
+"src": "HERO10 Black"
+},
+"167": {
+"n": "HindSight",
+"o": {
+"2": "15 Seconds",
+"3": "30 Seconds",
+"4": "Off"
+},
+"src": "HERO11 Black"
+},
+"168": {
+"n": "Scheduled Capture",
+"o": {
+"0": "Off"
+},
+"src": "HERO11 Black"
+},
+"169": {
+"n": "Mods",
+"o": {
+"1": "Standard Mic",
+"2": "Standard Mic+",
+"3": "Powered Mic",
+"4": "Powered Mic+",
+"5": "Line In"
+},
+"src": "HERO11 Black"
+},
+"173": {
+"n": "Video Performance Modes",
+"o": {
+"0": "Maximum Video Performance",
+"1": "Extended Battery",
+"2": "Tripod / Stationary Video"
+},
+"src": "HERO10 Black"
+},
+"174": {
+"n": "10 Bit",
+"o": {
+"0": "Off",
+"1": "On"
+},
+"src": "HERO11 Black"
+},
+"175": {
+"n": "Controls",
+"o": {
+"0": "Easy",
+"1": "Pro"
+},
+"src": "HERO11 Black"
+},
+"176": {
+"n": "Speed",
+"o": {
+"0": "8x Ultra Slo-Mo",
+"1": "4x Super Slo-Mo",
+"10": "1x Speed / Low Light",
+"11": "4x Super Slo-Mo",
+"12": "2x Slo-Mo",
+"13": "1x Speed / Low Light",
+"14": "8x Ultra Slo-Mo",
+"15": "8x Ultra Slo-Mo",
+"16": "8x Ultra Slo-Mo",
+"17": "4x Super Slo-Mo",
+"18": "2x Slo-Mo",
+"19": "1x Speed / Low Light",
+"2": "2x Slo-Mo",
+"20": "8x Ultra Slo-Mo",
+"21": "4x Super Slo-Mo",
+"22": "2x Slo-Mo",
+"23": "1x Speed / Low Light",
+"24": "2x Slo-Mo",
+"25": "4x Super Slo-Mo",
+"26": "2x Slo-Mo",
+"27": "4x Super Slo-Mo",
+"3": "1x Speed / Low Light",
+"4": "4x Super Slo-Mo",
+"5": "2x Slo-Mo",
+"6": "1x Speed / Low Light",
+"7": "8x Ultra Slo-Mo",
+"8": "4x Super Slo-Mo",
+"9": "2x Slo-Mo"
+},
+"src": "HERO11 Black"
+},
+"177": {
+"n": "Night Photo",
+"o": {
+"0": "Off",
+"1": "On"
+},
+"src": "HERO11 Black"
+},
+"178": {
+"n": "Wi-fi Band",
+"o": {
+"0": "2.4GHz",
+"1": "5GHz"
+},
+"src": "HERO11 Black"
+},
+"179": {
+"n": "Trail Length",
+"o": {
+"1": "Short",
+"2": "Long",
+"3": "Max"
+},
+"src": "HERO11 Black"
+},
+"180": {
+"n": "Video Mode",
+"o": {
+"0": "Highest Quality",
+"101": "Extended Battery",
+"102": "Longest Battery"
+},
+"src": "HERO11 Black"
+},
+"181": {
+"n": "Night Photo",
+"o": {
+"0": "Super Photo",
+"1": "Night Photo"
+},
+"src": "HERO11 Black"
+},
+"19": {
+"n": "Shutter",
+"o": {
+"0": "Auto",
+"1": "2 Seconds",
+"2": "5 Seconds",
+"3": "10 Seconds",
+"4": "15 Seconds",
+"5": "20 Seconds",
+"6": "30 Seconds"
+},
+"src": "HERO11 Black"
+},
+"2": {
+"n": "Resolution",
+"o": {
+"1": "4K",
+"100": "5.3K",
+"18": "4K 4:3",
+"26": "5.3K 8:7",
+"27": "5.3K 4:3",
+"28": "4K 8:7",
+"4": "2.7K",
+"6": "2.7K 4:3",
+"9": "1080"
+},
+"src": "HERO11 Black"
+},
+"24": {
+"n": "ISO Max",
+"o": {
+"0": "800",
+"1": "400",
+"2": "200",
+"3": "100",
+"4": "1600",
+"5": "3200"
+},
+"src": "HERO11 Black"
+},
+"3": {
+"n": "Frames Per Second",
+"o": {
+"0": "240",
+"1": "120",
+"10": "24",
+"13": "200",
+"2": "100",
+"5": "60",
+"6": "50",
+"8": "30",
+"9": "25"
+},
+"src": "HERO11 Black"
+},
+"30": {
+"n": "Interval",
+"o": {
+"100": "60 Minutes",
+"101": "30 Minutes",
+"102": "5 Minutes",
+"103": "2 Minutes",
+"104": "60 Seconds",
+"105": "30 Seconds",
+"106": "10 Seconds",
+"107": "5 Seconds",
+"108": "2 Seconds",
+"109": "1 Second",
+"110": "0.5 Seconds"
+},
+"src": "HERO11 Black"
+},
+"31": {
+"n": "Shutter",
+"o": {
+"0": "Auto",
+"1": "2 Seconds",
+"2": "5 Seconds",
+"3": "10 Seconds",
+"4": "15 Seconds",
+"5": "20 Seconds",
+"6": "30 Seconds",
+"7": "0.5 Seconds",
+"8": "1 Second"
+},
+"src": "HERO11 Black"
+},
+"32": {
+"n": "Interval",
+"o": {
+"10": "10 Seconds",
+"100": "60 Seconds",
+"120": "2 Minutes",
+"15": "15 Seconds",
+"1800": "30 Minutes",
+"20": "20 Seconds",
+"30": "30 Seconds",
+"300": "5 Minutes",
+"3600": "60 Minutes",
+"3601": "Auto",
+"4": "4 Seconds",
+"5": "5 Seconds"
+},
+"src": "HERO11 Black"
+},
+"37": {
+"n": "ISO Max",
+"o": {
+"0": "800",
+"1": "400",
+"2": "200",
+"3": "100",
+"4": "1600",
+"5": "3200"
+},
+"src": "HERO11 Black"
+},
+"41": {
+"n": "Resolution",
+"o": {
+"12": "720",
+"9": "1080"
+},
+"src": "HERO11 Black"
+},
+"42": {
+"n": "Frame Per Second",
+"o": {
+"8": "30"
+},
+"src": "HERO11 Black"
+},
+"43": {
+"n": "FOV",
+"o": {
+"0": "Wide",
+"2": "Narrow",
+"3": "Superview",
+"4": "Linear"
+},
+"src": "HERO11 Black"
+},
+"44": {
+"n": "BNR Resolution",
+"o": {
+"9": "1080"
+},
+"src": "HERO11 Black"
+},
+"45": {
+"n": "BNR Frame Per Second",
+"o": {
+"8": "30"
+},
+"src": "HERO11 Black"
+},
+"47": {
+"n": "Resolution",
+"o": {
+"12": "1080",
+"7": "720"
+},
+"src": "HERO11 Black"
+},
+"48": {
+"n": "Privacy",
+"o": {
+"0": "Ask",
+"1": "Public",
+"2": "Hidden"
+},
+"src": "HERO10 Black"
+},
+"5": {
+"n": "Interval",
+"o": {
+"0": "0.5 Seconds",
+"1": "1 Second",
+"10": "60 Minutes",
+"2": "2 Seconds",
+"3": "5 Seconds",
+"4": "10 Seconds",
+"5": "30 Seconds",
+"6": "60 Seconds",
+"7": "2 Minutes",
+"8": "5 Minutes",
+"9": "30 Minutes"
+},
+"src": "HERO11 Black"
+},
+"54": {
+"n": "Quick Capture",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO11 Black"
+},
+"59": {
+"n": "Auto Off",
+"o": {
+"0": "Never",
+"1": "1 Min",
+"4": "5 Min",
+"6": "15 Min",
+"7": "30 Min"
+},
+"src": "HERO11 Black"
+},
+"6": {
+"n": "Interval",
+"o": {
+"0": "Max",
+"1": "5 Minutes",
+"2": "20 Minutes",
+"3": "60 Minutes",
+"4": "120 Minutes"
+},
+"src": "HERO11 Black"
+},
+"60": {
+"n": "Secondary Stream GOP Size",
+"o": {
+"0": "Default",
+"15": "15",
+"3": "3",
+"30": "30",
+"4": "4",
+"8": "8"
+},
+"src": "HERO11 Black"
+},
+"61": {
+"n": "Secondary Stream IDR Interval",
+"o": {
+"0": "Default",
+"1": "1",
+"2": "2",
+"4": "4"
+},
+"src": "HERO11 Black"
+},
+"62": {
+"n": "Secondary Stream Bit Rate",
+"o": {
+"1000000": "1 Mbps",
+"1200000": "1.2 Mbps",
+"1600000": "1.6 Mbps",
+"2000000": "2 Mbps",
+"2400000": "2.4 Mbps",
+"250000": "250 Kbps",
+"2500000": "2.5 Mbps",
+"400000": "400 Kbps",
+"4000000": "4 Mbps",
+"600000": "600 Kbps",
+"700000": "700 Kbps",
+"800000": "800 Kbps"
+},
+"src": "HERO11 Black"
+},
+"64": {
+"n": "Secondary Stream Window Size",
+"o": {
+"0": "Default",
+"1": "240",
+"10": "720 Square",
+"11": "480 Square",
+"12": "1080",
+"2": "240 3:4 Subsample",
+"3": "240 1:2 Subsample",
+"4": "480",
+"5": "480 3:4 Subsample",
+"6": "480 1:2 Subsample",
+"7": "720",
+"8": "720 3:4 Subsample",
+"9": "720 1:2 Subsample"
+},
+"src": "HERO11 Black"
+},
+"65": {
+"n": "GOP Size",
+"o": {
+"0": "Default",
+"15": "15",
+"3": "3",
+"30": "30",
+"4": "4",
+"8": "8"
+},
+"src": "HERO11 Black"
+},
+"66": {
+"n": "IDR Interval",
+"o": {
+"0": "Default",
+"1": "1",
+"2": "2",
+"4": "4"
+},
+"src": "HERO11 Black"
+},
+"67": {
+"n": "Bit Rate",
+"o": {
+"1000000": "1 Mbps",
+"1200000": "1.2 Mbps",
+"1600000": "1.6 Mbps",
+"2000000": "2 Mbps",
+"2400000": "2.4 Mbps",
+"250000": "250 Kbps",
+"2500000": "2.5 Mbps",
+"400000": "400 Kbps",
+"4000000": "4 Mbps",
+"600000": "600 Kbps",
+"700000": "700 Kbps",
+"800000": "800 Kbps"
+},
+"src": "HERO11 Black"
+},
+"75": {
+"n": "ISO Min",
+"o": {
+"0": "800",
+"1": "400",
+"2": "200",
+"3": "100",
+"4": "1600",
+"5": "3200"
+},
+"src": "HERO11 Black"
+},
+"76": {
+"n": "ISO Min",
+"o": {
+"0": "800",
+"1": "400",
+"2": "200",
+"3": "100",
+"4": "1600",
+"5": "3200"
+},
+"src": "HERO11 Black"
+},
+"79": {
+"n": "Audio Protune",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO9 Black"
+},
+"83": {
+"n": "GPS",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO11 Black"
+},
+"84": {
+"n": "Language",
+"o": {
+"0": "English",
+"1": "Chinese",
+"10": "Swedish",
+"11": "Chinese(Traditional)",
+"2": "German",
+"3": "Italian",
+"4": "Spanish",
+"5": "Japanese",
+"6": "French",
+"7": "Korean",
+"8": "Portuguese",
+"9": "Russian"
+},
+"src": "HERO11 Black"
+},
+"85": {
+"n": "Voice Control Language",
+"o": {
+"0": "English - US",
+"1": "English - UK",
+"10": "Korean",
+"11": "Portuguese",
+"12": "Russian",
+"13": "English - IND",
+"14": "Swedish",
+"2": "English - AUS",
+"3": "German",
+"4": "French",
+"5": "Italian",
+"6": "Spanish",
+"7": "Spanish - NA",
+"8": "Chinese",
+"9": "Japanese"
+},
+"src": "HERO11 Black"
+},
+"86": {
+"n": "Voice Control Enable",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO11 Black"
+},
+"87": {
+"n": "Beeps",
+"o": {
+"0": "Mute",
+"100": "High",
+"40": "Low",
+"70": "Medium"
+},
+"src": "HERO11 Black"
+},
+"88": {
+"n": "LCD Brightness",
+"o": {
+"10": "10%",
+"100": "100%",
+"20": "20%",
+"30": "30%",
+"40": "40%",
+"50": "50%",
+"60": "60%",
+"70": "70%",
+"80": "80%",
+"90": "90%"
+},
+"src": "HERO11 Black"
+},
+"91": {
+"n": "LED",
+"o": {
+"3": "All On",
+"4": "All Off",
+"5": "Front Off Only"
+},
+"src": "HERO11 Black"
+},
+"96": {
+"n": "No Audio Track",
+"o": {
+"0": "OFF",
+"1": "ON"
+},
+"src": "HERO9 Black"
+}
+},
+"status": {
+"1": {
+"n": "Internal battery present",
+"src": "HERO11 Black"
+},
+"10": {
+"n": "Encoding active",
+"src": "HERO11 Black"
+},
+"100": {
+"n": "Num total live bursts",
+"src": "HERO11 Black"
+},
+"101": {
+"n": "Capture delay active",
+"src": "HERO11 Black"
+},
+"102": {
+"n": "Media mod mic status",
+"src": "HERO11 Black"
+},
+"103": {
+"n": "Timewarp speed ramp active",
+"src": "HERO11 Black"
+},
+"104": {
+"n": "Linux core active",
+"src": "HERO10 Black"
+},
+"105": {
+"n": "Camera lens type",
+"src": "HERO11 Black"
+},
+"106": {
+"n": "Video hindsight capture active",
+"src": "HERO11 Black"
+},
+"107": {
+"n": "Scheduled preset",
+"src": "HERO11 Black"
+},
+"108": {
+"n": "Scheduled enabled",
+"src": "HERO11 Black"
+},
+"109": {
+"n": "Creating preset",
+"src": "HERO11 Black"
+},
+"11": {
+"n": "Lcd lock active",
+"src": "HERO11 Black"
+},
+"110": {
+"n": "Media mod status",
+"src": "HERO11 Black"
+},
+"111": {
+"n": "Sd rating check error",
+"src": "HERO11 Black"
+},
+"112": {
+"n": "Sd write speed error",
+"src": "HERO11 Black"
+},
+"113": {
+"n": "Turbo transfer",
+"src": "HERO11 Black"
+},
+"114": {
+"n": "Camera control status",
+"src": "HERO11 Black"
+},
+"115": {
+"n": "Usb connected",
+"src": "HERO11 Black"
+},
+"116": {
+"n": "Allow control over usb",
+"src": "HERO11 Black"
+},
+"117": {
+"n": "Total sd space kb",
+"src": "HERO11 Black"
+},
+"13": {
+"n": "Video progress counter",
+"src": "HERO11 Black"
+},
+"14": {
+"n": "Broadcast progress counter",
+"src": "HERO11 Black"
+},
+"17": {
+"n": "Enable",
+"src": "HERO11 Black"
+},
+"19": {
+"n": "State",
+"src": "HERO11 Black"
+},
+"2": {
+"n": "Internal battery level",
+"src": "HERO11 Black"
+},
+"20": {
+"n": "Type",
+"src": "HERO11 Black"
+},
+"21": {
+"n": "Pair time",
+"src": "HERO11 Black"
+},
+"22": {
+"n": "State",
+"src": "HERO11 Black"
+},
+"23": {
+"n": "Scan time msec",
+"src": "HERO11 Black"
+},
+"24": {
+"n": "Provision status",
+"src": "HERO11 Black"
+},
+"26": {
+"n": "Remote control version",
+"src": "HERO11 Black"
+},
+"27": {
+"n": "Remote control connected",
+"src": "HERO11 Black"
+},
+"28": {
+"n": "Pairing",
+"src": "HERO11 Black"
+},
+"29": {
+"n": "Wlan ssid",
+"src": "HERO11 Black"
+},
+"3": {
+"n": "External battery present",
+"src": "HERO11 Black"
+},
+"30": {
+"n": "Ap ssid",
+"src": "HERO11 Black"
+},
+"31": {
+"n": "App count",
+"src": "HERO11 Black"
+},
+"32": {
+"n": "Enable",
+"src": "HERO11 Black"
+},
+"33": {
+"n": "Sd status",
+"src": "HERO11 Black"
+},
+"34": {
+"n": "Remaining photos",
+"src": "HERO11 Black"
+},
+"35": {
+"n": "Remaining video time",
+"src": "HERO11 Black"
+},
+"36": {
+"n": "Num group photos",
+"src": "HERO11 Black"
+},
+"37": {
+"n": "Num group videos",
+"src": "HERO11 Black"
+},
+"38": {
+"n": "Num total photos",
+"src": "HERO11 Black"
+},
+"39": {
+"n": "Num total videos",
+"src": "HERO11 Black"
+},
+"4": {
+"n": "External battery level",
+"src": "HERO11 Black"
+},
+"40": {
+"n": "Date time",
+"src": "HERO9 Black"
+},
+"41": {
+"n": "Ota status",
+"src": "HERO11 Black"
+},
+"42": {
+"n": "Download cancel request pending",
+"src": "HERO11 Black"
+},
+"45": {
+"n": "Camera locate active",
+"src": "HERO11 Black"
+},
+"49": {
+"n": "Multi shot count down",
+"src": "HERO11 Black"
+},
+"54": {
+"n": "Remaining space",
+"src": "HERO11 Black"
+},
+"55": {
+"n": "Supported",
+"src": "HERO11 Black"
+},
+"56": {
+"n": "Wifi bars",
+"src": "HERO11 Black"
+},
+"57": {
+"n": "Current time msec",
+"src": "HERO9 Black"
+},
+"58": {
+"n": "Num hilights",
+"src": "HERO11 Black"
+},
+"59": {
+"n": "Last hilight time msec",
+"src": "HERO11 Black"
+},
+"6": {
+"n": "System hot",
+"src": "HERO11 Black"
+},
+"60": {
+"n": "Next poll msec",
+"src": "HERO11 Black"
+},
+"61": {
+"n": "Analytics ready",
+"src": "HERO11 Black"
+},
+"62": {
+"n": "Analytics size",
+"src": "HERO11 Black"
+},
+"63": {
+"n": "In contextual menu",
+"src": "HERO11 Black"
+},
+"64": {
+"n": "Remaining timelapse time",
+"src": "HERO11 Black"
+},
+"65": {
+"n": "Exposure select type",
+"src": "HERO11 Black"
+},
+"66": {
+"n": "Exposure select x",
+"src": "HERO11 Black"
+},
+"67": {
+"n": "Exposure select y",
+"src": "HERO11 Black"
+},
+"68": {
+"n": "Gps status",
+"src": "HERO11 Black"
+},
+"69": {
+"n": "Ap state",
+"src": "HERO11 Black"
+},
+"70": {
+"n": "Internal battery percentage",
+"src": "HERO11 Black"
+},
+"74": {
+"n": "Acc mic status",
+"src": "HERO11 Black"
+},
+"75": {
+"n": "Digital zoom",
+"src": "HERO11 Black"
+},
+"76": {
+"n": "Wireless band",
+"src": "HERO11 Black"
+},
+"77": {
+"n": "Digital zoom active",
+"src": "HERO11 Black"
+},
+"78": {
+"n": "Mobile friendly video",
+"src": "HERO11 Black"
+},
+"79": {
+"n": "First time use",
+"src": "HERO10 Black"
+},
+"8": {
+"n": "System busy",
+"src": "HERO11 Black"
+},
+"81": {
+"n": "Band 5ghz avail",
+"src": "HERO11 Black"
+},
+"82": {
+"n": "System ready",
+"src": "HERO11 Black"
+},
+"83": {
+"n": "Batt okay for ota",
+"src": "HERO11 Black"
+},
+"85": {
+"n": "Video low temp alert",
+"src": "HERO11 Black"
+},
+"86": {
+"n": "Actual orientation",
+"src": "HERO11 Black"
+},
+"88": {
+"n": "Zoom while encoding",
+"src": "HERO11 Black"
+},
+"89": {
+"n": "Current mode",
+"src": "HERO11 Black"
+},
+"9": {
+"n": "Quick capture active",
+"src": "HERO11 Black"
+},
+"90": {
+"n": "Protune default",
+"src": "HERO11 Black"
+},
+"91": {
+"n": "Logs ready",
+"src": "HERO11 Black"
+},
+"93": {
+"n": "Active video presets",
+"src": "HERO11 Black"
+},
+"94": {
+"n": "Active photo presets",
+"src": "HERO11 Black"
+},
+"95": {
+"n": "Active timelapse presets",
+"src": "HERO11 Black"
+},
+"96": {
+"n": "Active presets group",
+"src": "HERO11 Black"
+},
+"97": {
+"n": "Active preset",
+"src": "HERO11 Black"
+},
+"98": {
+"n": "Preset modified",
+"src": "HERO11 Black"
+},
+"99": {
+"n": "Remaining live bursts",
+"src": "HERO11 Black"
+}
+}
+}

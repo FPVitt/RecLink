@@ -147,11 +147,24 @@ python3 tools/gen_catalog.py \
   --settings OpenGoPro/demos/python/sdk_wireless_camera_control/open_gopro/models/constants/settings.py \
   --settings-db tools/spec_settings_db.json \
   --extra-status '123=Active Preset Is Custom' --extra-status '28=Pairing State (Legacy)' \
+  --gpcontrol tools/gpcontrol_extract.json \
   -o www/catalog.js
 ```
 
 `tools/spec_settings_db.json` holds the settings and operations database
 embedded in the OpenGoPro spec site, extracted from its JS bundle.
+
+**Unofficial settings.** Cameras support about 40 settings the Open GoPro spec
+leaves out: Protune ISO Min/Max, shutter, EV, white balance, color, sharpness,
+bitrate, RAW audio, wind and 10-bit, plus streaming and setup options.
+`tools/gpcontrol_extract.json` names them. It comes from each camera's own
+`/gp/gpControl` settings dump, using HERO11, HERO10 and HERO9 dumps from
+[KonradIT/goprowifihack](https://github.com/KonradIT/goprowifihack)
+(Apache-2.0). The UI tags these settings **unofficial**. The camera may reject
+them, or they may differ across models and firmware. The same dumps also fill in
+option names that the spec database lacks for official settings. To rebuild the
+extract from raw dumps, pass `--gpcontrol HERO11.json --gpcontrol HERO10.json …
+--write-gpcontrol-extract tools/gpcontrol_extract.json`.
 
 ## Known limits
 

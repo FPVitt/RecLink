@@ -633,16 +633,19 @@ function renderSettings() {
       return h('option', { value: v, selected: cur && beInt(cur.raw) === +v, class: ok ? '' : 'dim' }, `${nm} (${v})${ok ? '' : ' ✕'}`);
     }), h('option', { value: '' }, 'custom…'));
     const custom = h('input', { class: 'small', placeholder: 'value' });
-    rows.push(h('tr', {}, h('td', {}, id), h('td', {}, d.n, h('small', {}, ' ' + (d.f || 'int8ub'))), h('td', { class: cur ? '' : 'dim' }, cur ? fmtSetting(+id, cur.raw) : '—'),
+    rows.push(h('tr', {}, h('td', {}, id), h('td', {}, d.n, h('small', {}, ' ' + (d.f || 'int8ub')), unofficialTag(d)), h('td', { class: cur ? '' : 'dim' }, cur ? fmtSetting(+id, cur.raw) : '—'),
       h('td', {}, sel, custom, h('button', { onclick: () => setSetting(+id, sel.value !== '' ? sel.value : custom.value, d.f) }, 'Set'),
         h('button', { onclick: () => sendMsg('0076', Uint8Array.of(+id < 256 ? 0x12 : 0x15, ...(+id < 256 ? [+id] : beBytes(+id, 2))), 'Get setting ' + id).catch(e => toast(e.message, true)) }, 'Get'))));
   }
   $('#s-model').textContent = ci >= 0 ? `Camera: ${OGP.CAMS[ci]}` : STATE.hw ? `Camera: ${STATE.hw.model_name} (not in spec DB)` : 'Camera model unknown — run Get Hardware Info to filter options';
   $('#settings-body').replaceChildren(...rows);
 }
+// Settings/statuses absent from the Open GoPro spec, named from a camera's
+// gpControl dump: may be rejected or behave differently on other models/firmware.
+const unofficialTag = d => d && d.u ? h('span', { class: 'tag warn', title: `Not in the Open GoPro spec. Name from the ${d.src || 'camera'} gpControl settings dump.` }, 'unofficial') : null;
 function setSetting(id, v, fmt) {
   if (v === '' || v == null) return toast('pick a value', true);
-  const n = fmt === 'int64ub' ? 8 : 1;
+  const n = fmt === 'int64ub' ? 8 : fmt === 'int32ub' ? 4 : 1;
   const val = beBytes(BigInt(v), n);
   const msg = id < 256 ? cat(Uint8Array.of(id, n), val) : cat(Uint8Array.of(0xFF), beBytes(id, 2), Uint8Array.of(n), val);
   sendMsg('0074', msg, `Set ${(OGP.SETTING[id] || {}).n || id} = ${v}`).catch(e => toast(e.message, true));
@@ -653,7 +656,7 @@ function renderStatuses() {
   const ids = new Set([...Object.keys(OGP.STATUS), ...Object.keys(STATE.status)]);
   const rows = [...ids].map(Number).sort((a, b) => a - b).filter(id => !q || (id + ' ' + ((OGP.STATUS[id] || {}).n || '')).toLowerCase().includes(q)).map(id => {
     const cur = STATE.status[id], d = OGP.STATUS[id] || { n: '(not in catalog)' };
-    return h('tr', { class: cur && now - cur.t < 1500 ? 'flash' : '' }, h('td', {}, id), h('td', {}, d.n), h('td', { class: cur ? '' : 'dim' }, cur ? fmtStatus(id, cur.raw) : '—'),
+    return h('tr', { class: cur && now - cur.t < 1500 ? 'flash' : '' }, h('td', {}, id), h('td', {}, d.n, unofficialTag(d)), h('td', { class: cur ? '' : 'dim' }, cur ? fmtStatus(id, cur.raw) : '—'),
       h('td', { class: 'mono' }, cur ? hex(cur.raw) : ''), h('td', { class: 'dim' }, cur ? Math.round((now - cur.t) / 1000) + ' s ago' : ''));
   });
   $('#status-body').replaceChildren(...rows);
