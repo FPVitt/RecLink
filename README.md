@@ -146,6 +146,16 @@ implements `camera_driver_t` — it never touches core code.
 
 ---
 
+## GoPro BLE debug firmware
+
+[`gopro_ble_debug/`](gopro_ble_debug/README.md) is a separate image for
+bench-debugging the camera link. It exposes every Open GoPro BLE command
+(TLV, settings, queries, protobuf, raw GATT) from a Wi-Fi web page and shows
+all camera traffic decoded. Upload it through this firmware's OTA page. It
+shares the partition table and BLE bonds with this firmware, never touches its
+settings, and its Firmware tab boots this firmware back from the other OTA
+slot in one click.
+
 ## Status
 
 Early development. The firmware builds for both targets and the full feature set

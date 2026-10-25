@@ -1,0 +1,72 @@
+# GOPRO-BLE-DEBUG common defaults. Anything that touches flash layout, the
+# bootloader contract or the shared NVS bond store is kept IDENTICAL to the
+# original RecLink firmware (../sdkconfig.defaults) so both images can be
+# OTA-swapped and share the NimBLE bond with the camera.
+
+# --- Partition table: the original's, by reference -------------------------
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../partitions.csv"
+
+# --- App / OTA: rollback stays on. This image marks itself valid only once
+#     the Wi-Fi portal is up, so a build that can't reach the portal is rolled
+#     back to the original firmware by the bootloader on the next reset.
+CONFIG_APP_PROJECT_VER_FROM_CONFIG=n
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+CONFIG_FREERTOS_HZ=1000
+
+# --- Task watchdog: on, but no panic (debug tool, keep running) -----------
+CONFIG_ESP_TASK_WDT_INIT=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=8
+CONFIG_ESP_TASK_WDT_PANIC=n
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_7=y
+
+# --- Bluetooth: NimBLE central. Bond-store settings MATCH the original so the
+#     "nimble_bond" NVS namespace is read/written in the same layout.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=n
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_BONDS=4
+CONFIG_BT_NIMBLE_MAX_CCCDS=20
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_SM_SC=y
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=5120
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
+
+# --- Wi-Fi AP + lwIP sized for OTA uploads (same as the original) ---------
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=12
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=24
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_RX_BA_WIN=12
+CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
+CONFIG_LWIP_TCP_WND_DEFAULT=20480
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=20480
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=16
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=32
+CONFIG_LWIP_TCP_MSS=1436
+
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=256
+
+CONFIG_NVS_ASSERT_ERROR_CHECK=n
+
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_COLORS=n
+CONFIG_LOG_TIMESTAMP_SOURCE_RTOS=y
+
+# Wi-Fi portal and BLE link run at the same time here (that's the point).
+CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
+
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y

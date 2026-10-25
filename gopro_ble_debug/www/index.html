@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoPro BLE Debug</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><b>RecLink</b> GOPRO-BLE-DEBUG <span id="hdr-link" class="dot"></span></div>
+  <span id="pill" class="pill idle">idle</span>
+  <small id="hdr-fw"></small>
+</header>
+<nav>
+  <button data-tab="connect">Connect</button>
+  <button data-tab="commands">Commands</button>
+  <button data-tab="settings">Settings</button>
+  <button data-tab="statuses">Statuses</button>
+  <button data-tab="gatt">GATT</button>
+  <button data-tab="log">Log</button>
+  <button data-tab="firmware">Firmware</button>
+</nav>
+<main>
+
+<section id="tab-connect" class="tab">
+  <div class="grid2">
+    <div class="card">
+      <h3>Scan</h3>
+      <div class="row">
+        <button id="scan-start" class="pri">Scan</button><button id="scan-stop">Stop</button>
+        <label class="inl">for <input id="scan-secs" type="number" value="10" min="0" class="small"> s (0 = forever)</label>
+        <label class="chk"><input id="scan-act" type="checkbox" checked>active</label>
+        <label class="chk"><input id="scan-gp" type="checkbox" checked>GoPro only</label>
+      </div>
+      <p class="note">First pairing: put the camera in pairing mode (camera menu → Connections → Connect Device → Quik / GoPro App). A camera already paired with the original RecLink firmware reconnects with the stored bond.</p>
+      <div class="tw"><table><thead><tr><th>Name</th><th>Address</th><th>RSSI</th><th>Advert</th><th></th></tr></thead><tbody id="dev-body"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h3>Link</h3>
+      <div id="conn-state" class="kvs"></div>
+      <div class="row">
+        <button id="btn-disc">Disconnect</button><button id="btn-sec">Pair / Encrypt</button>
+        <button id="btn-gatt">Discover GATT</button><button id="btn-suball">Subscribe all</button><button id="btn-mtu">MTU</button>
+      </div>
+      <div class="row">
+        <span>On connect:</span>
+        <label class="chk"><input id="a-sec" type="checkbox" checked>pair/encrypt</label>
+        <label class="chk"><input id="a-disc" type="checkbox" checked>discover</label>
+        <label class="chk"><input id="a-sub" type="checkbox" checked>subscribe all</label>
+      </div>
+      <div class="row"><label class="chk"><input id="ka" type="checkbox">Keep-alive every 3 s (setting 91 = 0x42)</label></div>
+      <h3>GoPro setup</h3>
+      <p class="note">Waits for BLE readiness (polls Get Hardware Info), optionally finishes pairing, reads version / clock / capabilities, registers for all status, setting and capability pushes, and turns keep-alive on.</p>
+      <div class="row"><button id="btn-setup" class="pri">Run setup</button><label class="chk"><input id="setup-pair" type="checkbox">send "Set Pairing State" (first pair)</label></div>
+      <div id="setup-log" class="steps"></div>
+      <div id="hw" class="kvs"></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-commands" class="tab" hidden>
+  <div class="cmds">
+    <div class="oplist">
+      <input id="op-q" placeholder="search commands, IDs, messages…">
+      <div id="op-list"></div>
+    </div>
+    <div>
+      <div id="op-form" class="card"></div>
+      <div class="card">
+        <h3>Raw message</h3>
+        <div class="row">
+          <select id="raw-h"></select>
+          <input id="raw-hex" class="mono grow" placeholder="hex payload, e.g. 01 01 01">
+        </div>
+        <div class="row">
+          <label class="chk"><input id="raw-gp" type="checkbox" checked>wrap in Open GoPro packet headers</label>
+          <label class="chk"><input id="raw-rsp-w" type="checkbox" checked>write with response</label>
+          <button id="raw-send" class="pri">Send</button>
+        </div>
+        <div id="raw-rsp" class="rsp"></div>
+      </div>
+      <div class="card"><h3>Recent messages</h3><div id="cmd-log" class="log mini"></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-settings" class="tab" hidden>
+  <div class="row">
+    <button id="s-getall" class="pri">Get all</button><button id="s-reg">Register all</button><button id="s-caps">Get capabilities</button>
+    <input id="s-q" placeholder="filter">
+    <label class="chk"><input id="s-only" type="checkbox" checked>only settings for this camera</label>
+    <small id="s-model"></small>
+  </div>
+  <p class="note">✕ = option not supported by this camera model (spec DB) or not in the camera's current capability list.</p>
+  <div class="tw"><table><thead><tr><th>ID</th><th>Setting</th><th>Current</th><th>Set</th></tr></thead><tbody id="settings-body"></tbody></table></div>
+</section>
+
+<section id="tab-statuses" class="tab" hidden>
+  <div class="row">
+    <button id="st-getall" class="pri">Get all</button><button id="st-reg">Register all (push)</button><button id="st-unreg">Unregister all</button>
+    <input id="st-q" placeholder="filter">
+  </div>
+  <div class="tw"><table><thead><tr><th>ID</th><th>Status</th><th>Value</th><th>Raw</th><th>Updated</th></tr></thead><tbody id="status-body"></tbody></table></div>
+</section>
+
+<section id="tab-gatt" class="tab" hidden>
+  <p><b id="gatt-sum"></b> — R read · W write · Wn write-no-response · N notify · I indicate</p>
+  <div class="tw"><table><thead><tr><th>Handle</th><th>Characteristic</th><th>Props</th><th>CCCD</th><th>Read / Subscribe</th><th>Write</th></tr></thead><tbody id="gatt-body"></tbody></table></div>
+</section>
+
+<section id="tab-log" class="tab" hidden>
+  <div class="row">
+    <label class="chk"><input id="f-raw" type="checkbox">raw packets</label>
+    <label class="chk"><input id="f-ka" type="checkbox">keep-alive</label>
+    <label class="chk"><input id="f-follow" type="checkbox" checked>follow</label>
+    <input id="f-q" placeholder="filter text / hex">
+    <button id="log-clear">Clear</button><button id="log-export">Export JSON</button>
+  </div>
+  <div id="log" class="log"></div>
+</section>
+
+<section id="tab-firmware" class="tab" hidden>
+  <div class="grid2">
+    <div class="card">
+      <h3>Firmware slots</h3>
+      <div id="slots" class="grid2"></div>
+      <p class="note">This debug image was flashed into the spare OTA slot, so the original RecLink firmware is still in the other slot. "Boot" switches back instantly, no upload. To return to debug later, upload <code>gopro_ble_debug.bin</code> from the original portal's firmware update.</p>
+      <div class="row"><button id="boot-other" class="pri">Boot other slot</button><button id="reboot">Reboot</button></div>
+      <h3>Upload firmware (.bin)</h3>
+      <p class="note">Writes the other slot (overwriting what is there) and reboots into it. Use <code>fc_cam_bridge.bin</code> for the original firmware.</p>
+      <div class="row"><input id="ota-file" type="file" accept=".bin"><button id="ota-go">Upload</button></div>
+      <progress id="ota-bar" max="1" value="0"></progress>
+    </div>
+    <div class="card">
+      <h3>BLE bonds</h3>
+      <p class="note bad">Shared with the original firmware. Deleting a bond means re-pairing that camera there too.</p>
+      <div id="bonds"></div>
+      <div class="row"><button id="bonds-all" class="danger">Delete all bonds</button></div>
+      <h3>Device log <button id="syslog-refresh">Refresh</button></h3>
+      <pre id="syslog" class="syslog"></pre>
+      <p class="dim small">Decode tables: <span id="catrev"></span></p>
+    </div>
+  </div>
+</section>
+</main>
+<div id="toasts"></div>
+<script src="/catalog.js"></script>
+<script src="/ops.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

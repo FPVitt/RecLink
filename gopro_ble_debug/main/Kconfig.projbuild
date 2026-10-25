@@ -1,0 +1,28 @@
+menu "GOPRO-BLE-DEBUG"
+
+config DBG_AP_SSID_PREFIX
+    string "Wi-Fi AP SSID prefix"
+    default "RECLINK-DBG"
+    help
+        The AP is named <prefix>-XXXX (last two MAC bytes), distinct from the
+        original firmware's RECLINK-XXXX so you can tell which image is running.
+
+config DBG_AP_PASSWORD
+    string "Wi-Fi AP password (>= 8 chars, empty = open)"
+    default "reclinkfpv"
+
+config DBG_AP_CHANNEL
+    int "Wi-Fi AP channel"
+    range 1 13
+    default 1
+
+config DBG_LED_GPIO
+    int "Status LED GPIO (-1 = none)"
+    range -1 48
+    default -1
+
+config DBG_LED_ACTIVE_LOW
+    bool "Status LED is active-low"
+    default n
+
+endmenu
