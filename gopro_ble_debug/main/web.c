@@ -321,11 +321,16 @@ static esp_err_t h_write(httpd_req_t *r)
 {
     cJSON *j = read_json(r);
     if (!j) { return send_result(r, ESP_ERR_INVALID_ARG); }
-    static uint8_t buf[8192];
-    int n = parse_hex(jstr(j, "hex"), buf, sizeof(buf));
+    // Sized per request: almost every message is a few bytes, and a static
+    // 8 KB buffer cost heap the Wi-Fi stack needs at runtime.
+    const char *hx = jstr(j, "hex");
+    size_t cap = hx ? strlen(hx) / 2 + 1 : 1;
+    uint8_t *buf = cap <= 8192 ? malloc(cap) : NULL;
+    int n = buf ? parse_hex(hx, buf, (int)cap) : -1;
     int h = jint(j, "handle", 0);
-    esp_err_t e = (n <= 0 || h <= 0) ? ESP_ERR_INVALID_ARG
+    esp_err_t e = !buf ? ESP_ERR_NO_MEM : (n <= 0 || h <= 0) ? ESP_ERR_INVALID_ARG
                 : dbg_ble_write((uint16_t)h, buf, (size_t)n, jint(j, "gopro", 1), jint(j, "rsp", 1));
+    free(buf);
     cJSON_Delete(j);
     return send_result(r, e);
 }
@@ -411,7 +416,7 @@ static esp_err_t h_events(httpd_req_t *r)
 
 static esp_err_t h_log(httpd_req_t *r)
 {
-    static char buf[6144];
+    static char buf[4096];      // = SYSLOG_BYTES (evlog.c)
     size_t n = syslog_dump(buf, sizeof(buf));
     httpd_resp_set_type(r, "text/plain");
     return httpd_resp_send(r, buf, n);
@@ -484,7 +489,7 @@ static esp_err_t h_ota(httpd_req_t *r)
         OTA_FAIL("500 Internal Server Error", "ota_begin");
     }
 
-    #define OTA_BUF 16384
+    #define OTA_BUF 8192
     static uint8_t buf[OTA_BUF];
     int remaining = total, timeouts = 0;
     bool started = false;

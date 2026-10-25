@@ -113,7 +113,8 @@ void app_main(void)
     ESP_ERROR_CHECK(web_start());
     app_mark_valid();
 
-    if (CONFIG_DBG_LED_GPIO >= 0) { xTaskCreate(led_task, "led", 2048, NULL, 1, NULL); }
+    // 3 KB: gpio_reset_pin()/gpio_set_direction() log through ESP_LOG.
+    if (CONFIG_DBG_LED_GPIO >= 0) { xTaskCreate(led_task, "led", 3072, NULL, 1, NULL); }
     evlog_text(EV_SYS, "ready: join Wi-Fi '%s', open http://10.0.0.1", wifi_ap_ssid());
     ESP_LOGI(TAG, "boot headroom: main stack %u B unused, heap %u B free (min %u)",
              (unsigned)(uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t)),

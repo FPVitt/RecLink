@@ -12,7 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define EV_SLOTS 96              // ~26 KB; about 10 s of a busy GoPro link
+#define EV_SLOTS 64              // ~17 KB; the UI drains it every 200 ms
 
 static ev_t        s_ring[EV_SLOTS];
 static uint32_t    s_next = 1;   // seq of the next entry; 0 is "from the start"
@@ -70,29 +70,46 @@ uint32_t evlog_next_seq(void) { return s_next; }
 uint32_t evlog_oldest_seq(void) { return s_next > EV_SLOTS ? s_next - EV_SLOTS : 1; }
 
 // ---- ESP_LOG mirror ------------------------------------------------------
-#define SYSLOG_BYTES 6144
+#define SYSLOG_BYTES 4096
 static char     s_sys[SYSLOG_BYTES];
 static size_t   s_sys_head;          // next write offset
 static bool     s_sys_wrapped;
 static vprintf_like_t s_prev_vprintf;
 
+// This hook runs on the stack of EVERY task that logs, including small IDF
+// system tasks. It must cost no more than the default vprintf: format ONCE,
+// into a static buffer (never a stack buffer, never a second vsnprintf), then
+// print that. A second formatting pass here overflowed a 2 KB task at boot.
+static char          s_line[256];
+static volatile bool s_line_busy;
+
 static int syslog_vprintf(const char *fmt, va_list ap)
 {
-    char line[192];
+    bool mine = false;
+    taskENTER_CRITICAL(&s_mux);
+    if (!s_line_busy) { s_line_busy = mine = true; }
+    taskEXIT_CRITICAL(&s_mux);
+    if (!mine) {                 // another task is mid-line: print, skip the mirror
+        return s_prev_vprintf ? s_prev_vprintf(fmt, ap) : vprintf(fmt, ap);
+    }
     va_list cp;
     va_copy(cp, ap);
-    int n = vsnprintf(line, sizeof(line), fmt, cp);
+    int n = vsnprintf(s_line, sizeof(s_line), fmt, cp);
     va_end(cp);
-    if (n > 0) {
-        if (n >= (int)sizeof(line)) { n = sizeof(line) - 1; }
+    int ret;
+    if (n >= 0 && n < (int)sizeof(s_line)) {
         taskENTER_CRITICAL(&s_mux);
         for (int i = 0; i < n; i++) {
-            s_sys[s_sys_head++] = line[i];
+            s_sys[s_sys_head++] = s_line[i];
             if (s_sys_head == SYSLOG_BYTES) { s_sys_head = 0; s_sys_wrapped = true; }
         }
         taskEXIT_CRITICAL(&s_mux);
+        ret = fputs(s_line, stdout) < 0 ? -1 : n;
+    } else {                     // too long for the mirror: console only, untruncated
+        ret = s_prev_vprintf ? s_prev_vprintf(fmt, ap) : vprintf(fmt, ap);
     }
-    return s_prev_vprintf ? s_prev_vprintf(fmt, ap) : vprintf(fmt, ap);
+    s_line_busy = false;
+    return ret;
 }
 
 void syslog_hook_init(void) { s_prev_vprintf = esp_log_set_vprintf(syslog_vprintf); }
