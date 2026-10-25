@@ -7,6 +7,9 @@
 #include "esp_log.h"
 #include "esp_bt.h"
 #include "nvs_flash.h"
+#include "monoclock.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -32,8 +35,109 @@ static uint16_t s_mtu;
 static bool     s_host_synced;
 
 #define MAX_CHRS 24
-static struct { ble_uuid_any_t uuid; uint16_t val_handle; } s_chrs[MAX_CHRS];
+static struct { ble_uuid_any_t uuid; uint16_t val_handle; uint16_t cccd_handle; } s_chrs[MAX_CHRS];
 static int s_chr_n;
+
+// ---------------------------------------------------------------------------
+// Serialized ATT write queue.
+//
+// ATT allows exactly ONE outstanding request per link. Firing write-REQUESTS
+// back-to-back gets all but the first rejected by the host, and since callers
+// are fire-and-forget (spec 1.2.4) nobody notices: that is why GoPro push
+// registration never took effect -- gp_pull_all() issued 16 write-requests in
+// a row and only the first reached the camera.
+//
+// So every write is queued here and sent one at a time: a write-REQUEST holds
+// the queue until its completion callback lands; a write-COMMAND (no response)
+// is unacknowledged and so is sent straight through. Enqueue happens on
+// cam_task, completion on the NimBLE host task, hence the mutex -- held only
+// to touch the ring, never across the GATT call itself.
+// ---------------------------------------------------------------------------
+#define WRQ_DEPTH     16
+#define WRQ_DATA_MAX  72     // GoPro packets are <= 20 B; DUML frames <= ~64 B
+#define WRQ_STALL_MS  3000   // a request outstanding this long = something is wrong
+
+typedef struct {
+    uint16_t handle;
+    uint16_t len;
+    bool     with_rsp;
+    uint8_t  data[WRQ_DATA_MAX];
+} wr_item_t;
+
+static wr_item_t s_wrq[WRQ_DEPTH];
+static uint8_t   s_wrq_head, s_wrq_tail, s_wrq_count;
+static bool      s_wr_inflight;
+static uint32_t  s_wr_inflight_ms;
+static SemaphoreHandle_t s_wrq_lock;
+static StaticSemaphore_t s_wrq_lock_buf;
+
+static void wrq_lock(void)   { if (s_wrq_lock) { xSemaphoreTake(s_wrq_lock, portMAX_DELAY); } }
+static void wrq_unlock(void) { if (s_wrq_lock) { xSemaphoreGive(s_wrq_lock); } }
+
+static void wrq_reset(void)
+{
+    wrq_lock();
+    s_wrq_head = s_wrq_tail = s_wrq_count = 0;
+    s_wr_inflight = false;
+    wrq_unlock();
+}
+
+static void wrq_pump(void);
+
+static int on_write_done(uint16_t conn, const struct ble_gatt_error *err,
+                         struct ble_gatt_attr *attr, void *arg)
+{
+    (void)conn; (void)attr; (void)arg;
+    if (err && err->status != 0) {
+        ESP_LOGW(TAG, "ATT write failed: %d", err->status);
+    }
+    wrq_lock();
+    s_wr_inflight = false;
+    wrq_unlock();
+    wrq_pump();          // next queued write, if any
+    return 0;
+}
+
+// Sends queued writes until a write-request is left in flight (or the queue
+// drains). Safe to call from either task; the GATT calls happen outside the lock.
+static void wrq_pump(void)
+{
+    for (;;) {
+        wr_item_t it;
+
+        wrq_lock();
+        if (s_wr_inflight) {
+            // Self-heal: never let one lost completion wedge the link (and with
+            // it the 3 s keep-alive, which would let the camera sleep).
+            if ((uint32_t)(now_ms() - s_wr_inflight_ms) < WRQ_STALL_MS) { wrq_unlock(); return; }
+            ESP_LOGW(TAG, "ATT write stalled %lu ms -- continuing",
+                     (unsigned long)(now_ms() - s_wr_inflight_ms));
+            s_wr_inflight = false;
+        }
+        if (s_wrq_count == 0 || s_conn == BLE_HS_CONN_HANDLE_NONE) { wrq_unlock(); return; }
+        it = s_wrq[s_wrq_tail];
+        s_wrq_tail = (uint8_t)((s_wrq_tail + 1) % WRQ_DEPTH);
+        s_wrq_count--;
+        if (it.with_rsp) { s_wr_inflight = true; s_wr_inflight_ms = now_ms(); }
+        wrq_unlock();
+
+        int rc;
+        if (it.with_rsp) {
+            rc = ble_gattc_write_flat(s_conn, it.handle, it.data, it.len, on_write_done, NULL);
+            if (rc != 0) {
+                // Nothing will complete it -- drop it and keep the queue moving.
+                ESP_LOGW(TAG, "write_flat h=%u rc=%d", it.handle, rc);
+                wrq_lock();
+                s_wr_inflight = false;
+                wrq_unlock();
+                continue;
+            }
+            return;      // wait for on_write_done
+        }
+        rc = ble_gattc_write_no_rsp_flat(s_conn, it.handle, it.data, it.len);
+        if (rc != 0) { ESP_LOGW(TAG, "write_no_rsp h=%u rc=%d", it.handle, rc); }
+    }
+}
 
 // ---- helpers ---------------------------------------------------------
 static void emit(ble_central_evt_t ev, int status)
@@ -94,6 +198,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_conn = BLE_HS_CONN_HANDLE_NONE;
         s_chr_n = 0;
         s_mtu = 0;
+        wrq_reset();        // nothing queued is deliverable now (spec 5.1: drop, don't buffer)
         emit(BLE_EVT_DISCONNECTED, event->disconnect.reason);
         break;
     case BLE_GAP_EVENT_ENC_CHANGE:
@@ -129,16 +234,47 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 }
 
 // ---- GATT discovery ----------------------------------------------
+// Two passes: characteristics, then every descriptor. The second pass is what
+// gives us real CCCD handles -- assuming val_handle+1 happens to be right on
+// today's GoPro and DJI firmware, but it is not guaranteed by GATT and would
+// fail silently (subscribed to nothing, no notifications, no error) if either
+// vendor ever inserted another descriptor. The camera does not persist CCCDs,
+// so this runs on every connection.
+static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
+                  uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg)
+{
+    (void)conn; (void)arg;
+    if (err->status == 0 && dsc) {
+        if (ble_uuid_u16(&dsc->uuid.u) == BLE_GATT_DSC_CLT_CFG_UUID16) {
+            for (int i = 0; i < s_chr_n; i++) {
+                if (s_chrs[i].val_handle == chr_val_handle) {
+                    s_chrs[i].cccd_handle = dsc->handle;
+                    break;
+                }
+            }
+        }
+    } else if (err->status == BLE_HS_EDONE) {
+        emit(BLE_EVT_DISC_DONE, 0);     // characteristics + descriptors both done
+    } else if (err->status != 0) {
+        emit(BLE_EVT_DISC_FAIL, err->status);
+    }
+    return 0;
+}
+
 static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
                   const struct ble_gatt_chr *chr, void *arg)
 {
-    (void)conn; (void)arg;
+    (void)arg;
     if (err->status == 0 && chr && s_chr_n < MAX_CHRS) {
         ble_uuid_copy(&s_chrs[s_chr_n].uuid, &chr->uuid.u);
         s_chrs[s_chr_n].val_handle = chr->val_handle;
+        s_chrs[s_chr_n].cccd_handle = 0;
         s_chr_n++;
     } else if (err->status == BLE_HS_EDONE) {
-        emit(BLE_EVT_DISC_DONE, 0);
+        // Now sweep descriptors; DISC_DONE is emitted when that finishes.
+        if (ble_gattc_disc_all_dscs(conn, 1, 0xffff, on_dsc, NULL) != 0) {
+            emit(BLE_EVT_DISC_FAIL, BLE_HS_EUNKNOWN);
+        }
     } else if (err->status != 0) {
         emit(BLE_EVT_DISC_FAIL, err->status);
     }
@@ -215,19 +351,49 @@ esp_err_t ble_central_secure(void)
     return (rc == 0 || rc == BLE_HS_EALREADY) ? ESP_OK : ESP_FAIL;
 }
 
+// Queues the write; ESP_OK means "accepted for transmission", not "delivered"
+// (the fire-and-forget contract, spec 1.2.4). See the write-queue comment above.
 esp_err_t ble_central_write(uint16_t h, const void *data, uint16_t len, bool with_rsp)
 {
     if (s_conn == BLE_HS_CONN_HANDLE_NONE || !h) { return ESP_ERR_INVALID_STATE; }
-    int rc = with_rsp ? ble_gattc_write_flat(s_conn, h, data, len, NULL, NULL)
-                      : ble_gattc_write_no_rsp_flat(s_conn, h, data, len);
-    return rc == 0 ? ESP_OK : ESP_FAIL;
+    if (len > WRQ_DATA_MAX) {
+        ESP_LOGE(TAG, "write of %u B exceeds queue slot (%u)", len, (unsigned)WRQ_DATA_MAX);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    wrq_lock();
+    if (s_wrq_count >= WRQ_DEPTH) {
+        wrq_unlock();
+        ESP_LOGE(TAG, "ATT write queue full -- dropped write to h=%u", h);
+        return ESP_ERR_NO_MEM;
+    }
+    wr_item_t *it = &s_wrq[s_wrq_head];
+    it->handle = h;
+    it->len = len;
+    it->with_rsp = with_rsp;
+    memcpy(it->data, data, len);
+    s_wrq_head = (uint8_t)((s_wrq_head + 1) % WRQ_DEPTH);
+    s_wrq_count++;
+    wrq_unlock();
+
+    wrq_pump();
+    return ESP_OK;
 }
 
 esp_err_t ble_central_subscribe(uint16_t val_handle, bool enable)
 {
-    // CCCD sits at val_handle + 1 for well-behaved peers; both GoPro and DJI
-    // follow this. A full descriptor discovery would be more robust (VERIFY).
-    uint16_t cccd = val_handle + 1;
+    // Real CCCD handle from descriptor discovery. The val_handle+1 fallback
+    // only covers a peer whose descriptors we failed to enumerate -- it is what
+    // both vendors happen to use, but it is an assumption, so say so when we
+    // have to lean on it.
+    uint16_t cccd = 0;
+    for (int i = 0; i < s_chr_n; i++) {
+        if (s_chrs[i].val_handle == val_handle) { cccd = s_chrs[i].cccd_handle; break; }
+    }
+    if (!cccd) {
+        cccd = val_handle + 1;
+        ESP_LOGW(TAG, "no CCCD discovered for val handle %u -- assuming %u", val_handle, cccd);
+    }
     uint16_t v = enable ? 1 : 0;
     return ble_central_write(cccd, &v, sizeof(v), true);
 }
@@ -302,6 +468,9 @@ void ble_central_init(void)
     static bool done;
     if (done) { return; }
     done = true;
+
+    // Guards the ATT write ring, which cam_task fills and the host task drains.
+    s_wrq_lock = xSemaphoreCreateMutexStatic(&s_wrq_lock_buf);
 
     (void)nimble_port_init();
 

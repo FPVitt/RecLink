@@ -66,6 +66,23 @@ static void gp_pull_all(void);
 static bool     want_record_ack;
 static bool     want_record_target;
 
+// Open GoPro requires Get Hardware Info (0x3C) to be polled until it answers
+// with status 0 before ANY other command is sent -- that reply is the camera's
+// "BLE ready" signal. Until then this driver sends nothing but 0x3C retries;
+// sending queries earlier is why registration/get-alls could land before the
+// camera was listening. (Separate from cam_task's CAM_LINK_READY, which is the
+// link lifecycle state and must be reported promptly so ticks start running.)
+static bool     ble_ready;
+static uint32_t last_hwinfo_ms;
+static uint32_t hwinfo_first_ms;
+static uint16_t last_reasm_drops;
+#define HWINFO_RETRY_MS 500
+// Fail open: a camera that never answers 0x3C (unsupported, or an unexpected
+// status) must not leave us silent forever -- that would mean no telemetry at
+// all, which is worse than talking to a camera that may not be listening yet.
+// Give up waiting after this and carry on, loudly.
+#define HWINFO_GIVEUP_MS 3000
+
 // ---------------------------------------------------------------------------
 static int64_t epoch_from_civil_utc(int y, int m, int d, int hh, int mm, int ss)
 {
@@ -80,12 +97,20 @@ static int64_t epoch_from_civil_utc(int y, int m, int d, int hh, int mm, int ss)
 }
 
 // ---- low-level writers -------------------------------------------
-static void wr(uint16_t handle, const uint8_t *body, uint8_t n)
+// Splits the message into Open GoPro packets (<= 20 B each) and queues them.
+// ble_central serializes the queue, so a multi-packet message is delivered in
+// order and one ATT request at a time -- required, because ATT allows a single
+// outstanding request and the camera reassembles strictly in sequence.
+static void wr(uint16_t handle, const uint8_t *body, uint16_t n)
 {
     if (!handle) { return; }
-    uint8_t pkt[64];
-    size_t len = gopro_pack(pkt, sizeof(pkt), body, n);
-    if (len) { ble_central_write(handle, pkt, len, true); }
+    gopro_tx_t t;
+    gopro_tx_init(&t, body, n);
+    uint8_t pkt[GOPRO_PKT_MAX];
+    size_t len;
+    while ((len = gopro_tx_next(&t, pkt, sizeof(pkt))) > 0) {
+        if (ble_central_write(handle, pkt, len, true) != ESP_OK) { break; }
+    }
 }
 
 // ---- driver ops -------------------------------------------------
@@ -170,6 +195,33 @@ static esp_err_t gp_hilight(void)
 static esp_err_t gp_tick_1s(void)
 {
     uint32_t t0 = now_ms();
+
+    // Not BLE-ready yet: keep probing with Get Hardware Info and send nothing
+    // else, until the camera answers or we run out of patience.
+    if (!ble_ready) {
+        if (t0 - hwinfo_first_ms >= HWINFO_GIVEUP_MS) {
+            applog_note("gopro: no hardware-info reply in %u ms -- proceeding anyway",
+                        (unsigned)HWINFO_GIVEUP_MS);
+            ble_ready = true;
+            gp_pull_all();
+            return ESP_OK;
+        }
+        if (t0 - last_hwinfo_ms >= HWINFO_RETRY_MS) {
+            last_hwinfo_ms = t0;
+            uint8_t hw[1] = { 0x3C };
+            wr(h_cmd, hw, 1);
+        }
+        return ESP_OK;
+    }
+
+    // Reassembly drops mean notifications are being lost or are bigger than our
+    // buffer -- either way the OSD silently goes stale, so say it once per event.
+    uint16_t drops = (uint16_t)(rz_qry.drops + rz_cmd.drops + rz_set.drops);
+    if (drops != last_reasm_drops) {
+        last_reasm_drops = drops;
+        applog_note("gopro: %u dropped BLE message(s)", drops);
+    }
+
     // keepalive every 3 s (spec 6.4: must be < 10 s).
     if (t0 - last_keepalive_ms >= 3000) {
         last_keepalive_ms = t0;
@@ -177,9 +229,12 @@ static esp_err_t gp_tick_1s(void)
         wr(h_set, b, 3);
     }
 
-    // Polling fallback -- this firmware does not appear to honour our async-push
-    // registration (0x52/0x53), so nothing the user changes ON the camera
-    // (record, resolution, mode) ever pushes to us. Poll instead:
+    // Polling fallback. Pushes previously never arrived at all, which looked
+    // like the camera ignoring our 0x52/0x53 registration; the real cause was
+    // those registrations being dropped before they were sent (see
+    // gp_pull_all). With that fixed the pushes should do the work, but the
+    // poll stays until pushes are confirmed on real hardware -- it is cheap
+    // and a stale OSD is the one failure we care about here. Poll:
     //   get-all-STATUS   (0x13, small: encoding/battery/SD/busy) -- per-camera rate
     //   get-all-SETTINGS  (0x12, res/fps/lens)                   -- 3x that, min 3 s
     uint32_t t = t0;
@@ -238,8 +293,15 @@ static esp_err_t gp_link_up(bool first_pair)
     getall_retry = 0;
     last_getall_ms = now_ms();
     last_status_poll_ms = now_ms();
+    ble_ready = false;
+    last_reasm_drops = 0;
 
-    gp_pull_all();
+    // Nothing but the readiness probe until the camera answers it (spec: poll
+    // Get Hardware Info until status 0). gp_tick_1s retries; its reply kicks
+    // off registration and the initial reads.
+    last_hwinfo_ms = hwinfo_first_ms = now_ms();
+    uint8_t hw[1] = { 0x3C };
+    wr(h_cmd, hw, 1);
 
     applog_note("gopro link up%s", first_pair ? " (first pair)" : "");
     if (first_pair && CB->on_paired) {
@@ -256,10 +318,19 @@ static void gp_link_down(void)
 {
     h_cmd = h_set = h_qry = 0;
     want_record_ack = false;
+    ble_ready = false;      // re-probe 0x3C on the next connection
 }
 
-// Register for async updates (one ID per request -- the documented form) and
-// pull every value now. Shared by link-up and the portal "refresh" button.
+// Register for async updates and pull every value now. Shared by link-up (once
+// the camera reports BLE-ready) and the portal "refresh" button.
+//
+// A query request takes a LIST of element IDs, so this is two writes, not
+// fourteen. That matters: ATT allows one outstanding request at a time, so the
+// old one-ID-per-write loop had most of its registrations rejected and
+// silently dropped -- which is why camera-side changes never pushed to us and
+// the polling fallback below had to exist. (Registering for ALL IDs by sending
+// an empty list would also work, but then the camera pushes high-rate statuses
+// we don't use, e.g. 13 encoding duration and 49 interval countdown.)
 static void gp_pull_all(void)
 {
     static const uint8_t reg_st[]  = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
@@ -267,17 +338,29 @@ static void gp_pull_all(void)
                                        ST_SD_STATUS, ST_PRESET_GROUP };
     static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_ASPECT,
                                        SET_LENS, SET_BIT_DEPTH, SET_PROFILE };
-    for (unsigned i = 0; i < sizeof(reg_st); i++)  { uint8_t b[2] = { 0x53, reg_st[i] };  wr(h_qry, b, 2); }
-    for (unsigned i = 0; i < sizeof(reg_set); i++) { uint8_t b[2] = { 0x52, reg_set[i] }; wr(h_qry, b, 2); }
+    _Static_assert(sizeof(reg_st) >= sizeof(reg_set), "size b[] off the longer list");
+    uint8_t b[1 + sizeof(reg_st)];
+
+    b[0] = 0x53;                                   // register status updates
+    memcpy(b + 1, reg_st, sizeof(reg_st));
+    wr(h_qry, b, 1 + sizeof(reg_st));
+
+    b[0] = 0x52;                                   // register setting updates
+    memcpy(b + 1, reg_set, sizeof(reg_set));
+    wr(h_qry, b, 1 + sizeof(reg_set));
+
+    // The register replies already carry current values, but ask outright too:
+    // it also covers anything we read but didn't register for.
     uint8_t g13[1] = { 0x13 }; wr(h_qry, g13, 1);
     uint8_t g12[1] = { 0x12 }; wr(h_qry, g12, 1);
 }
 
 static esp_err_t gp_refresh(void)
 {
-    if (!h_qry) { return ESP_ERR_INVALID_STATE; }
+    if (!h_qry || !ble_ready) { return ESP_ERR_INVALID_STATE; }
     applog_note("gopro: manual refresh");
     gopro_reasm_reset(&rz_qry);
+    last_reasm_drops = 0;
     last_getall_ms = last_status_poll_ms = now_ms();
     gp_pull_all();
     return ESP_OK;
@@ -298,15 +381,6 @@ static uint32_t be(const uint8_t *p, uint8_t n)
 // Mutates the scratch in place; the caller (walk_tuples) commits once at the end.
 static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n)
 {
-    // Temporary: log the candidate mode/preset statuses (raw) so the right one
-    // can be identified from a capture while switching Photo<->Video.
-    switch (id) {
-    case 19: case 89: case 90: case 93: case 96: case 97: case 98: case 99:
-        ESP_LOGI(TAG, "status %3u len %u = %02x %02x %02x %02x", id, n,
-                 n > 0 ? v[0] : 0, n > 1 ? v[1] : 0, n > 2 ? v[2] : 0, n > 3 ? v[3] : 0);
-        break;
-    default: break;
-    }
     switch (id) {
     case ST_ENCODING: {
         tribool_t was = s->recording;
@@ -334,9 +408,6 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
     case ST_BATT_PCT: s->battery_pct.valid = true; s->battery_pct.v = v[0]; break;
     case ST_SD_REMAIN_KB:
         s->sd_remaining_kb.valid = true; s->sd_remaining_kb.v = be(v, n);
-        ESP_LOGI(TAG, "SD remaining: %lu KB (~%lu MB), field len %u",
-                 (unsigned long)s->sd_remaining_kb.v,
-                 (unsigned long)(s->sd_remaining_kb.v / 1024), n);
         break;
     case ST_REMAIN_VIDEO_S:
         s->rec_remaining_s.valid = true; s->rec_remaining_s.v = be(v, n); break;
@@ -430,23 +501,58 @@ static void walk_tuples(const uint8_t *p, uint16_t len, bool is_status)
     if (CB->on_state_dirty) { CB->on_state_dirty(); }   // commits + wakes osd_task
 }
 
+// Get Hardware Info (0x3C) response: [id][status] then length-value fields
+// in order -- model_number (u32 BE), model_name, deprecated, firmware_version,
+// serial_number, ap_ssid, ap_mac_address. We only want the two that identify
+// what we are actually talking to; they go in the log, which is where a
+// support question starts.
+static void parse_hw_info(const uint8_t *p, uint16_t len)
+{
+    char model[24] = "?", fw[24] = "?";
+    uint16_t i = 2;                       // past [id][status]
+    for (int field = 0; field < 7 && i < len; field++) {
+        uint8_t n = p[i++];
+        if (i + n > len) { break; }
+        if (field == 1 || field == 3) {   // model_name / firmware_version
+            char *dst = (field == 1) ? model : fw;
+            size_t cap = (field == 1) ? sizeof(model) : sizeof(fw);
+            size_t c = n < cap - 1 ? n : cap - 1;
+            memcpy(dst, p + i, c);
+            dst[c] = '\0';
+        }
+        i += n;
+    }
+    applog_note("gopro ready: %s fw %s", model, fw);
+}
+
 static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
 {
     if (len < 2) { return; }
     uint8_t cmd_id = p[0];
     uint8_t status = p[1];
-    if (cmd_id == 0x10 && status == 0 && len >= 12) {
-        // GET_DATE_TIME_DST (0x10) response.
-        // FIXME(protocol-verifier): UNRESOLVED -- the exact response framing is
-        // not documented in a machine-readable form. The Open GoPro Python SDK
-        // parser (DateTimeByteParserBuilder.parse) skips ONE leading byte
-        // (data[1:]) before the year, implying a payload length/count byte after
-        // [cmd_id][status]. If so, every field below is off by one and 'off'
-        // reads garbage. Needs a real HERO 11/12/13 BLE capture to confirm.
-        // Assumed here (no length byte): [id][st][yr hi][yr lo][mon][day][hr][min][sec][off hi][off lo][dst]
-        int y = (p[2] << 8) | p[3];
-        int mon = p[4], day = p[5], hh = p[6], mm = p[7], ss = p[8];
-        int16_t off = (int16_t)((p[9] << 8) | p[10]);
+
+    if (cmd_id == 0x3C) {
+        // The camera answers this with an error until its BLE stack is up.
+        if (status != 0) { return; }
+        parse_hw_info(p, len);
+        if (!ble_ready) {
+            ble_ready = true;
+            gp_pull_all();         // now safe to register for pushes + read values
+        }
+        return;
+    }
+    if (cmd_id == 0x10 && status == 0 && len >= 13) {
+        // GET_DATE_TIME_DST (0x10) response. Resolved: there IS a
+        // response_length byte after [cmd_id][status] -- TLV command responses
+        // are length-value sequences, and the Open GoPro Python SDK's parser
+        // (DateTimeByteParserBuilder.parse) skips exactly that byte before the
+        // year. Reading it as part of the date made every field one byte early,
+        // so the year was (len<<8)|year_hi and the UTC offset was garbage.
+        //   [id][status][response_length][yyyy BE][mm][dd][hh][mi][ss]
+        //   [utc_offset int16 BE][is_dst]
+        int y = (p[3] << 8) | p[4];
+        int mon = p[5], day = p[6], hh = p[7], mm = p[8], ss = p[9];
+        int16_t off = (int16_t)((p[10] << 8) | p[11]);
         int64_t local_epoch = epoch_from_civil_utc(y, mon, day, hh, mm, ss);
         int64_t utc_ms = (local_epoch - off * 60) * 1000;
         cam_state_t *s = cam_scratch();
@@ -475,9 +581,6 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
         // to consume (we never write settings we care about).
         (void)gopro_reasm_feed(&rz_set, data, len, &pl, &pll);
     } else if (handle == vh_qry_rsp) {
-        char hx[52]; int hn = 0;
-        for (int i = 0; i < len && i < 16; i++) hn += snprintf(hx + hn, sizeof(hx) - hn, "%02x ", data[i]);
-        ESP_LOGI(TAG, "QRY raw len=%u: %s", len, hx);
         if (gopro_reasm_feed(&rz_qry, data, len, &pl, &pll) && pll >= 2) {
             uint8_t qid = pl[0];
             // Every TLV query response -- get-all (0x12/0x13), register echo
@@ -485,7 +588,7 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
             // (verified: OpenGoPro tutorial_modules TlvResponse.parse @ 0f963572).
             // Settings live under 0x12/0x52/0x92; statuses under 0x13/0x53/0x93.
             bool is_setting = (qid == 0x12 || qid == 0x52 || qid == 0x92);
-            ESP_LOGI(TAG, "query id=%02x st=%02x len=%u (%s)",
+            ESP_LOGD(TAG, "query id=%02x st=%02x len=%u (%s)",
                      qid, pl[1], pll, is_setting ? "setting" : "status");
             if (pll > 2) { walk_tuples(pl + 2, pll - 2, !is_setting); }
         }
