@@ -134,6 +134,10 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddBoolToObject(dbg, "arm_bit_resolved", fc.arm_bit_index >= 0);
     cJSON_AddNumberToObject(dbg, "arm_disable_flags", (double)fc.arming_disable_flags);
     cJSON_AddBoolToObject(dbg, "armed_raw", fc.armed);
+    // Boot-time timing (ms since this ESP boot, not since cfg load/reconnect):
+    // 0 = hasn't happened yet this boot.
+    cJSON_AddNumberToObject(dbg, "link_up_first_ms", fc.link_up_first_ms);
+    cJSON_AddNumberToObject(dbg, "osd_first_ms", fc.osd_first_ms);
 
     cJSON *clk = cJSON_AddObjectToObject(j, "clock");
     bool readable, last_ok, ever; int32_t delta_ms; uint32_t last_res;

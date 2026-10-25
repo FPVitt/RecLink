@@ -11,6 +11,12 @@ typedef struct {
     bool     link_up;               // valid MSP RX within FC_LINK_TIMEOUT_MS
     uint32_t last_rx_ms;
 
+    // Boot-time diagnostics (portal MSP debug panel): uptime (ms) the first
+    // time each became true since THIS boot -- never reset on a later
+    // reconnect, only on an ESP reboot. 0 = hasn't happened yet this boot.
+    uint32_t link_up_first_ms;
+    uint32_t osd_first_ms;           // first time osd_supported went true
+
     uint8_t  api_major, api_minor;
     char     fc_variant[5];         // "BTFL"
     bool     osd_supported;         // api >= 1.47

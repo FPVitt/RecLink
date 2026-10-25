@@ -1151,7 +1151,14 @@ async function poll() {
   if (dj !== lastDbg) {
     lastDbg = dj;
     const armFlags = (g.arm_disable_flags | 0);
-    $('#mspdbg').textContent = fcUp ? [
+    // Boot-timing lines: historical ("since this boot"), so shown even if the
+    // FC is offline right now -- that's exactly when they're most useful.
+    const bootLines = [
+      'MSP link up at  : ' + (g.link_up_first_ms ? (g.link_up_first_ms / 1000).toFixed(2) + ' s after boot' : 'not yet this boot'),
+      'OSD first sent  : ' + (g.osd_first_ms ? (g.osd_first_ms / 1000).toFixed(2) + ' s after boot' : 'not yet this boot'),
+    ];
+    $('#mspdbg').textContent = fcUp ? bootLines.concat([
+      '',
       'RC channel poll : ' + (g.rc_hz || 0).toFixed(1) + ' Hz'
         + (g.rc_period_ms ? '  (' + g.rc_period_ms + ' ms, nominal ' + (g.rc_nominal_hz||10) + ' Hz)' : '  (no data)'),
       'RC data age     : ' + (g.rc_age_ms >= 0 ? g.rc_age_ms + ' ms' : '—'),
@@ -1162,7 +1169,7 @@ async function poll() {
       'Armed (raw bit) : ' + (g.armed_raw ? 'ARMED' : 'disarmed'),
       'BOXARM bit index: ' + (g.arm_bit_resolved ? g.arm_bit : 'not resolved (waiting for MSP_BOXIDS)'),
       'Arming-disable  : ' + (armFlags ? '0x' + armFlags.toString(16).toUpperCase() : '0 (armable)')
-    ].join('\n') : 'FC offline — no MSP data';
+    ]).join('\n') : bootLines.concat(['', 'FC offline — no MSP data']).join('\n');
   }
 
   const bl = s.ble || {};

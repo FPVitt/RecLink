@@ -205,6 +205,7 @@ static void msp_task(void *arg)
             if (msp_rx_byte(&rx, rxb[i], &fr, &bad)) {
                 st.last_rx_ms = now;
                 if (msp_parse_frame(&fr, &st, &pctx)) { /* changed */ }
+                if (st.osd_supported && !st.osd_first_ms) { st.osd_first_ms = now; }
                 if (fr.dir == '>') {
                     msp_sched_mark_responded(fr.func);
                     // measured cadence: EMA (1/4) of the response interval, dt
@@ -236,6 +237,7 @@ static void msp_task(void *arg)
         bool link_up = (now - st.last_rx_ms) < FC_LINK_TIMEOUT_MS && st.last_rx_ms != 0;
         if (link_up != st.link_up) {
             st.link_up = link_up;
+            if (link_up && !st.link_up_first_ms) { st.link_up_first_ms = now; }
             fc_state_publish(&st);
             published = true;
         }
