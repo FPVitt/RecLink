@@ -244,6 +244,11 @@ function auxDetectStop(name, note) {
   if (note) msg(note);
 }
 function auxDetectStart(btn, sel) {
+  // gate() greys out the enclosing fieldset's inputs/selects but can't reach
+  // into every button inside it (other gated buttons, e.g. the preset "Test
+  // now" row, have their own disarmed-only guard elsewhere) -- check the
+  // select's own disabled state rather than widen gate()'s reach.
+  if (sel.disabled) { msg('enable this section first'); return; }
   const name = sel.name;
   if (auxDetect[name]) { auxDetectStop(name, 'AUX detect cancelled'); return; }
   const m = lastStatus && lastStatus.msp;
@@ -252,7 +257,9 @@ function auxDetectStart(btn, sel) {
     return;
   }
   auxDetect[name] = { btn, sel, baseline: m.aux.slice(), startedAt: Date.now() };
-  btn.textContent = 'push button or switch';
+  // Status polls every 1.5 s, so a brief momentary-button tap can land
+  // between two polls and go undetected -- ask for a hold, not a tap.
+  btn.textContent = 'hold switch/button ~1s';
   btn.classList.add('active');
 }
 function auxDetectCheck(m) {
@@ -415,14 +422,16 @@ function tokVal(pair, d) {
     case 'bb': { if (!d.battery.valid) return ''; let b = Math.floor((d.battery.v + 12) / 25);
       if (b > 4) b = 4;
       return d.digital ? '#'.repeat(b) + '-'.repeat(4 - b) : '█'.repeat(b) + '░'.repeat(4 - b); }
-    case 'bi': { if (!d.battery.valid) return ''; let b = Math.floor((d.battery.v + 12) / 25);
-      if (b > 4) b = 4;
-      // digital: same 4-char bar as %bb (no icon glyph in the DJI font).
+    case 'bi':
+      // digital: no icon glyph in the DJI font -- same 4-char bar as %bb, so
+      // route through it rather than repeat the bar formula here.
       // analog: single glyph -- real hardware shows the verified MAX7456
       // SYM_BATT_FULL..EMPTY icon (osd_format.c); a single shaded block is
       // the closest a browser can approximate that here.
-      if (d.digital) return '#'.repeat(b) + '-'.repeat(4 - b);
-      return ['░', '▒', '▒', '▓', '█'][b]; }
+      if (d.digital) return tokVal('bb', d);
+      if (!d.battery.valid) return '';
+      { let b = Math.floor((d.battery.v + 12) / 25); if (b > 4) b = 4;
+        return ['░', '▒', '▒', '▓', '█'][b]; }
     case 'rs': return d.resolution.valid ? d.resolution.v : '';
     case 'fp': return d.fps.valid ? d.fps.v : '';
     case 'ln': return d.lens.valid ? d.lens.v : '';

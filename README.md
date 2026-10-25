@@ -27,7 +27,7 @@ PIDs, or navigation.
 
 - **Camera telemetry → Betaflight OSD.** Recording state, elapsed / remaining
   time, camera battery, SD card free space (minutes *and* GB), resolution, frame
-  rate, colour profile, shooting mode, link status — 21 tokens across 4 freely
+  rate, colour profile, shooting mode, link status — 22 tokens across 4 freely
   editable 16-character lines.
 - **Recording that follows the aircraft.** Start/stop on arm, on a radio switch,
   or a combination — arm OR the switch (either one triggers it), or arm AND the
