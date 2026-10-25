@@ -102,6 +102,7 @@ encoding and decoding.
 - `main/evlog.c` — ring of every TX/RX packet and link event, polled by the UI
   via `GET /api/events?since=N`. If the UI falls behind, it reports the gap.
 - `main/web.c` — HTTP API + gzip-embedded UI. `main/wifi_ap.c` — AP + captive DNS.
+- `docs/OPEN_GOPRO_BLE_REFERENCE.md` — implementation reference: protocol, all commands, settings and statuses, pitfalls (regenerate with `tools/gen_reference.py`).
 - `www/catalog.js` — **generated** decode tables. `www/ops.js` — the operation
   catalog. `www/app.js` — UI, protobuf codec, depacketizer, decoders.
 
