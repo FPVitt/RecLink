@@ -817,7 +817,8 @@ void dbg_ble_init(void)
     s_mux = xSemaphoreCreateMutex();
     s_done = xSemaphoreCreateBinary();
     s_opq = xQueueCreate(16, sizeof(op_t));
-    xTaskCreate(gatt_task, "gatt_task", 4096, NULL, 6, NULL);
+    // 6 KB: evlog_text -> ESP_LOG -> syslog mirror nests two vsnprintf frames.
+    xTaskCreate(gatt_task, "gatt_task", 6144, NULL, 6, NULL);
 
     ESP_ERROR_CHECK(nimble_port_init());
     ble_hs_cfg.sync_cb = on_sync;

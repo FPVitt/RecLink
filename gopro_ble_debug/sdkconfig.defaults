@@ -15,6 +15,12 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
 CONFIG_FREERTOS_HZ=1000
 
+# app_main brings up NimBLE, the Wi-Fi AP and the HTTP server on its own stack.
+# That chain needs ~6 KB (see ../components/portal/portal_task.c); the 3.5 KB
+# default overflowed, panicked before the image was marked valid, and the
+# bootloader silently rolled back to the original firmware.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
 # --- Task watchdog: on, but no panic (debug tool, keep running) -----------
 CONFIG_ESP_TASK_WDT_INIT=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=8

@@ -115,4 +115,7 @@ void app_main(void)
 
     if (CONFIG_DBG_LED_GPIO >= 0) { xTaskCreate(led_task, "led", 2048, NULL, 1, NULL); }
     evlog_text(EV_SYS, "ready: join Wi-Fi '%s', open http://10.0.0.1", wifi_ap_ssid());
+    ESP_LOGI(TAG, "boot headroom: main stack %u B unused, heap %u B free (min %u)",
+             (unsigned)(uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t)),
+             (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size());
 }
