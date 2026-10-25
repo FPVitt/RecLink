@@ -54,30 +54,17 @@ void app_main(void)
     camera_register(dji_driver());
     if (cam_reconcile_bonds(erase_orphan)) { bridge_flag_set(FLAG_REPAIR_NEEDED); }
 
-    // --- step 3: msp_task, wait briefly for the FC link -------------
+    // --- step 3-6: msp_task, then camera + control + osd + housekeeping --
+    // No boot-time wait for the FC link here any more: cam_task's BLE scan
+    // and osd_task's rendering don't depend on MSP at all (independent
+    // resources per spec 1.2 -- one owner each, no cross-blocking), so
+    // starting them immediately rather than behind an up-to-2s MSP wait
+    // directly shortens how long OSD content (almost all of it camera
+    // -sourced by default) takes to show up. FLAG_FC_OFFLINE and
+    // FLAG_OSD_UNSUPPORTED are both judged continuously by housekeeping off
+    // live fc_state (see housekeeping.c) -- not a boot-time snapshot -- so
+    // nothing here needs to wait for a result to act on.
     msp_start();
-    for (int i = 0; i < 40; i++) {
-        fc_state_t s; fc_state_get(&s);
-        // Wait for a genuine MSP_API_VERSION reply (api_major > 0), not just
-        // any frame: the scheduler asks for it first, but an FC still finishing
-        // its own boot can answer a later-scheduled request (MSP_STATUS/RC)
-        // before that one lands, which flips link_up true with api_major/minor
-        // still at their zero default -- reading that as "API 0.0, too old for
-        // custom OSD" was a false positive on the very race this waits out.
-        if (s.link_up && s.api_major > 0) { ESP_LOGI(TAG, "FC link up after %d ms", i * 50); break; }
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
-    {
-        // FLAG_OSD_UNSUPPORTED is judged continuously by housekeeping instead
-        // (gated on a real MSP_API_VERSION reply, not a fixed boot budget) --
-        // a slow-booting FC could still be short of that here, and setting it
-        // prematurely produced the "FC too old" flash that only cleared once
-        // housekeeping caught the real answer a few seconds later.
-        fc_state_t s; fc_state_get(&s);
-        if (!s.link_up) { bridge_flag_set(FLAG_FC_OFFLINE); }
-    }
-
-    // --- step 5-6: camera + control + osd + housekeeping ------------
     cam_start();
     ctrl_start();
     osd_start();

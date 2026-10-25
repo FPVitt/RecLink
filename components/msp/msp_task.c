@@ -206,7 +206,7 @@ static void msp_task(void *arg)
                 st.last_rx_ms = now;
                 if (msp_parse_frame(&fr, &st, &pctx)) { /* changed */ }
                 if (fr.dir == '>') {
-                    msp_sched_mark_oneshot_done(fr.func);
+                    msp_sched_mark_responded(fr.func);
                     // measured cadence: EMA (1/4) of the response interval, dt
                     // capped so a link outage doesn't skew it.
                     if (fr.func == MSP_RC) {

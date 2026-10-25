@@ -22,4 +22,7 @@ void msp_sched_rearm_oneshots(void);
 
 // True once every one-shot has completed at least once.
 bool msp_sched_oneshots_done(void);
-void msp_sched_mark_oneshot_done(uint16_t func);
+// Call for every received response's func, one-shot or periodic: records
+// that it has been answered (fast-retry ends for it) and, for a one-shot
+// specifically, marks it done.
+void msp_sched_mark_responded(uint16_t func);
