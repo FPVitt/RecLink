@@ -38,7 +38,7 @@ void cfg_load_defaults(cfg_t *d)
     d->osd.type        = 1;      // digital -- DJI-goggle-safe glyph subset (default)
     d->osd.corner      = 1;
     strcpy(d->osd.line[0], "%st %et");
-    strcpy(d->osd.line[1], "BAT %bt %wr");
+    strcpy(d->osd.line[1], "%bi %bt %wr");
     strcpy(d->osd.line[2], "%rs%fp %ln");
     strcpy(d->osd.line[3], "SD %sd");
     d->osd.fields_mask = (1u << OSD_TOK_COUNT) - 1u;   // all tokens on

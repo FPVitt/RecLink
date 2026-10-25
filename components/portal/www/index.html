@@ -133,7 +133,8 @@
         <option value="0">Never (manual only)</option>
         <option value="1">When the aircraft is armed</option>
         <option value="2">From a radio switch</option>
-        <option value="3">Armed AND switch on</option>
+        <option value="3">Armed OR switch on</option>
+        <option value="4">Armed AND switch on</option>
       </select></label>
     <fieldset id="rec-switch">
       <legend>Radio switch</legend>
@@ -143,7 +144,10 @@
           <option value="1">Button</option>
         </select></label>
       <label>AUX channel
-        <select name="record.switch.channel" data-auxsel></select></label>
+        <span class="auxctl">
+          <button type="button" class="ghost auxdetect" data-aux-for="record.switch.channel">Set AUX</button>
+          <select name="record.switch.channel" data-auxsel></select>
+        </span></label>
       <div class="rangebar" id="rb-record" data-fn="record"></div>
       <label>On above &mdash; &micro;s (900&ndash;2100)
         <input type="number" inputmode="numeric" name="record.switch.threshold_us" min="900" max="2100" step="25"></label>
@@ -167,7 +171,10 @@
     <fieldset id="preset-setup">
       <legend>Radio knob / switch</legend>
       <label>AUX channel
-        <select name="preset.channel" data-auxsel></select></label>
+        <span class="auxctl">
+          <button type="button" class="ghost auxdetect" data-aux-for="preset.channel">Set AUX</button>
+          <select name="preset.channel" data-auxsel></select>
+        </span></label>
       <div class="rangebar" id="rb-preset" data-fn="preset"></div>
       <div id="zone-ids"></div>
       <p class="muted">Each zone applies its Preset / mode ID (GoPro preset ID or DJI mode value).</p>
@@ -191,7 +198,10 @@
   <div class="card adv-only" id="hilight-card">
     <h3>Highlight tag</h3>
     <label>AUX channel
-      <select name="hilight.channel" data-auxsel></select></label>
+      <span class="auxctl">
+        <button type="button" class="ghost auxdetect" data-aux-for="hilight.channel">Set AUX</button>
+        <select name="hilight.channel" data-auxsel></select>
+      </span></label>
     <div class="rangebar" id="rb-hilight" data-fn="hilight"></div>
     <p class="muted">Tags a moment (GoPro HiLight / DJI QS) above 1700&nbsp;&micro;s.</p>
   </div>
@@ -299,6 +309,23 @@
     <input type="number" inputmode="numeric" name="wifi.portal_timeout_min" min="1" max="120" step="1"></label>
 
   <div class="adv-only">
+    <h3>Radio power</h3>
+    <label>Wi-Fi (config portal)
+      <select name="radio.wifi_power">
+        <option value="0">Low (2 dBm)</option>
+        <option value="1">Medium (10 dBm)</option>
+        <option value="2">Max (20 dBm)</option>
+      </select></label>
+    <label>Bluetooth (camera link) &mdash; applies after reboot
+      <select name="radio.ble_power">
+        <option value="0">Low (&minus;12 dBm)</option>
+        <option value="1">Medium (0 dBm)</option>
+        <option value="2">Max (+9 dBm)</option>
+      </select></label>
+    <p class="muted">Turn power up if the connection is unreliable, down to use less power.</p>
+  </div>
+
+  <div class="adv-only">
     <h3>Flight controller link (MSP serial)</h3>
     <label>Baud rate
       <select name="msp.baud">
@@ -322,23 +349,6 @@
   <h3>Indicator LED</h3>
   <label>Brightness (16&ndash;255)
     <input type="number" inputmode="numeric" name="led_brightness" min="16" max="255" step="1"></label>
-
-  <div class="adv-only">
-    <h3>Radio power</h3>
-    <label>Wi-Fi (config portal)
-      <select name="radio.wifi_power">
-        <option value="0">Low (2 dBm)</option>
-        <option value="1">Medium (10 dBm)</option>
-        <option value="2">Max (20 dBm)</option>
-      </select></label>
-    <label>Bluetooth (camera link) &mdash; applies after reboot
-      <select name="radio.ble_power">
-        <option value="0">Low (&minus;12 dBm)</option>
-        <option value="1">Medium (0 dBm)</option>
-        <option value="2">Max (+9 dBm)</option>
-      </select></label>
-    <p class="muted">Turn power up if the connection is unreliable, down to use less power.</p>
-  </div>
 
   <h3>Actions</h3>
   <div class="row">

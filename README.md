@@ -30,7 +30,9 @@ PIDs, or navigation.
   rate, colour profile, shooting mode, link status — 21 tokens across 4 freely
   editable 16-character lines.
 - **Recording that follows the aircraft.** Start/stop on arm, on a radio switch,
-  or on both. Every command is verified against what the camera actually reports.
+  or a combination — arm OR the switch (either one triggers it), or arm AND the
+  switch (both must be true at once). Every command is verified against what the
+  camera actually reports.
 - **Profile / preset switching** from a 3-position radio switch, with editable
   band edges.
 - **Highlight tags** punched into the recording from a momentary switch.
@@ -87,13 +89,15 @@ While the aircraft is disarmed, RecLink hosts an open Wi-Fi network
 `RECLINK-XXXX`. Join it and any page redirects to the portal at `http://10.0.0.1`.
 
 - **Status** — live link state, camera telemetry, and MSP diagnostics.
-- **Cam control** — recording mode, the arm/switch triggers, preset zones,
-  highlight switch.
+- **Cam control** — recording mode, the arm/switch triggers (with one-touch AUX
+  channel auto-detect — flip the switch you want and it finds the channel for
+  you), preset zones, highlight switch.
 - **OSD** — pick analog or digital, drag telemetry tokens onto the four lines,
   preview them against live or sample data.
 - **Binding** — pair, list and forget cameras; a guided GoPro pairing flow with a
   GoPro Labs QR shortcut.
-- **Network** — Wi-Fi credentials, MSP baud rate and TX/RX swap.
+- **Network** — Wi-Fi credentials, MSP baud rate and TX/RX swap, Wi-Fi/BLE
+  transmit power.
 - **System** — LED brightness, advanced-mode toggle, OTA firmware upload,
   factory reset.
 
@@ -145,9 +149,11 @@ implements `camera_driver_t` — it never touches core code.
 ## Status
 
 Early development. The firmware builds for both targets and the full feature set
-is implemented, but it has **not been validated on hardware** and several
-protocol constants are still assumed pending verification against the upstream
-GoPro / DJI / Betaflight sources.
+is implemented, and it has been bench-tested on real ESP32-C3 hardware wired to
+a Betaflight FC — MSP link, OSD rendering, recording triggers, and the config
+portal all working — but it has **not been flight tested**, and several
+protocol constants are still assumed pending verification against a live
+GoPro / DJI capture (see [VERIFY.md](VERIFY.md)).
 
 > [!WARNING]
 > This is not a released image. Do not fly it.

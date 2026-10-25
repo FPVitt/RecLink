@@ -47,7 +47,13 @@ bool     bridge_flag_get(bridge_flag_t f);
 uint32_t bridge_flags_all(void);
 
 // -------- record modes -------------------------------------------------------
-enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3 };
+// REC_ARM_AND_SWITCH: despite the name (kept for on-flash compatibility), this
+// is OR-with-override, not a strict AND -- records while armed OR while the
+// switch is on; flipping the switch OFF while armed cuts the clip and it stays
+// cut (even though still armed) until the switch goes back ON (spec 8.1 combi
+// "cut & restart"). REC_STRICT_AND is the literal AND: recording tracks
+// `armed && switch` live, no latch -- both conditions true at once, no more.
+enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3, REC_STRICT_AND = 4 };
 // record.sw.mode: how the assigned AUX channel drives the record trigger.
 //   SWITCH -- a real 2-position switch. Above threshold = recording, below =
 //             not, mirrored live (spec 8.2 hysteresis). Release stops the clip.
@@ -193,6 +199,7 @@ enum {
     OSD_TOK_CN, OSD_TOK_WR,
     OSD_TOK_AR, OSD_TOK_PR, OSD_TOK_BD, OSD_TOK_CR, OSD_TOK_GS, OSD_TOK_GF,
     OSD_TOK_FB, OSD_TOK_SP, OSD_TOK_SG,
+    OSD_TOK_BI,
     OSD_TOK_COUNT
 };
 

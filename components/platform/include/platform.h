@@ -33,16 +33,19 @@ void led_identify(uint32_t ms);         // temporary override
 // Button ----------------------------------------------------------------
 typedef enum {
     BTN_NONE = 0,
-    BTN_SHORT,           // < 1 s
-    BTN_LONG,            // >= 3 s  (held, released)
+    BTN_SHORT,           // < 1 s, on release
+    BTN_LONG,            // held >= 3 s -- fires once, while still held
+    BTN_FACTORY,         // held >= 10 s -- fires once, while still held (supersedes BTN_LONG)
 } btn_event_t;
 
-// Poll from housekeeping. Returns an event once per gesture.
+// Poll from housekeeping, at runtime only -- never sampled at boot. GPIO9 is
+// the ROM download-mode strap on this board, so a boot-time hold isn't a safe
+// gesture to build a feature on: a user holding the button through power-up
+// (exactly the gesture a boot-time check would want to see) risks the chip
+// dropping into the ROM bootloader instead of running firmware at all. Both
+// "force portal" (BTN_LONG, via portal_supervise) and "factory reset"
+// (BTN_FACTORY, in housekeeping) are runtime-only as a result.
 btn_event_t button_poll(void);
-
-// Sampled once, in platform_init, before anything else runs.
-bool     button_held_at_boot_long(void);   // >= 3 s at power-up -> force portal
-bool     button_held_at_boot_factory(void);// >= 10 s at power-up -> factory reset
 
 // Task Watchdog aggregation (spec 3.5) --------------------------------
 typedef enum {

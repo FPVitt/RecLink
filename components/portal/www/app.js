@@ -227,9 +227,66 @@ $$('.rangebar').forEach(buildBar);
   if (/\.channel$/.test(n) && lastStatus) updateCursors(lastStatus.msp);
 }));
 
+// ---- "Set AUX" -- wiggle-to-find the channel a switch/knob is wired to ----
+// Snapshots the live AUX values when armed, then on each poll compares
+// against that baseline; whichever channel has moved the most (past a
+// noise-floor threshold) wins and gets written into the paired select.
+const AUX_MOVE_US = 200;      // minimum swing to count as a deliberate move
+const AUX_TIMEOUT_MS = 15000;
+const auxDetect = {};          // select name -> {btn, sel, baseline, startedAt}
+
+function auxDetectStop(name, note) {
+  const d = auxDetect[name];
+  if (!d) return;
+  d.btn.textContent = 'Set AUX';
+  d.btn.classList.remove('active');
+  delete auxDetect[name];
+  if (note) msg(note);
+}
+function auxDetectStart(btn, sel) {
+  const name = sel.name;
+  if (auxDetect[name]) { auxDetectStop(name, 'AUX detect cancelled'); return; }
+  const m = lastStatus && lastStatus.msp;
+  if (!m || !m.connected || !Array.isArray(m.aux) || m.aux.length < 5) {
+    msg('no live AUX data — connect the FC first');
+    return;
+  }
+  auxDetect[name] = { btn, sel, baseline: m.aux.slice(), startedAt: Date.now() };
+  btn.textContent = 'push button or switch';
+  btn.classList.add('active');
+}
+function auxDetectCheck(m) {
+  const names = Object.keys(auxDetect);
+  if (!names.length) return;
+  const aux = (m && m.connected && Array.isArray(m.aux)) ? m.aux : null;
+  names.forEach(name => {
+    const d = auxDetect[name];
+    if (Date.now() - d.startedAt > AUX_TIMEOUT_MS) {
+      auxDetectStop(name, 'no movement seen — try again');
+      return;
+    }
+    if (!aux) return;
+    let bestIdx = -1, bestDelta = AUX_MOVE_US;
+    for (let i = 4; i < aux.length && i < d.baseline.length; i++) {
+      const delta = Math.abs(aux[i] - d.baseline[i]);
+      if (delta >= bestDelta) { bestDelta = delta; bestIdx = i; }
+    }
+    if (bestIdx < 0) return;
+    const ch = bestIdx - 3;   // aux[3+ch] <-> AUX channel `ch` (spec 8.2 mapping)
+    d.sel.value = ch;
+    d.sel.dispatchEvent(new Event('input', { bubbles: true }));
+    d.sel.dispatchEvent(new Event('change', { bubbles: true }));
+    auxDetectStop(name, 'AUX ' + ch + ' set');
+  });
+}
+$$('.auxdetect').forEach(btn => {
+  const sel = document.querySelector(`[name="${CSS.escape(btn.dataset.auxFor)}"]`);
+  if (sel) { btn.onclick = () => auxDetectStart(btn, sel); }
+});
+
 // ================= OSD tab: chip line editor + live preview =================
 const TOKLIST = [
-  ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bb','batt bar'],
+  ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bb','batt bar'],['bi','batt icon'],
   ['rs','resolution'],['fp','fps'],['ar','aspect'],['ln','lens'],['pr','profile'],['bd','bit depth'],
   ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],['gs','GPS sats'],['gf','GPS fix'],
   ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning']
@@ -358,6 +415,14 @@ function tokVal(pair, d) {
     case 'bb': { if (!d.battery.valid) return ''; let b = Math.floor((d.battery.v + 12) / 25);
       if (b > 4) b = 4;
       return d.digital ? '#'.repeat(b) + '-'.repeat(4 - b) : '█'.repeat(b) + '░'.repeat(4 - b); }
+    case 'bi': { if (!d.battery.valid) return ''; let b = Math.floor((d.battery.v + 12) / 25);
+      if (b > 4) b = 4;
+      // digital: same 4-char bar as %bb (no icon glyph in the DJI font).
+      // analog: single glyph -- real hardware shows the verified MAX7456
+      // SYM_BATT_FULL..EMPTY icon (osd_format.c); a single shaded block is
+      // the closest a browser can approximate that here.
+      if (d.digital) return '#'.repeat(b) + '-'.repeat(4 - b);
+      return ['░', '▒', '▒', '▓', '█'][b]; }
     case 'rs': return d.resolution.valid ? d.resolution.v : '';
     case 'fp': return d.fps.valid ? d.fps.v : '';
     case 'ln': return d.lens.valid ? d.lens.v : '';
@@ -565,7 +630,7 @@ function gate(el, on, reason) {
 }
 function applyGates() {
   const mode = Number(getField('record.mode'));
-  const recSw = mode === 2 || mode === 3;
+  const recSw = mode === 2 || mode === 3 || mode === 4;
   gate($('#rec-switch'), recSw, 'only used with a switch trigger');
   setBarEnabled('record', recSw);
 
@@ -1042,6 +1107,7 @@ async function poll() {
   $('#aux').textContent = (fcUp && m.aux && m.aux.length)
     ? m.aux.map((v, i) => 'ch' + (i + 1) + ':' + v).join('  ') : '—';
   updateCursors(m);
+  auxDetectCheck(m);
 
   const fj = JSON.stringify(s.flags || []);
   if (fj !== lastFlags) {
@@ -1112,7 +1178,7 @@ async function poll() {
   const rj = JSON.stringify(rd);
   if (rj !== lastRecDbg) {
     lastRecDbg = rj;
-    const modeNames = ['off', 'on arm', 'on switch', 'armed + switch'];
+    const modeNames = ['off', 'on arm', 'on switch', 'armed OR switch', 'armed AND switch'];
     const recTriggerNames = ['switch', 'button'];
     $('#recdbg').textContent = fcUp ? [
       'Record mode      : ' + (modeNames[rd.mode] || rd.mode),

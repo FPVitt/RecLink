@@ -45,14 +45,6 @@ void app_main(void)
     cfg_stats_load(NULL);
 
     if (rtcnv_wdt_recovered_unacked()) { bridge_flag_set(FLAG_WDT_RECOVERED); led_request(LED_FAULT); }
-    if (button_held_at_boot_factory()) {
-        ESP_LOGW(TAG, "factory reset (button held 10 s)");
-        cfg_factory_erase();
-        ble_central_init();
-        ble_central_erase_all_bonds();
-        vTaskDelay(pdMS_TO_TICKS(200));
-        esp_restart();
-    }
 
     // --- BLE host up, then reconcile cfg vs bond store ---------------
     ble_central_init();
@@ -66,12 +58,22 @@ void app_main(void)
     msp_start();
     for (int i = 0; i < 40; i++) {
         fc_state_t s; fc_state_get(&s);
-        if (s.link_up) { ESP_LOGI(TAG, "FC link up after %d ms", i * 50); break; }
+        // Wait for a genuine MSP_API_VERSION reply (api_major > 0), not just
+        // any frame: the scheduler asks for it first, but an FC still finishing
+        // its own boot can answer a later-scheduled request (MSP_STATUS/RC)
+        // before that one lands, which flips link_up true with api_major/minor
+        // still at their zero default -- reading that as "API 0.0, too old for
+        // custom OSD" was a false positive on the very race this waits out.
+        if (s.link_up && s.api_major > 0) { ESP_LOGI(TAG, "FC link up after %d ms", i * 50); break; }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     {
+        // FLAG_OSD_UNSUPPORTED is judged continuously by housekeeping instead
+        // (gated on a real MSP_API_VERSION reply, not a fixed boot budget) --
+        // a slow-booting FC could still be short of that here, and setting it
+        // prematurely produced the "FC too old" flash that only cleared once
+        // housekeeping caught the real answer a few seconds later.
         fc_state_t s; fc_state_get(&s);
-        if (!s.osd_supported && s.link_up) { bridge_flag_set(FLAG_OSD_UNSUPPORTED); }
         if (!s.link_up) { bridge_flag_set(FLAG_FC_OFFLINE); }
     }
 
@@ -82,11 +84,13 @@ void app_main(void)
     housekeeping_start();
 
     // --- step 7: portal open condition -----------------------------
+    // Force-open-via-button is runtime-only now (housekeeping's BTN_LONG ->
+    // portal_supervise), since GPIO9 can't be sampled safely at boot -- see
+    // platform.h.
     const cfg_t *c = cfg_get();
     fc_state_t fc; fc_state_get(&fc);
-    bool want_portal = button_held_at_boot_long() ||
-                       (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED && !fc.armed);
-    if (want_portal && !fc.armed) { portal_start(); }
+    bool want_portal = (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED && !fc.armed);
+    if (want_portal) { portal_start(); }
 
     // init got this far cleanly -> tell the bootloader this image is good, so an
     // OTA-installed build isn't rolled back on the next reboot.

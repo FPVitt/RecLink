@@ -95,6 +95,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
     case REC_ARM:            desired = armed; break;
     case REC_SWITCH:         desired = S.sw_active; break;
     case REC_ARM_AND_SWITCH: desired = (armed || S.sw_active); break;
+    case REC_STRICT_AND:     desired = (armed && S.sw_active); break;
     default:                 desired = false; break;
     }
 

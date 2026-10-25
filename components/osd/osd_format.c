@@ -44,6 +44,21 @@ static size_t app(char *out, size_t cap, size_t len, const char *s)
 
 static bool field_on(const cfg_t *cfg, int tok) { return (cfg->osd.fields_mask >> tok) & 1u; }
 
+// Digital-safe 4-segment battery bar. Used by %bb, and as %bi's fallback on
+// digital OSD -- the DJI-goggle font has no true battery-icon glyph.
+static void batt_bar4(char *tmp, int pct, bool digital)
+{
+    int bars = (pct + 12) / 25; if (bars > 4) { bars = 4; }
+    // VERIFY: analog bytes 0xFE/0xFA are NOT defined in BF osd_symbols.h @
+    // pin (tag 2025.12.5, commit 7348054f) and are not referenced by
+    // osd_elements.c's bar-drawing code -- placeholder, unconfirmed as a
+    // real solid/empty-block glyph. See VERIFY.md MSP-OSD-SYM-BATTBAR.
+    char full = digital ? '#' : (char)0xFE;
+    char none = digital ? '-' : (char)0xFA;
+    for (int i = 0; i < 4; i++) { tmp[i] = (i < bars) ? full : none; }
+    tmp[4] = '\0';
+}
+
 int osd_format_line(char *out, size_t out_cap, const char *tmpl,
                     const fc_state_t *fc, const cam_state_t *cam,
                     const cfg_t *cfg, bool blink_phase)
@@ -87,12 +102,25 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
         } else if (TOK2('b','b')) {                // battery bar glyphs
             p++;
             if (!field_on(cfg, OSD_TOK_BB) || !cam->battery_pct.valid) { continue; }
-            int bars = (cam->battery_pct.v + 12) / 25; if (bars > 4) bars = 4;
-            // analog: MAX7456 block glyphs; digital: plain ASCII (see filter below)
-            char full = (cfg->osd.type == 1) ? '#' : (char)0xFE;
-            char none = (cfg->osd.type == 1) ? '-' : (char)0xFA;
-            for (int i = 0; i < 4; i++) { tmp[i] = (i < bars) ? full : none; }
-            tmp[4] = '\0';
+            batt_bar4(tmp, cam->battery_pct.v, cfg->osd.type == 1);
+            len = app(out, out_cap, len, tmp);
+        } else if (TOK2('b','i')) {                // battery icon (single glyph)
+            p++;
+            if (!field_on(cfg, OSD_TOK_BI) || !cam->battery_pct.valid) { continue; }
+            if (cfg->osd.type == 1) {
+                // No battery-icon glyph exists in the DJI digital OSD's
+                // ASCII-only subset (spec 9.1) -- fall back to the %bb bar.
+                batt_bar4(tmp, cam->battery_pct.v, true);
+            } else {
+                // Betaflight MAX7456 font, verified @ BF drivers/osd_symbols.h
+                // (tag 2025.12.5, commit 7348054): SYM_BATT_FULL 0x90 ..
+                // SYM_BATT_EMPTY 0x96 -- a 7-step "evolution" set, exactly
+                // one glyph per battery state.
+                int lvl = (100 - (int)cam->battery_pct.v) * 7 / 100;
+                if (lvl < 0) { lvl = 0; } else if (lvl > 6) { lvl = 6; }
+                tmp[0] = (char)(0x90 + lvl);
+                tmp[1] = '\0';
+            }
             len = app(out, out_cap, len, tmp);
         } else if (TOK2('r','s')) {                // resolution
             p++;

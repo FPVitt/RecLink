@@ -12,6 +12,7 @@
 
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -75,7 +76,17 @@ static void hk_task(void *arg)
         // --- flags upkeep -------------------------------------------
         if (fc.link_up) { bridge_flag_clear(FLAG_FC_OFFLINE); }
         else            { bridge_flag_set(FLAG_FC_OFFLINE); }
-        if (fc.link_up && fc.osd_supported) { bridge_flag_clear(FLAG_OSD_UNSUPPORTED); }
+        // Only judge OSD support once a genuine MSP_API_VERSION reply has
+        // landed (api_major > 0 -- Betaflight's real major version is always
+        // >= 1). Before that, api_major/osd_supported just haven't been
+        // resolved yet -- gating on it here (not a fixed boot-time budget)
+        // means a flight controller that's slow to finish its own boot no
+        // longer produces a false "FC too old for custom OSD" that only
+        // clears once housekeeping happens to re-check.
+        if (fc.link_up && fc.api_major > 0) {
+            if (fc.osd_supported) { bridge_flag_clear(FLAG_OSD_UNSUPPORTED); }
+            else                  { bridge_flag_set(FLAG_OSD_UNSUPPORTED); }
+        }
 
         // --- LED -------------------------------------------------
         led_request(pick_led(&fc, &cam));
@@ -84,6 +95,18 @@ static void hk_task(void *arg)
         // --- button --------------------------------------------
         btn_event_t be = button_poll();
         if (be == BTN_SHORT) { led_identify(3000); }
+        // Factory reset (spec 11.0), runtime-only gesture (>= 10 s held, same
+        // pin as portal force-open) -- refused while armed, matching the
+        // portal's own guard on this action (never disrupt a flying aircraft
+        // for a discretionary reset). GPIO9 can't be sampled at boot for this
+        // (see platform.h), so there's no boot-time equivalent any more.
+        if (be == BTN_FACTORY && !fc.armed) {
+            ESP_LOGW(TAG, "factory reset (button held 10 s)");
+            cfg_factory_erase();
+            cam_erase_all_bonds();
+            vTaskDelay(pdMS_TO_TICKS(200));
+            esp_restart();
+        }
 
         // --- portal supervision (spec 10.1) -------------------
         const cfg_t *c = cfg_get();

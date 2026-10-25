@@ -52,7 +52,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
         return ESP_ERR_INVALID_ARG;
     }
 
-    CLAMP(c->record.mode, REC_OFF, REC_ARM_AND_SWITCH);
+    CLAMP(c->record.mode, REC_OFF, REC_STRICT_AND);
     CLAMP(c->record.arm_delay_ms, 0, 10000);
     CLAMP(c->record.stop_delay_ms, 0, 20000);
     CLAMP(c->record.verify_timeout_ms, 100, 5000);

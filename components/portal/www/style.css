@@ -69,6 +69,11 @@ button:active{transform:translateY(1px)}
 button.danger{background:var(--dng)}
 button.reveal,button#mspscan,button.ghost{background:transparent;border:1px solid var(--line);color:var(--fg)}
 
+.auxctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.auxctl select{width:auto}
+button.auxdetect{padding:6px 10px;font-size:12px;min-height:0;white-space:nowrap}
+button.auxdetect.active{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
+
 /* fresh-install Wi-Fi password modal */
 .modal{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
   padding:16px;background:rgba(0,0,0,.62)}

@@ -1,18 +1,15 @@
-// button.c -- single button. Debounced, edge-timed. Boot-time hold is sampled
-// once in button_hw_init() so app_main can branch on it before tasks start.
+// button.c -- single button. Debounced, edge-timed. GPIO9 doubles as the ROM
+// download-mode strap on this board, so nothing here samples the button at
+// boot -- only button_poll(), called from housekeeping once the app is
+// already running (see platform.h).
 #include "platform.h"
 #include "led_internal.h"
 
 #include "monoclock.h"
 #include "sdkconfig.h"
 #include "driver/gpio.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 #define PIN   CONFIG_BRIDGE_BUTTON_GPIO
-
-static bool s_boot_long;
-static bool s_boot_factory;
 
 static inline bool pressed(void)
 {
@@ -36,43 +33,34 @@ void button_hw_init(void)
 #endif
     };
     gpio_config(&io);
-
-    // Sample the boot-time hold. Blocks only while the button is actually held
-    // (release -> loop exits): >=3 s => portal, >=10 s => factory reset. The
-    // normal portal case is also covered by button_poll() once tasks run, so a
-    // few seconds of blocked init here is acceptable.
-    if (!pressed()) { return; }
-    uint32_t start = now_ms();
-    while (pressed()) {
-        vTaskDelay(pdMS_TO_TICKS(20));
-        uint32_t held = now_ms() - start;
-        if (held >= 10000) { s_boot_factory = true; s_boot_long = true; break; }
-        if (held >= 3000)  { s_boot_long = true; }
-    }
 }
-
-bool button_held_at_boot_long(void)    { return s_boot_long; }
-bool button_held_at_boot_factory(void) { return s_boot_factory; }
 
 btn_event_t button_poll(void)
 {
     static bool     was = false;
     static uint32_t down_ms = 0;
-    static bool     consumed = false;
+    static bool     long_fired = false;
+    static bool     factory_fired = false;
 
     bool now = pressed();
     uint32_t t = now_ms();
 
-    if (now && !was) { down_ms = t; consumed = false; }
+    if (now && !was) { down_ms = t; long_fired = false; factory_fired = false; }
 
     btn_event_t ev = BTN_NONE;
-    if (now && !consumed && (t - down_ms) >= 3000) {
-        ev = BTN_LONG;          // fire on threshold cross, once
-        consumed = true;
-    }
-    if (!now && was && !consumed) {
-        if ((t - down_ms) >= 30 && (t - down_ms) < 1000) { ev = BTN_SHORT; }
-        consumed = true;
+    if (now) {
+        uint32_t held = t - down_ms;
+        if (!factory_fired && held >= 10000) {
+            ev = BTN_FACTORY;              // fire once, at the 10 s crossing
+            factory_fired = true;
+            long_fired = true;             // supersedes the 3 s event
+        } else if (!long_fired && held >= 3000) {
+            ev = BTN_LONG;                 // fire once, at the 3 s crossing
+            long_fired = true;
+        }
+    } else if (was && !long_fired) {
+        uint32_t held = t - down_ms;
+        if (held >= 30 && held < 1000) { ev = BTN_SHORT; }
     }
     was = now;
     return ev;
