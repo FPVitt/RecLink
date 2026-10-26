@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/message_buffer.h"
 #include "freertos/semphr.h"
 
 static const char *TAG = "cam";
@@ -32,13 +33,12 @@ static const char *TAG = "cam";
 static const uint32_t k_backoff_s[] = { 1, 2, 4, 8, 16, 30, 30 };
 
 // ---- internal event queue -----------------------------------------
-typedef enum { IQ_BLE_EVT, IQ_NOTIFY, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET,
+typedef enum { IQ_BLE_EVT, IQ_NOTIFY_WAKE, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET,
                IQ_CMD_SUSPEND, IQ_CMD_SCAN_PAUSE } iq_kind_t;
 typedef struct {
     uint8_t kind;
     union {
         struct { int ev; int status; } ble;
-        struct { uint16_t handle; uint16_t len; uint8_t data[256]; } notify;
         ble_adv_t adv;                    // full advert; cam_task does the matching
         struct { char brand[6]; uint8_t addr[6]; uint8_t has_addr; } pair;
         struct { uint8_t addr[6]; uint8_t has_addr; } forget;   // has_addr=0 -> forget all
@@ -46,16 +46,28 @@ typedef struct {
     };
 } iq_item_t;
 
-// s_iq carries BLE events + adverts + portal cmds + inbound GATT notifications.
-// Deep enough to absorb the GoPro get-all-statuses / get-all-settings burst
-// (many MTU-sized notifications back to back) before cam_task drains it -- a
-// shallow queue silently loses the resolution/fps/SD-total fields (review H14).
+// s_iq carries BLE events + adverts + portal cmds. Inbound GATT notifications do
+// NOT go through it: a GoPro get-all-statuses / get-all-settings reply is 25-50
+// back-to-back 20-byte notifications, which shared this queue with adverts and
+// events and got dropped when it filled (review H14). They have their own byte
+// buffer below; s_iq only carries a one-slot "notifications waiting" wake-up.
 #define IQ_DEPTH 24
 static StaticQueue_t s_iq_s, s_cmdq_s, s_evq_s;
 static uint8_t s_iq_buf[IQ_DEPTH * sizeof(iq_item_t)];
 static uint8_t s_cmdq_buf[16 * sizeof(cam_cmd_t)];
 static uint8_t s_evq_buf[16 * sizeof(cam_event_t)];
 static QueueHandle_t s_iq, s_cmdq, s_evq;
+
+// ---- inbound notification buffer ------------------------------------
+// Single producer (NimBLE host task, h_notify) -> single consumer (cam_task).
+// Message = [handle u16 LE][payload]; the buffer adds its own 4-byte length
+// header per message. ~4 KB holds well over a full get-all burst.
+#define NB_SIZE        4096
+#define NB_PAYLOAD_MAX 256
+static StaticMessageBuffer_t s_nb_s;
+static uint8_t s_nb_buf[NB_SIZE + 1];
+static MessageBufferHandle_t s_nb;
+static volatile bool s_nb_wake_pending;     // a wake item is already in s_iq
 
 // ---- driver + link bookkeeping --------------------------------------
 static const camera_driver_t *s_drv;
@@ -219,13 +231,36 @@ static volatile uint32_t s_notify_drops_total;
 uint32_t cam_notify_drops(void) { return s_notify_drops_total; }
 static void h_notify(uint16_t handle, const uint8_t *data, uint16_t len)
 {
-    iq_item_t it = { .kind = IQ_NOTIFY };
-    it.notify.handle = handle;
-    it.notify.len = len > sizeof(it.notify.data) ? sizeof(it.notify.data) : len;
-    memcpy(it.notify.data, data, it.notify.len);
-    if (xQueueSend(s_iq, &it, 0) != pdTRUE) {
+    uint8_t msg[2 + NB_PAYLOAD_MAX];
+    if (len > NB_PAYLOAD_MAX) { len = NB_PAYLOAD_MAX; }
+    msg[0] = (uint8_t)handle;
+    msg[1] = (uint8_t)(handle >> 8);
+    memcpy(msg + 2, data, len);
+    if (xMessageBufferSend(s_nb, msg, 2u + len, 0) == 0) {
         s_notify_drops++;          // surfaced in the 1 Hz tick log
         s_notify_drops_total++;    // monotonic, surfaced in /api/status
+        return;
+    }
+    // One wake-up in s_iq at a time, however many notifications arrive. If it
+    // can't be queued, cam_task still drains the buffer on its next pass.
+    if (!s_nb_wake_pending) {
+        s_nb_wake_pending = true;
+        iq_item_t it = { .kind = IQ_NOTIFY_WAKE };
+        if (xQueueSend(s_iq, &it, 0) != pdTRUE) { s_nb_wake_pending = false; }
+    }
+}
+
+// cam_task ctx: hand every buffered notification to the driver.
+static void drain_notifications(void)
+{
+    static uint8_t msg[2 + NB_PAYLOAD_MAX];
+    s_nb_wake_pending = false;      // clear BEFORE draining so a late arrival re-wakes us
+    size_t n;
+    while ((n = xMessageBufferReceive(s_nb, msg, sizeof(msg), 0)) >= 2) {
+        s_cs.last_rx_ms = now_ms();
+        if (s_drv && s_drv->on_notify) {
+            s_drv->on_notify((uint16_t)(msg[0] | (msg[1] << 8)), msg + 2, (uint16_t)(n - 2));
+        }
     }
 }
 
@@ -602,6 +637,7 @@ static void cam_task(void *arg)
 
     for (;;) {
         iq_item_t it;
+        drain_notifications();      // before blocking: a wake-up in s_iq ends the wait below
         if (xQueueReceive(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE) {
             switch (it.kind) {
             case IQ_ADV: {
@@ -666,12 +702,8 @@ static void cam_task(void *arg)
             case IQ_BLE_EVT:
                 handle_ble_evt(it.ble.ev, it.ble.status);
                 break;
-            case IQ_NOTIFY:
-                s_cs.last_rx_ms = now_ms();
-                if (s_drv && s_drv->on_notify) {
-                    s_drv->on_notify(it.notify.handle, it.notify.data, it.notify.len);
-                }
-                break;
+            case IQ_NOTIFY_WAKE:
+                break;              // drained below, same pass
             case IQ_CMD_PAIR: {
                 const camera_driver_t *d = camera_by_name(it.pair.brand);
                 if (d && cfg_cam_count() >= CAM_MAX_BONDS &&
@@ -887,6 +919,7 @@ void cam_start(void)
     cam_state_init();
     s_found_mux = xSemaphoreCreateMutexStatic(&s_found_mux_buf);
     s_iq   = xQueueCreateStatic(IQ_DEPTH, sizeof(iq_item_t), s_iq_buf, &s_iq_s);
+    s_nb   = xMessageBufferCreateStatic(NB_SIZE, s_nb_buf, &s_nb_s);
     s_cmdq = xQueueCreateStatic(16, sizeof(cam_cmd_t), s_cmdq_buf, &s_cmdq_s);
     s_evq  = xQueueCreateStatic(16, sizeof(cam_event_t), s_evq_buf, &s_evq_s);
     cam_registry_set_cbs(&k_cbs);

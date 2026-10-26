@@ -34,9 +34,13 @@ static int8_t   s_rssi;
 static uint16_t s_mtu;
 static bool     s_host_synced;
 
-#define MAX_CHRS 24
-static struct { ble_uuid_any_t uuid; uint16_t val_handle; uint16_t cccd_handle; } s_chrs[MAX_CHRS];
+// A GoPro exposes ~30 characteristics (GAP/DIS, Wi-Fi AP, control+query, camera
+// management, internal services). Too small a table silently hides the later
+// ones -- including the control/query characteristics we need.
+#define MAX_CHRS 48
+static struct { ble_uuid_any_t uuid; uint16_t def_handle; uint16_t val_handle; uint16_t cccd_handle; } s_chrs[MAX_CHRS];
 static int s_chr_n;
+static int s_dsc_idx;       // characteristic whose descriptors are being discovered
 
 // ---------------------------------------------------------------------------
 // Serialized ATT write queue.
@@ -234,47 +238,73 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 }
 
 // ---- GATT discovery ----------------------------------------------
-// Two passes: characteristics, then every descriptor. The second pass is what
-// gives us real CCCD handles -- assuming val_handle+1 happens to be right on
-// today's GoPro and DJI firmware, but it is not guaranteed by GATT and would
-// fail silently (subscribed to nothing, no notifications, no error) if either
-// vendor ever inserted another descriptor. The camera does not persist CCCDs,
-// so this runs on every connection.
+// Two passes: characteristics, then descriptors one characteristic at a time.
+// The second pass is what gives us real CCCD handles -- assuming val_handle+1
+// happens to be right on today's GoPro and DJI firmware, but it is not
+// guaranteed by GATT and would fail silently (subscribed to nothing, no
+// notifications, no error) if either vendor ever inserted another descriptor.
+// The camera does not persist CCCDs, so this runs on every connection.
+//
+// Descriptors must be discovered per characteristic: NimBLE reports the
+// start_handle you passed as the "owning characteristic" in every callback, so
+// one sweep over 1..0xffff attributes everything to handle 1 and matches nothing.
+static void disc_next_dsc(uint16_t conn);
+
 static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
                   uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg)
 {
-    (void)conn; (void)arg;
+    (void)chr_val_handle; (void)arg;
     if (err->status == 0 && dsc) {
         if (ble_uuid_u16(&dsc->uuid.u) == BLE_GATT_DSC_CLT_CFG_UUID16) {
-            for (int i = 0; i < s_chr_n; i++) {
-                if (s_chrs[i].val_handle == chr_val_handle) {
-                    s_chrs[i].cccd_handle = dsc->handle;
-                    break;
-                }
-            }
+            s_chrs[s_dsc_idx].cccd_handle = dsc->handle;
         }
-    } else if (err->status == BLE_HS_EDONE) {
-        emit(BLE_EVT_DISC_DONE, 0);     // characteristics + descriptors both done
-    } else if (err->status != 0) {
-        emit(BLE_EVT_DISC_FAIL, err->status);
+    } else {
+        // EDONE, or an error for this one characteristic: keep going. A missing
+        // CCCD falls back to val_handle+1 (with a warning) in ble_central_subscribe.
+        if (err->status != BLE_HS_EDONE) {
+            ESP_LOGW(TAG, "descriptor discovery h=%u failed: %d",
+                     s_chrs[s_dsc_idx].val_handle, err->status);
+        }
+        s_dsc_idx++;
+        disc_next_dsc(conn);
     }
     return 0;
+}
+
+// Descriptors of characteristic i live between its value handle and the next
+// characteristic's declaration (the table is in handle order).
+static void disc_next_dsc(uint16_t conn)
+{
+    for (; s_dsc_idx < s_chr_n; s_dsc_idx++) {
+        uint16_t start = s_chrs[s_dsc_idx].val_handle + 1;
+        uint16_t end = (s_dsc_idx + 1 < s_chr_n) ? (uint16_t)(s_chrs[s_dsc_idx + 1].def_handle - 1)
+                                                 : 0xffff;
+        if (start > end) { continue; }
+        if (ble_gattc_disc_all_dscs(conn, start, end, on_dsc, NULL) == 0) { return; }
+        ESP_LOGW(TAG, "descriptor discovery h=%u not started",
+                 s_chrs[s_dsc_idx].val_handle);
+    }
+    emit(BLE_EVT_DISC_DONE, 0);     // characteristics + descriptors both done
 }
 
 static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
                   const struct ble_gatt_chr *chr, void *arg)
 {
     (void)arg;
-    if (err->status == 0 && chr && s_chr_n < MAX_CHRS) {
-        ble_uuid_copy(&s_chrs[s_chr_n].uuid, &chr->uuid.u);
-        s_chrs[s_chr_n].val_handle = chr->val_handle;
-        s_chrs[s_chr_n].cccd_handle = 0;
-        s_chr_n++;
-    } else if (err->status == BLE_HS_EDONE) {
-        // Now sweep descriptors; DISC_DONE is emitted when that finishes.
-        if (ble_gattc_disc_all_dscs(conn, 1, 0xffff, on_dsc, NULL) != 0) {
-            emit(BLE_EVT_DISC_FAIL, BLE_HS_EUNKNOWN);
+    if (err->status == 0 && chr) {
+        if (s_chr_n < MAX_CHRS) {
+            ble_uuid_copy(&s_chrs[s_chr_n].uuid, &chr->uuid.u);
+            s_chrs[s_chr_n].def_handle = chr->def_handle;
+            s_chrs[s_chr_n].val_handle = chr->val_handle;
+            s_chrs[s_chr_n].cccd_handle = 0;
+            s_chr_n++;
+        } else {
+            static bool warned;
+            if (!warned) { warned = true; ESP_LOGW(TAG, "GATT table > %d characteristics -- ignoring the rest", MAX_CHRS); }
         }
+    } else if (err->status == BLE_HS_EDONE) {
+        s_dsc_idx = 0;
+        disc_next_dsc(conn);        // DISC_DONE is emitted when that finishes
     } else if (err->status != 0) {
         emit(BLE_EVT_DISC_FAIL, err->status);
     }
