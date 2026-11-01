@@ -33,8 +33,12 @@ PIDs, or navigation.
   or a combination — arm OR the switch (either one triggers it), or arm AND the
   switch (both must be true at once). Every command is verified against what the
   camera actually reports.
-- **Profile / preset switching** from a 3-position radio switch, with editable
-  band edges.
+- **Preset switching from a 2–6 zone radio switch.** On a GoPro each zone
+  pushes its own **camera settings** — resolution, frame rate, lens, HyperSmooth,
+  Protune (ISO, shutter angle, white balance, colour, sharpness, EV, 10-bit) —
+  to the camera's video preset, checked against what the camera reports; on a
+  DJI each zone selects a camera mode. Zones and their settings are built in the
+  portal, with option lists that follow what the camera actually allows.
 - **Highlight tags** punched into the recording from a momentary switch.
 - **Up to 4 paired cameras.** Any mix of GoPro and DJI. On power-up RecLink
   connects to whichever paired camera has the strongest signal — one at a time.
@@ -88,10 +92,13 @@ embedded in the app image, so `gzip` must be on `PATH`.
 While the aircraft is disarmed, RecLink hosts an open Wi-Fi network
 `RECLINK-XXXX`. Join it and any page redirects to the portal at `http://10.0.0.1`.
 
-- **Status** — live link state, camera telemetry, and MSP diagnostics.
+- **Status** — live link state, camera telemetry (including the GoPro Protune
+  values and the result of the last zone push), and MSP diagnostics.
 - **Cam control** — recording mode, the arm/switch triggers (with one-touch AUX
   channel auto-detect — flip the switch you want and it finds the channel for
-  you), preset zones, highlight switch.
+  you), the zone builder (add up to 6 zones, per-zone camera settings, capture
+  from the camera, options filtered by the camera's capabilities), highlight
+  switch.
 - **OSD** — pick analog or digital, drag telemetry tokens onto the four lines,
   preview them against live or sample data.
 - **Binding** — pair, list and forget cameras; a guided GoPro pairing flow with a
@@ -123,7 +130,10 @@ Six rules shape every line of the firmware:
    verification.
 5. **Wi-Fi only while disarmed.** The access point is down within 100 ms of the
    armed edge; in flight only BLE is active.
-6. **Deterministic memory.** No heap allocation once running.
+6. **Deterministic memory.** No heap allocation in the flight path (everything
+   the bridge needs while flying is static). The config portal exists only on
+   the bench and does use the heap, so it is sized for it: large JSON responses
+   are streamed section by section, and task stacks are measured and logged.
 
 ### Layout
 
@@ -150,8 +160,9 @@ implements `camera_driver_t` — it never touches core code.
 
 Early development. The firmware builds for both targets and the full feature set
 is implemented, and it has been bench-tested on real ESP32-C3 hardware wired to
-a Betaflight FC — MSP link, OSD rendering, recording triggers, and the config
-portal all working — but it has **not been flight tested**, and several
+a Betaflight FC and a GoPro HERO11 Black — MSP link, OSD rendering, recording
+triggers, the config portal and the settings-based zone presets all working —
+but it has **not been flight tested**, and several
 protocol constants are still assumed pending verification against a live
 GoPro / DJI capture (see [VERIFY.md](VERIFY.md)).
 
