@@ -102,11 +102,20 @@ static cJSON *cfg_build(const cfg_t *c, jstream_t *js)
     cJSON_AddNumberToObject(pre, "channel", c->preset.channel);
     cJSON_AddNumberToObject(pre, "dwell_ms", c->preset.dwell_ms);
     cJSON_AddBoolToObject(pre, "allow_during_record", c->preset.allow_during_record);
+    cJSON_AddNumberToObject(pre, "n_zones", cfg_zones(c));
     cJSON *bands = cJSON_AddArrayToObject(pre, "bands");
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < cfg_zones(c); i++) {
         cJSON *b = cJSON_CreateObject();
-        cJSON_AddNumberToObject(b, "max_us", c->preset.bands[i].max_us);
-        cJSON_AddNumberToObject(b, "id", c->preset.bands[i].id);
+        cJSON_AddNumberToObject(b, "max_us", cfg_zone_max_us(c, i));
+        cJSON_AddNumberToObject(b, "id", cfg_zone_id(c, i));
+        // GoPro zone settings: {"<setting id>": <option value>, ...}
+        cJSON *gp = cJSON_AddObjectToObject(b, "gp");
+        const cfg_gp_zone_t *g = cfg_zone_gp(c, i);
+        for (int k = 0; k < g->n && k < GP_PSET_MAX; k++) {
+            char key[8];
+            snprintf(key, sizeof(key), "%u", g->s[k].id);
+            cJSON_AddNumberToObject(gp, key, g->s[k].val);
+        }
         cJSON_AddItemToArray(bands, b);
     }
 
@@ -162,6 +171,7 @@ static cJSON *cfg_build(const cfg_t *c, jstream_t *js)
     cJSON *radio = cJSON_AddObjectToObject(r, "radio");
     cJSON_AddNumberToObject(radio, "wifi_power", c->wifi_tx_power);   // RF_PWR_*
     cJSON_AddNumberToObject(radio, "ble_power", c->ble_tx_power);     // RF_PWR_*, applies after reboot
+    #undef FL
     return r;
 }
 
@@ -245,12 +255,33 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
         mnum_u(o, "channel", &c->preset.channel, 1);
         mnum_u(o, "dwell_ms", &c->preset.dwell_ms, 2);
         mbool(o, "allow_during_record", &c->preset.allow_during_record);
+        mnum_u(o, "n_zones", &c->n_zones, 1);        // before the bands: decides how many to read
         const cJSON *bands = J_OBJ(o, "bands");
         if (cJSON_IsArray(bands)) {
-            for (int i = 0; i < 3 && i < cJSON_GetArraySize(bands); i++) {
+            for (int i = 0; i < cfg_zones(c) && i < cJSON_GetArraySize(bands); i++) {
                 const cJSON *b = cJSON_GetArrayItem(bands, i);
-                mnum_u(b, "max_us", &c->preset.bands[i].max_us, 2);
-                mnum_u(b, "id", &c->preset.bands[i].id, 4);
+                uint16_t mx = cfg_zone_max_us(c, i);
+                uint32_t zid = cfg_zone_id(c, i);
+                mnum_u(b, "max_us", &mx, 2);
+                mnum_u(b, "id", &zid, 4);
+                cfg_zone_set(c, i, mx, zid);
+                // "gp" REPLACES the zone's whole settings list (absent = unchanged).
+                // Ids outside gp_preset.h's list are dropped here and again by
+                // cfg_validate.
+                const cJSON *gp = J_OBJ(b, "gp");
+                if (gp) {
+                    cfg_gp_zone_t *g = cfg_zone_gp_mut(c, i);
+                    memset(g, 0, sizeof(*g));
+                    for (const cJSON *e = gp->child; e; e = e->next) {
+                        int id = atoi(e->string ? e->string : "");
+                        if (!cJSON_IsNumber(e) || id < 1 || id > 255 || gp_pset_index((uint8_t)id) < 0) { continue; }
+                        if (e->valuedouble < 0 || e->valuedouble > 255) { continue; }
+                        if (g->n >= GP_PSET_MAX) { break; }
+                        g->s[g->n].id  = (uint8_t)id;
+                        g->s[g->n].val = (uint8_t)e->valuedouble;
+                        g->n++;
+                    }
+                }
             }
         }
     }

@@ -132,3 +132,114 @@ const char *gopro_aspect108_str(uint8_t v)
     default: return "";
     }
 }
+
+// ---- Video + Protune (unofficial; HERO11 Black gpControl dump) -------------
+// ISO option IDs are NOT ordered by value. Same table for min (102) and max (13).
+const char *gopro_iso_str(uint8_t v)
+{
+    switch (v) {
+    case 0: return "6400";
+    case 1: return "1600";
+    case 2: return "400";
+    case 3: return "3200";
+    case 4: return "800";
+    case 7: return "200";
+    case 8: return "100";
+    case 9: return "Auto";
+    default: return "";
+    }
+}
+
+// setting 145: whole fractions of the frame rate (shutter angle); the allowed
+// set depends on setting 3.
+const char *gopro_shutter_str(uint8_t v)
+{
+    switch (v) {
+    case 0:  return "Auto";
+    case 3:  return "1/24";
+    case 4:  return "1/25";
+    case 5:  return "1/30";
+    case 6:  return "1/48";
+    case 7:  return "1/50";
+    case 8:  return "1/60";
+    case 11: return "1/96";
+    case 12: return "1/100";
+    case 13: return "1/120";
+    case 16: return "1/192";
+    case 17: return "1/200";
+    case 18: return "1/240";
+    case 21: return "1/400";
+    case 22: return "1/480";
+    case 23: return "1/960";
+    case 24: return "1/1920";
+    case 25: return "1/384";
+    case 28: return "1/800";
+    case 29: return "1/1600";
+    case 30: return "1/3200";
+    case 31: return "1/3840";
+    default: return "";
+    }
+}
+
+const char *gopro_wb_str(uint8_t v)
+{
+    switch (v) {
+    case 0:  return "Auto";
+    case 2:  return "5500K";
+    case 3:  return "6500K";
+    case 4:  return "Native";
+    case 5:  return "4000K";
+    case 7:  return "6000K";
+    case 8:  return "2300K";
+    case 9:  return "2800K";
+    case 10: return "3200K";
+    case 11: return "4500K";
+    case 12: return "5000K";
+    default: return "";
+    }
+}
+
+const char *gopro_color_str(uint8_t v)
+{
+    switch (v) {
+    case 1:   return "Flat";
+    case 2:   return "Natural";
+    case 100: return "Vibrant";
+    default:  return "";
+    }
+}
+
+const char *gopro_sharpness_str(uint8_t v)
+{
+    switch (v) {
+    case 0:  return "High";
+    case 1:  return "Medium";
+    case 2:  return "Low";
+    default: return "";
+    }
+}
+
+const char *gopro_ev_str(uint8_t v)
+{
+    switch (v) {
+    case 0:  return "+2.0";
+    case 1:  return "+1.5";
+    case 2:  return "+1.0";
+    case 3:  return "+0.5";
+    case 4:  return "0.0";
+    case 5:  return "-0.5";
+    case 6:  return "-1.0";
+    case 7:  return "-1.5";
+    case 8:  return "-2.0";
+    default: return "";
+    }
+}
+
+const char *gopro_onoff_str(uint8_t v)
+{
+    switch (v) {
+    case 0:  return "OFF";
+    case 1:  return "ON";
+    default: return "";
+    }
+}

@@ -5,10 +5,13 @@
 #include "gopro_tlv.h"
 #include "gopro_enums.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
 #include "cfg.h"
+#include "gp_preset.h"
+#include "cam_caps.h"
 #include "cam_state.h"
 #include "ble_central.h"
 #include "monoclock.h"
@@ -50,6 +53,13 @@ enum { ST_BATT_BARS = 2, ST_HOT = 6, ST_BUSY = 8, ST_ENCODING = 10,
        ST_PRESET_GROUP = 96 };   // 1000 VIDEO / 1001 PHOTO / 1002 TIMELAPSE
 enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_ASPECT = 108, SET_LENS = 121,
        SET_BIT_DEPTH = 183, SET_PROFILE = 184 };
+// Unofficial Video + Protune settings (not in the Open GoPro spec; IDs/options
+// from the HERO11 gpControl dump, gopro_ble_debug/docs App. D). Shown on the
+// portal status page only. 13/102/145 are the VIDEO-mode ISO/shutter -- photo
+// and multishot have their own IDs -- so they are ignored outside VIDEO.
+enum { SET_ISO_MAX = 13, SET_ISO_MIN = 102, SET_SHUTTER = 145, SET_PROTUNE = 114,
+       SET_WB = 115, SET_COLOR = 116, SET_SHARPNESS = 117, SET_EV = 118,
+       SET_10BIT = 174 };
 
 // ---- driver state ---------------------------------------------------
 static const camera_cbs_t *CB;
@@ -63,6 +73,7 @@ static uint32_t last_getall_ms;      // get-all-settings poll
 static uint32_t last_status_poll_ms; // get-all-status poll
 
 static void gp_pull_all(void);
+static void caps_request(uint32_t delay_ms);
 static bool     want_record_ack;
 static bool     want_record_target;
 
@@ -130,13 +141,293 @@ static esp_err_t gp_record(bool start)
     return ESP_OK;
 }
 
+// ---- capabilities: what each setting may be set to RIGHT NOW ----------------
+// Open GoPro "Get Setting Capabilities" (query 0x32 <id>): the reply repeats the
+// id once per allowed option, and the list depends on the camera's other
+// settings (the fps list on the current resolution, ...). One request per id,
+// one at a time -- so a setting the model lacks only costs its own empty reply
+// instead of failing a combined request. Afterwards register for capability
+// pushes (0x62) for the settings that answered, so later changes arrive by
+// themselves; a re-ask is also scheduled after every change we make, since
+// pushes are not yet confirmed on real cameras. Published to cam_caps for the
+// portal's preset builder.
+enum { CP_IDLE, CP_WAIT };
+#define CP_TIMEOUT_MS 2000
+static struct {
+    uint8_t  state;
+    int8_t   cur;
+    bool     want, registered;
+    uint32_t due_ms, t_ms;
+} cp;
+static cam_caps_t wk;       // working copy; published when a pass completes
+
+static void caps_request(uint32_t delay_ms) { cp.want = true; cp.due_ms = now_ms() + delay_ms; }
+
+static void caps_register(void)
+{
+    uint8_t b[1 + GP_PSET_MAX];
+    int n = 0;
+    b[0] = 0x62;                                    // register capability updates
+    for (int i = 0; i < GP_PSET_MAX; i++) {
+        if (wk.have[i]) { b[1 + n++] = gp_pset_id(i); }
+    }
+    if (n) { wr(h_qry, b, (uint16_t)(1 + n)); }
+    cp.registered = true;
+}
+
+static void caps_next(void)
+{
+    cp.cur++;
+    if (cp.cur >= GP_PSET_MAX) {
+        cp.state = CP_IDLE;
+        cam_caps_publish(&wk);
+        if (!cp.registered) { caps_register(); }
+        return;
+    }
+    uint8_t b[2] = { 0x32, gp_pset_id(cp.cur) };
+    wr(h_qry, b, 2);
+    cp.state = CP_WAIT;
+    cp.t_ms = now_ms();
+}
+
+static void caps_pump(void)
+{
+    uint32_t t = now_ms();
+    if (cp.state == CP_WAIT) {
+        if (t - cp.t_ms >= CP_TIMEOUT_MS) { caps_next(); }          // no reply: keep what we had, move on
+        return;
+    }
+    if (cp.want && ble_ready && (int32_t)(t - cp.due_ms) >= 0) {
+        cp.want = false;
+        cp.cur = -1;
+        caps_next();
+    }
+}
+
+// TLVs of a 0x32 reply (one id), a 0x62 register echo or a 0xA2 push:
+// [id][len][value], the id repeating once per allowed option.
+static void caps_on_tlv(uint8_t qid, const uint8_t *p, uint16_t len)
+{
+    bool seen[GP_PSET_MAX] = { false };
+    for (uint16_t i = 0; i + 2 <= len; ) {
+        uint8_t id = p[i], n = p[i + 1];
+        i += 2;
+        if (i + n > len) { break; }
+        int k = gp_pset_index(id);
+        bool mine = k >= 0 && n >= 1 && (qid != 0x32 || (cp.state == CP_WAIT && k == cp.cur));
+        if (mine) {
+            if (!seen[k]) { seen[k] = true; memset(wk.bits[k], 0, sizeof(wk.bits[k])); }
+            wk.bits[k][p[i] >> 3] |= (uint8_t)(1u << (p[i] & 7));
+            wk.have[k] = true;
+        }
+        i += n;
+    }
+    if (qid == 0x32) {
+        if (cp.state != CP_WAIT) { return; }
+        if (!seen[cp.cur]) { wk.have[cp.cur] = false; memset(wk.bits[cp.cur], 0, sizeof(wk.bits[cp.cur])); }
+        caps_next();
+    } else {
+        cam_caps_publish(&wk);
+    }
+}
+
+// ---- zone presets as settings ---------------------------------------------
+// A zone does not load a GoPro preset: cfg.gp_preset[zone] lists (setting id,
+// option value) pairs and we write them to the camera's active preset. One
+// write at a time, in gp_preset.h order (resolution before the settings whose
+// options depend on it), each acknowledged by the camera's [id][status] reply
+// on the settings-response characteristic. Then one read-back of everything we
+// wrote; whatever did not stick is rewritten once, and the rest is reported
+// (cam_state gp_apply_*) rather than assumed. Settings the camera already has
+// are not rewritten. All of it runs in cam_task context and never blocks.
+//
+// Video settings only apply to a VIDEO preset, so the apply waits until the
+// camera is in one (status 96) instead of firing writes that would be refused.
+enum { AP_IDLE, AP_WAIT, AP_SEND, AP_VERIFY };
+enum { APS_PEND, APS_SENT, APS_REJ, APS_BAD };   // BAD = accepted, not confirmed
+#define AP_WRITE_TIMEOUT_MS   3000
+#define AP_VERIFY_TIMEOUT_MS  2000
+#define AP_MODE_WAIT_MS       4000   // fail open if the preset group never shows up
+
+static struct {
+    uint8_t  state, slot, pass, n;
+    int8_t   cur;                       // entry awaiting its write ack
+    uint8_t  idx[GP_PSET_MAX];          // index into gp_pset_id()
+    uint8_t  val[GP_PSET_MAX];
+    uint8_t  st[GP_PSET_MAX];
+    uint32_t t_ms;                      // when the current phase started
+} ap;
+
+static void ap_publish(uint8_t state, uint16_t fail)
+{
+    cam_state_t *s = cam_scratch();
+    s->gp_apply_zone = (uint8_t)(ap.slot + 1);
+    s->gp_apply_state = state;
+    s->gp_apply_fail = fail;
+    if (CB && CB->on_state_dirty) { CB->on_state_dirty(); }
+}
+
+static void ap_finish(void)
+{
+    uint16_t fail = 0;
+    int bad = 0;
+    char ids[GP_PSET_MAX * 4 + 1]; ids[0] = '\0';
+    for (int i = 0; i < ap.n; i++) {
+        if (ap.st[i] == APS_REJ || ap.st[i] == APS_BAD) {
+            fail |= (uint16_t)(1u << ap.idx[i]);
+            bad++;
+            size_t l = strlen(ids);
+            snprintf(ids + l, sizeof(ids) - l, " %u", gp_pset_id(ap.idx[i]));
+        }
+    }
+    ap.state = AP_IDLE;
+    ap_publish(bad == 0 ? GPA_OK : bad == ap.n ? GPA_FAILED : GPA_PARTIAL, fail);
+    applog_note("gopro zone %u: %d/%d settings confirmed%s%s", ap.slot + 1, ap.n - bad, ap.n,
+                bad ? " -- not applied:" : "", ids);
+    if (CB && CB->on_ack) { CB->on_ack(CAM_OP_SELECT_PRESET, bad == 0); }
+    caps_request(300);          // the camera's options changed with its settings
+}
+
+// Read back every setting we wrote (one get-values request with the id list).
+static void ap_request_verify(void)
+{
+    uint8_t b[1 + GP_PSET_MAX];
+    int n = 0;
+    b[0] = 0x12;                                    // get setting values
+    for (int i = 0; i < ap.n; i++) {
+        if (ap.st[i] != APS_REJ) { b[1 + n++] = gp_pset_id(ap.idx[i]); }
+    }
+    if (n == 0) { ap_finish(); return; }
+    wr(h_qry, b, (uint16_t)(1 + n));
+    ap.state = AP_VERIFY;
+    ap.t_ms = now_ms();
+}
+
+// Send the next setting that is not already on the camera; verify when none is left.
+static void ap_next(void)
+{
+    cam_state_t *s = cam_scratch();
+    for (int i = 0; i < ap.n; i++) {
+        if (ap.st[i] != APS_PEND) { continue; }
+        int k = ap.idx[i];
+        if (s->gp_set[k].valid && s->gp_set[k].v == ap.val[i]) { ap.st[i] = APS_SENT; continue; }
+        uint8_t b[3] = { gp_pset_id(k), 0x01, ap.val[i] };
+        wr(h_set, b, 3);
+        ap.cur = (int8_t)i;
+        ap.state = AP_SEND;
+        ap.t_ms = now_ms();
+        return;
+    }
+    ap.cur = -1;
+    ap_request_verify();
+}
+
+static void ap_evaluate(void)
+{
+    cam_state_t *s = cam_scratch();
+    bool retry = false;
+    for (int i = 0; i < ap.n; i++) {
+        if (ap.st[i] == APS_REJ) { continue; }
+        int k = ap.idx[i];
+        if (s->gp_set[k].valid && s->gp_set[k].v == ap.val[i]) { ap.st[i] = APS_SENT; continue; }
+        if (ap.pass == 0) { ap.st[i] = APS_PEND; retry = true; }   // e.g. a later write undid it
+        else              { ap.st[i] = APS_BAD; }
+    }
+    if (retry) { ap.pass = 1; ap_next(); }
+    else       { ap_finish(); }
+}
+
+// Reply to one of our setting writes: [id][status], status 0 = accepted.
+static void ap_on_set_rsp(uint8_t id, uint8_t status)
+{
+    if (ap.state != AP_SEND || ap.cur < 0 || gp_pset_id(ap.idx[ap.cur]) != id) { return; }
+    if (status == 0) {
+        ap.st[ap.cur] = APS_SENT;
+    } else {
+        ap.st[ap.cur] = APS_REJ;
+        applog_note("gopro zone %u: setting %u rejected (status %u)", ap.slot + 1, id, status);
+    }
+    ap_next();
+}
+
+static void ap_pump(void)
+{
+    uint32_t t = now_ms();
+    switch (ap.state) {
+    case AP_WAIT: {
+        if (!ble_ready) { return; }
+        const cam_state_t *s = cam_scratch();
+        if (!s->mode.valid && t - ap.t_ms < AP_MODE_WAIT_MS) { return; }
+        if (s->mode.valid && s->mode.v != 0) { return; }       // photo / timelapse: wait for video
+        ap.pass = 0;
+        ap_publish(GPA_APPLYING, 0);
+        ap_next();
+        break;
+    }
+    case AP_SEND:
+        if (t - ap.t_ms >= AP_WRITE_TIMEOUT_MS) {
+            applog_note("gopro zone %u: setting %u: no reply", ap.slot + 1,
+                        gp_pset_id(ap.idx[ap.cur]));
+            ap.st[ap.cur] = APS_REJ;
+            ap_next();
+        }
+        break;
+    case AP_VERIFY:
+        if (t - ap.t_ms >= AP_VERIFY_TIMEOUT_MS) { ap_evaluate(); }
+        break;
+    default:
+        break;
+    }
+}
+
+// One preset-able setting, right now (portal builder keeps the camera in step
+// with what is being edited, so the capability lists match). Explicit portal
+// action only; refused while recording. Re-asks the capabilities afterwards.
+static esp_err_t gp_set_setting(uint8_t id, uint8_t val)
+{
+    if (gp_pset_index(id) < 0) { return ESP_ERR_INVALID_ARG; }
+    if (!h_set || !ble_ready) { return ESP_ERR_INVALID_STATE; }
+    if (cam_scratch()->recording == TRIBOOL_TRUE) {
+        applog_note("gopro: setting %u not changed while recording", id);
+        return ESP_ERR_INVALID_STATE;
+    }
+    uint8_t b[3] = { id, 0x01, val };
+    wr(h_set, b, 3);
+    caps_request(400);
+    return ESP_OK;
+}
+
 static esp_err_t gp_select_preset(uint8_t slot)
 {
     const cfg_t *c = cfg_get();
-    if (slot > 2) { return ESP_ERR_INVALID_ARG; }
-    uint32_t id = c->preset.bands[slot].id;
-    uint8_t b[6] = { 0x40, 0x04, id >> 24, id >> 16, id >> 8, id };
-    wr(h_cmd, b, 6);
+    if (!c || slot >= cfg_zones(c)) { return ESP_ERR_INVALID_ARG; }
+    const cfg_gp_zone_t *gz = cfg_zone_gp(c, slot);
+
+    memset(&ap, 0, sizeof(ap));
+    ap.slot = slot;
+    ap.cur = -1;
+    // Entries in apply order, whatever order cfg stored them in.
+    for (int k = 0; k < GP_PSET_MAX; k++) {
+        for (int j = 0; j < gz->n && j < GP_PSET_MAX; j++) {
+            if (gz->s[j].id == gp_pset_id(k)) {
+                ap.idx[ap.n] = (uint8_t)k;
+                ap.val[ap.n] = gz->s[j].val;
+                ap.n++;
+                break;
+            }
+        }
+    }
+    if (ap.n == 0) {
+        ap.state = AP_IDLE;
+        ap_publish(GPA_NONE, 0);
+        applog_note("gopro zone %u has no camera settings -- nothing pushed", slot + 1);
+        return ESP_OK;
+    }
+    ap.state = AP_WAIT;
+    ap.t_ms = now_ms();
+    ap_publish(GPA_WAITING, 0);
+    applog_note("gopro zone %u: pushing %u setting(s)", slot + 1, ap.n);
+    ap_pump();
     return ESP_OK;
 }
 
@@ -204,6 +495,7 @@ static esp_err_t gp_tick_1s(void)
                         (unsigned)HWINFO_GIVEUP_MS);
             ble_ready = true;
             gp_pull_all();
+            caps_request(300);
             return ESP_OK;
         }
         if (t0 - last_hwinfo_ms >= HWINFO_RETRY_MS) {
@@ -221,6 +513,9 @@ static esp_err_t gp_tick_1s(void)
         last_reasm_drops = drops;
         applog_note("gopro: %u dropped BLE message(s)", drops);
     }
+
+    ap_pump();      // zone-preset apply: timeouts, waiting for a video preset
+    caps_pump();    // capability queries
 
     // keepalive every 3 s (spec 6.4: must be < 10 s).
     if (t0 - last_keepalive_ms >= 3000) {
@@ -295,6 +590,8 @@ static esp_err_t gp_link_up(bool first_pair)
     last_status_poll_ms = now_ms();
     ble_ready = false;
     last_reasm_drops = 0;
+    memset(&cp, 0, sizeof(cp));
+    memset(&wk, 0, sizeof(wk));
 
     // Nothing but the readiness probe until the camera answers it (spec: poll
     // Get Hardware Info until status 0). gp_tick_1s retries; its reply kicks
@@ -317,6 +614,10 @@ static esp_err_t gp_link_up(bool first_pair)
 static void gp_link_down(void)
 {
     h_cmd = h_set = h_qry = 0;
+    memset(&ap, 0, sizeof(ap));     // pre-LOST commands are dropped, not replayed (spec 5.1)
+    memset(&cp, 0, sizeof(cp));
+    memset(&wk, 0, sizeof(wk));
+    cam_caps_publish(&wk);          // stale capabilities must not outlive the link
     want_record_ack = false;
     ble_ready = false;      // re-probe 0x3C on the next connection
 }
@@ -338,8 +639,14 @@ static void gp_pull_all(void)
                                        ST_SD_STATUS, ST_PRESET_GROUP };
     static const uint8_t reg_set[] = { SET_RESOLUTION, SET_FPS, SET_ASPECT,
                                        SET_LENS, SET_BIT_DEPTH, SET_PROFILE };
-    _Static_assert(sizeof(reg_st) >= sizeof(reg_set), "size b[] off the longer list");
-    uint8_t b[1 + sizeof(reg_st)];
+    // Unofficial IDs go in their own request: a camera that rejects one must not
+    // take the core registration above down with it.
+    static const uint8_t reg_set_pro[] = { SET_ISO_MAX, SET_ISO_MIN, SET_SHUTTER,
+                                           SET_PROTUNE, SET_WB, SET_COLOR,
+                                           SET_SHARPNESS, SET_EV, SET_10BIT };
+    _Static_assert(sizeof(reg_set_pro) >= sizeof(reg_st), "size b[] off the longest list");
+    _Static_assert(sizeof(reg_set_pro) >= sizeof(reg_set), "size b[] off the longest list");
+    uint8_t b[1 + sizeof(reg_set_pro)];
 
     b[0] = 0x53;                                   // register status updates
     memcpy(b + 1, reg_st, sizeof(reg_st));
@@ -348,6 +655,9 @@ static void gp_pull_all(void)
     b[0] = 0x52;                                   // register setting updates
     memcpy(b + 1, reg_set, sizeof(reg_set));
     wr(h_qry, b, 1 + sizeof(reg_set));
+
+    memcpy(b + 1, reg_set_pro, sizeof(reg_set_pro));   // b[0] is still 0x52
+    wr(h_qry, b, 1 + sizeof(reg_set_pro));
 
     // The register replies already carry current values, but ask outright too:
     // it also covers anything we read but didn't register for.
@@ -428,6 +738,7 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
         uint8_t code = (g == 1001) ? 1 : (g == 1002) ? 2 : (g == 1000) ? 0 : 0xFF;
         if (s->mode.valid && s->mode.v != code) {
             last_getall_ms = 0;         // re-poll settings for the new mode
+            caps_request(500);          // video / photo offer different options
         }
         s->mode.valid = (code != 0xFF);
         s->mode.v = code;
@@ -435,6 +746,7 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
         val_str_set(&s->mode_name, mn);
         if (!*mn) { s->mode_name.valid = false; }
         if (code != 0) {
+            s->iso_max.valid = s->iso_min.valid = s->shutter.valid = false;
             s->resolution.valid = false;
             s->framerate.valid = false;
             s->aspect.valid = false;
@@ -446,9 +758,21 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
     }
 }
 
+// Unknown option value -> "" -> blank (spec 9.4), never a guess.
+static void set_str(val_str_t *d, const char *t)
+{
+    val_str_set(d, t);
+    if (!*d->v) { d->valid = false; }
+}
+
 static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n)
 {
-    (void)n;
+    // Raw value of every setting a zone can push: verifies an apply, and is what
+    // the portal's "capture from camera" reads.
+    int ri = gp_pset_index(id);
+    if (ri >= 0 && n >= 1) {
+        s->gp_set[ri].id = id; s->gp_set[ri].valid = true; s->gp_set[ri].v = v[0];
+    }
     switch (id) {
     case SET_RESOLUTION:
         val_str_set(&s->resolution, gopro_resolution_str(v[0]));
@@ -479,6 +803,24 @@ static void apply_setting(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t 
         s->bit_depth.valid = true;
         s->bit_depth.v = (v[0] == 2) ? 10 : 8;
         break;
+    case SET_ISO_MAX:
+    case SET_ISO_MIN:
+    case SET_SHUTTER: {
+        // Video-mode IDs: blank them outside VIDEO (blank-on-unconfirmed).
+        val_str_t *d = id == SET_ISO_MAX ? &s->iso_max : id == SET_ISO_MIN ? &s->iso_min
+                                                                          : &s->shutter;
+        const char *t = id == SET_SHUTTER ? gopro_shutter_str(v[0]) : gopro_iso_str(v[0]);
+        if (s->mode.valid && s->mode.v != 0) { d->valid = false; break; }
+        val_str_set(d, t);
+        if (!*d->v) { d->valid = false; }
+        break;
+    }
+    case SET_PROTUNE:    set_str(&s->protune,    gopro_onoff_str(v[0]));     break;
+    case SET_WB:         set_str(&s->wb,         gopro_wb_str(v[0]));        break;
+    case SET_COLOR:      set_str(&s->color,      gopro_color_str(v[0]));     break;
+    case SET_SHARPNESS:  set_str(&s->sharpness,  gopro_sharpness_str(v[0])); break;
+    case SET_EV:         set_str(&s->ev,         gopro_ev_str(v[0]));        break;
+    case SET_10BIT:      set_str(&s->tune_10bit, gopro_onoff_str(v[0]));     break;
     default:
         break;
     }
@@ -523,6 +865,17 @@ static void parse_hw_info(const uint8_t *p, uint16_t len)
         i += n;
     }
     applog_note("gopro ready: %s fw %s", model, fw);
+    // Keep the model for the portal (preset builder hides settings it lacks).
+    // Camera-supplied text: printable ASCII only.
+    if (model[0] && strcmp(model, "?") != 0) {
+        cam_state_t *s = cam_scratch();
+        size_t i = 0;
+        for (; model[i] && i < sizeof(s->model) - 1; i++) {
+            s->model[i] = (model[i] >= 0x20 && model[i] < 0x7F) ? model[i] : '?';
+        }
+        s->model[i] = '\0';
+        if (CB && CB->on_state_dirty) { CB->on_state_dirty(); }
+    }
 }
 
 static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
@@ -538,6 +891,7 @@ static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
         if (!ble_ready) {
             ble_ready = true;
             gp_pull_all();         // now safe to register for pushes + read values
+            caps_request(300);
         }
         return;
     }
@@ -577,12 +931,16 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
     if (handle == vh_cmd_rsp) {
         if (gopro_reasm_feed(&rz_cmd, data, len, &pl, &pll)) { parse_cmd_rsp(pl, pll); }
     } else if (handle == vh_set_rsp) {
-        // Response to our keepalive / any setting write: [id][status]. Nothing
-        // to consume (we never write settings we care about).
-        (void)gopro_reasm_feed(&rz_set, data, len, &pl, &pll);
+        // Response to our keepalive / any setting write: [id][status]. Only the
+        // zone-preset apply cares (the keep-alive's 0x5B never matches it).
+        if (gopro_reasm_feed(&rz_set, data, len, &pl, &pll) && pll >= 2) { ap_on_set_rsp(pl[0], pl[1]); }
     } else if (handle == vh_qry_rsp) {
         if (gopro_reasm_feed(&rz_qry, data, len, &pl, &pll) && pll >= 2) {
             uint8_t qid = pl[0];
+            if (qid == 0x32 || qid == 0x62 || qid == 0xA2) {    // capabilities, not statuses
+                caps_on_tlv(qid, pl + 2, (uint16_t)(pll - 2));
+                return;
+            }
             // Every TLV query response -- get-all (0x12/0x13), register echo
             // (0x52/0x53) AND async push (0x92/0x93) -- is [id][status][tlvs...]
             // (verified: OpenGoPro tutorial_modules TlvResponse.parse @ 0f963572).
@@ -591,6 +949,12 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
             ESP_LOGD(TAG, "query id=%02x st=%02x len=%u (%s)",
                      qid, pl[1], pll, is_setting ? "setting" : "status");
             if (pll > 2) { walk_tuples(pl + 2, pll - 2, !is_setting); }
+            // Our read-back is a short 0x12 reply (<= one tuple per zone setting);
+            // the big periodic get-all-settings reply must not stand in for it, as
+            // it may have been generated before our last write landed.
+            if (qid == 0x12 && ap.state == AP_VERIFY && pll <= 2 + 3 * GP_PSET_MAX) {
+                ap_evaluate();
+            }
         }
     } else {
         ESP_LOGD(TAG, "notify on unknown handle %u len %u", handle, len);
@@ -615,6 +979,7 @@ const camera_driver_t *gopro_driver(void)
         .link_down = gp_link_down,
         .record = gp_record,
         .select_preset = gp_select_preset,
+        .set_setting = gp_set_setting,
         .set_datetime = gp_set_datetime,
         .get_datetime = gp_get_datetime,
         .push_gps = gp_push_gps,

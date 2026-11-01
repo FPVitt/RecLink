@@ -43,8 +43,9 @@ advmode.onchange = () => setAdv(advmode.checked, true);
 // ============ Cam control tab: Betaflight-style AUX range bars =============
 // name= attributes still map 1:1 to /api/config: record.switch.threshold_us,
 // preset.bands.N.max_us / .id, record.switch.channel, preset.channel,
-// hilight.channel. Zone 3's upper edge is fixed at 2100 us in firmware, so
-// preset.bands.2.max_us is deliberately NOT a control (server keeps its value).
+// hilight.channel. The LAST zone's upper edge is fixed at 2100 us in firmware, so
+// its max_us is deliberately NOT a control. Zones can be added/removed (2..6):
+// preset.n_zones + preset.bands[0..n-1].
 const US_MIN = 900, US_MAX = 2100, US_SPAN = US_MAX - US_MIN;
 const clampUs = u => u < US_MIN ? US_MIN : u > US_MAX ? US_MAX : u;
 const snapUs  = u => Math.round(clampUs(u) / 25) * 25;
@@ -56,16 +57,24 @@ const usPct   = u => (clampUs(u) - US_MIN) / US_SPAN * 100;
   $$('select[data-auxsel]').forEach(s => { s.innerHTML = o; });
 })();
 
+const ZONES_MAX = 6, ZONES_MIN = 2;
+let presetN = 3;                     // number of radio-switch zones
 const zwrap = $('#zone-ids');
-for (let i = 0; i < 3; i++) {
-  zwrap.insertAdjacentHTML('beforeend',
-    `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>
-       <label>up to &micro;s ${i < 2
-         ? `<input type="number" inputmode="numeric" name="preset.bands.${i}.max_us" min="900" max="2100" step="25">`
-         : `<span class="ro">2100 (fixed)</span>`}</label>
-       <label>Preset / mode ID
-         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></div>`);
+function buildZoneRows() {
+  zwrap.innerHTML = '';
+  for (let i = 0; i < presetN; i++) {
+    zwrap.insertAdjacentHTML('beforeend',
+      `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>
+         <label>up to &micro;s ${i < presetN - 1
+           ? `<input type="number" inputmode="numeric" name="preset.bands.${i}.max_us" min="900" max="2100" step="25">`
+           : `<span class="ro">2100 (fixed)</span>`}</label>
+         <label class="zid">Mode ID
+           <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></div>`);
+  }
+  $('#zone-add').disabled = presetN >= ZONES_MAX;
+  $('#zone-del').disabled = presetN <= ZONES_MIN;
 }
+buildZoneRows();
 
 const numAt = name => {
   const e = document.querySelector(`[name="${CSS.escape(name)}"]`);
@@ -84,16 +93,17 @@ let presetLiveUs = null;
 function barVals(fn) {
   if (fn === 'record')  return [snapUs(numAt('record.switch.threshold_us') || 1700)];
   if (fn === 'hilight') return [1700];
-  return [snapUs(numAt('preset.bands.0.max_us') || 1300),
-          snapUs(numAt('preset.bands.1.max_us') || 1700)];
+  const e = [];                                   // the editable edges: one fewer than zones
+  for (let k = 0; k < presetN - 1; k++) e.push(snapUs(numAt('preset.bands.' + k + '.max_us') || (900 + (k + 1) * 1200 / presetN)));
+  return e;
 }
 function setBarVal(fn, i, u) {
   u = snapUs(u);
   if (fn === 'record') { setNum('record.switch.threshold_us', u); return; }
   if (fn === 'preset') {
-    const v = barVals('preset');
-    if (i === 0) u = Math.min(u, v[1] - 25);
-    else         u = Math.max(u, v[0] + 25);
+    const v = barVals('preset');                  // keep the edges ascending, >= 25 us apart
+    const lo = i ? v[i - 1] + 25 : 925, hi = i < v.length - 1 ? v[i + 1] - 25 : 2075;
+    u = Math.max(lo, Math.min(hi, u));
     setNum('preset.bands.' + i + '.max_us', snapUs(u));
   }
 }
@@ -105,7 +115,7 @@ function tickHTML() {
 function buildBar(host) {
   const fn = host.dataset.fn;
   host.innerHTML = '<i class="track"></i>' +
-    (fn === 'preset' ? '<i class="seg z0"></i><i class="seg z1"></i><i class="seg z2"></i>'
+    (fn === 'preset' ? Array.from({ length: presetN }, (_, k) => `<i class="seg z${k}"></i>`).join('')
                      : '<i class="fill"></i>') +
     tickHTML() + '<i class="cursor" hidden><i class="cval"></i></i>';
   const b = {
@@ -116,7 +126,7 @@ function buildBar(host) {
     cval: host.querySelector('.cval'),
     handles: []
   };
-  const nh = fn === 'record' ? 1 : fn === 'preset' ? 2 : 0;
+  const nh = fn === 'record' ? 1 : fn === 'preset' ? presetN - 1 : 0;
   for (let i = 0; i < nh; i++) {
     const h = el('i', 'handle');
     h.tabIndex = 0;
@@ -134,14 +144,14 @@ function layoutBar(fn) {
   const b = BARS[fn]; if (!b) return;
   const v = barVals(fn);
   if (fn === 'preset') {
-    const p0 = usPct(v[0]), p1 = usPct(v[1]);
-    b.segs[0].style.cssText = `left:0;width:${p0}%`;
-    b.segs[1].style.cssText = `left:${p0}%;width:${p1 - p0}%`;
-    b.segs[2].style.cssText = `left:${p1}%;right:0`;
-    b.handles[0].style.left = p0 + '%';
-    b.handles[1].style.left = p1 + '%';
-    b.handles[0].setAttribute('aria-valuenow', v[0]);
-    b.handles[1].setAttribute('aria-valuenow', v[1]);
+    const e = [0, ...v.map(usPct), 100];           // zone k spans e[k]..e[k+1]
+    b.segs.forEach((sg, k) => {
+      sg.style.cssText = k === b.segs.length - 1 ? `left:${e[k]}%;right:0` : `left:${e[k]}%;width:${e[k + 1] - e[k]}%`;
+    });
+    b.handles.forEach((h, k) => {
+      h.style.left = e[k + 1] + '%';
+      h.setAttribute('aria-valuenow', v[k]);
+    });
   } else {
     const p = usPct(fn === 'hilight' ? 1700 : v[0]);
     b.fill.style.cssText = `left:${p}%;right:0`;
@@ -193,7 +203,7 @@ function paintZones(liveUs) {
   if (liveUs !== undefined) presetLiveUs = liveUs;
   const v = barVals('preset');
   const z = presetLiveUs == null ? -1
-          : presetLiveUs <= v[0] ? 0 : presetLiveUs <= v[1] ? 1 : 2;
+          : (k => k < 0 ? presetN - 1 : k)(v.findIndex(x => presetLiveUs <= x));
   b.segs.forEach((s, k) => s.classList.toggle('live', k === z));
   $$('#zone-ids .pz').forEach((r, k) => r.classList.toggle('live', k === z));
 }
@@ -220,10 +230,49 @@ function updateCursors(m) {
   });
 }
 $$('.rangebar').forEach(buildBar);
+
+// ---- add / remove zones ----
+// Rebuilds the zone rows, the range bar and the builder tabs for n zones, keeping
+// every value already entered. Adding splits the space above the current top edge
+// (the old last zone gets an editable edge); removing drops the last zone.
+function setZoneCount(n) {
+  const snap = [];
+  for (let i = 0; i < presetN; i++) snap.push({ max: numAt('preset.bands.' + i + '.max_us'), id: numAt('preset.bands.' + i + '.id') });
+  const old = presetN;
+  presetN = n;
+  buildZoneRows();
+  snap.forEach((z, i) => {
+    if (i >= n) return;
+    if (i < n - 1) setField('preset.bands.' + i + '.max_us', z.max);
+    setField('preset.bands.' + i + '.id', z.id);
+  });
+  if (n > old) {                                              // the old top zone now needs an edge
+    const last = old >= 2 ? snap[old - 2].max : 900;
+    const mid = snapUs(last + (2100 - last) / 2);
+    if (mid - last >= 150 && 2100 - mid >= 150 && n === old + 1) {
+      setField('preset.bands.' + (old - 1) + '.max_us', mid);
+    } else {                                                  // the top would get cramped: spread all edges evenly
+      for (let k = 0; k < n - 1; k++) setField('preset.bands.' + k + '.max_us', snapUs(900 + (k + 1) * 1200 / n));
+    }
+    setField('preset.bands.' + (n - 1) + '.id', n - 1);
+  }
+  while (gpz.length < n) gpz.push({});
+  gpz.length = n;
+  if (gpSel >= n) gpSel = n - 1;
+  buildBar($('#rb-preset'));
+  applyGates();
+  gpRender(); setDirty(true);
+}
+$('#zone-add').onclick = () => { if (presetN < ZONES_MAX) { setZoneCount(presetN + 1); gpSelectZone(presetN - 1, true); } };
+$('#zone-del').onclick = () => {
+  if (presetN <= ZONES_MIN) return;
+  if (Object.keys(gpz[presetN - 1] || {}).length && !confirm('Remove zone ' + presetN + ' and its camera settings?')) return;
+  setZoneCount(presetN - 1);
+};
 ['input', 'change'].forEach(ev => $('#cam-control').addEventListener(ev, e => {
   const n = (e.target && e.target.name) || '';
   if (n === 'record.switch.threshold_us') layoutBar('record');
-  else if (/^preset\.bands\.[01]\.max_us$/.test(n)) { layoutBar('preset'); paintZones(); }
+  else if (/^preset\.bands\.\d+\.max_us$/.test(n)) { layoutBar('preset'); paintZones(); }
   if (/\.channel$/.test(n) && lastStatus) updateCursors(lastStatus.msp);
 }));
 
@@ -559,6 +608,249 @@ function renderPreview() {
   if (e.target.closest && e.target.closest('#osd')) renderPreview();
 }));
 
+// ============ GoPro zone settings builder ============
+// On a GoPro a zone does not load a camera preset: it pushes these settings to the
+// camera's active (video) preset. Stored as preset.bands[N].gp = {settingId: value}
+// (firmware: gp_preset.h). Rows that are not ticked are left as the camera has them.
+// Option lists are the camera's own enum values (Open GoPro spec / HERO11 gpControl
+// dump); unofficial settings may be refused by some models -- the Status tab and
+// the line under the editor show what the camera actually accepted.
+const GP_SET = {
+  2: ["Resolution", [[1,"4K"],[4,"2.7K"],[6,"2.7K 4:3"],[7,"1440"],[9,"1080"],[12,"720"],[18,"4K 4:3"],[21,"5.6K"],[24,"5K"],[25,"5K 4:3"],[26,"5.3K 8:7"],[27,"5.3K 4:3"],[28,"4K 8:7"],[31,"8K"],[35,"5.3K 21:9"],[36,"4K 21:9"],[37,"4K 1:1"],[38,"900"],[39,"4K SPH"],[40,"8K 4:3"],[44,"1440 4:3"],[100,"5.3K"],[107,"5.3K 8:7 V2"],[108,"4K 8:7 V2"],[109,"4K 9:16 V2"],[110,"1080 9:16 V2"],[111,"2.7K 4:3 V2"],[112,"4K 4:3 V2"],[113,"5.3K 4:3 V2"]]],
+  108: ["Aspect ratio", [[0,"4:3"],[1,"16:9"],[3,"8:7"],[4,"9:16"],[5,"21:9"],[6,"1:1"]], ["HERO12 Black", "HERO13 Black", "MAX 2", "Mission 1 Pro", "Mission 1", "LIT HERO"]],
+  3: ["Frame rate (fps)", [[0,"240"],[1,"120"],[2,"100"],[3,"90"],[5,"60"],[6,"50"],[8,"30"],[9,"25"],[10,"24"],[13,"200"],[15,"400"],[16,"360"],[17,"300"],[18,"480"],[19,"960"],[20,"800"]]],
+  121: ["Lens", [[0,"Wide"],[2,"Narrow"],[3,"Superview"],[4,"Linear"],[7,"Max SuperView"],[8,"Linear + Horizon Leveling"],[9,"HyperView"],[10,"Linear + Horizon Lock"],[11,"Max HyperView"],[12,"Ultra SuperView"],[13,"Ultra Wide"],[14,"Ultra Linear"],[104,"Ultra HyperView"]]],
+  135: ["HyperSmooth", [[0,"Off"],[1,"Low"],[2,"High"],[3,"Boost"],[4,"Auto Boost"],[100,"Standard"]], ["HERO9 Black", "HERO10 Black", "HERO11 Black", "HERO11 Black Mini", "HERO12 Black", "HERO13 Black", "MAX 2", "Mission 1 Pro", "Mission 1"]],
+  183: ["Bit depth", [[0,"8-Bit"],[2,"10-Bit"]], ["HERO12 Black", "HERO13 Black", "MAX 2", "Mission 1 Pro", "Mission 1"]],
+  184: ["Color profile", [[0,"Standard"],[1,"HDR"],[2,"Log"],[101,"HLG HDR"]], ["HERO12 Black", "HERO13 Black", "MAX 2"]],
+  114: ["Protune", [[0,"OFF"],[1,"ON"]]],
+  13: ["ISO max", [[0,"6400"],[1,"1600"],[2,"400"],[3,"3200"],[4,"800"],[7,"200"],[8,"100"],[9,"Auto"]]],
+  102: ["ISO min", [[0,"6400"],[1,"1600"],[2,"400"],[3,"3200"],[4,"800"],[7,"200"],[8,"100"],[9,"Auto"]]],
+  145: ["Shutter angle", [[0,"Auto"],[3,"1/24"],[4,"1/25"],[5,"1/30"],[6,"1/48"],[7,"1/50"],[8,"1/60"],[11,"1/96"],[12,"1/100"],[13,"1/120"],[16,"1/192"],[17,"1/200"],[18,"1/240"],[21,"1/400"],[22,"1/480"],[23,"1/960"],[24,"1/1920"],[25,"1/384"],[28,"1/800"],[29,"1/1600"],[30,"1/3200"],[31,"1/3840"]]],
+  115: ["White balance", [[0,"Auto"],[2,"5500K"],[3,"6500K"],[4,"Native"],[5,"4000K"],[7,"6000K"],[8,"2300K"],[9,"2800K"],[10,"3200K"],[11,"4500K"],[12,"5000K"]]],
+  116: ["Color", [[1,"Flat"],[2,"Natural"],[100,"Vibrant"]]],
+  117: ["Sharpness", [[0,"High"],[1,"Medium"],[2,"Low"]]],
+  118: ["EV comp", [[0,"+2.0"],[1,"+1.5"],[2,"+1.0"],[3,"+0.5"],[4,"0.0"],[5,"-0.5"],[6,"-1.0"],[7,"-1.5"],[8,"-2.0"]]],
+  174: ["10-bit", [[0,"Off"],[1,"On"]]],
+};
+// GP_SET[id] = [label, options, models?]. `models` (from the Open GoPro settings
+// database) lists the cameras that have the setting; the builder hides it for any
+// other connected model. Settings without a list (incl. the unofficial ones) are
+// always shown -- we only hide what is known to be missing.
+const GP_GROUPS = [['Video', [2,108,3,121,135,183,184]],
+                   ['Protune', [114,13,102,145,115,116,117,118,174]]];
+let gpz = [{}, {}, {}], gpSel = 0, gpModel = '';
+try { gpModel = localStorage.getItem('gpmodel') || ''; } catch (e) {}
+const gpSupported = id => { const m = GP_SET[id][2]; return !m || !gpModel || m.includes(gpModel); };
+
+// ---- shutter angle ----
+// Setting 145's options are fractions of a second (1/60...), but what a filmmaker
+// wants is the ANGLE: 180 deg = exposure of 1/(2 x fps). The angle -> option mapping
+// depends on the frame rate, so it is derived here from the option names: the zone
+// still stores the camera's raw option, the UI shows and edits it as an angle.
+const GP_FPS = {0:240,1:120,2:100,3:90,5:60,6:50,8:30,9:25,10:24,13:200,15:400,16:360,17:300,18:480,19:960,20:800};
+const GP_ANGLES = [360, 180, 90, 45, 22.5];
+const gpDenom = v => { const o = GP_SET[145][1].find(x => x[0] === v), m = o && /^1\/(\d+)$/.exec(o[1]);
+                       return m ? +m[1] : 0; };                                  // 0 = Auto / unknown
+const gpAngleOf = (v, fps) => { const d = gpDenom(v); return d ? Math.round(360 * fps / d * 10) / 10 : 0; };
+const gpShutterFor = (angle, fps) => { const d = Math.round(fps * 360 / angle);
+  const o = GP_SET[145][1].find(x => gpDenom(x[0]) === d); return o ? o[0] : undefined; };
+const fmtAngle = a => String(a) + '\u00b0';
+// Frame rate the angles refer to: this zone's own, else what the camera has right now.
+function gpFpsNum(z) {
+  if (z[3] !== undefined) return GP_FPS[z[3]] || 0;
+  const gs = lastStatus && lastStatus.cam_state && lastStatus.cam_state.gp_set;
+  return gs && gs[3] !== undefined ? GP_FPS[gs[3]] || 0 : 0;
+}
+// ---- capabilities (what the camera offers right now) ----
+// /api/camera/caps lists, per setting, the options the camera currently accepts --
+// which depend on its other settings (the fps list on the current resolution, ...).
+// Only trusted while the camera is connected and in a video preset (it then lists
+// resolution); otherwise the full option tables above are shown. With "keep the
+// camera in step" on, edits are also written to the camera so the dependent lists
+// (fps for the chosen resolution, ...) follow the zone being built.
+let gpCaps = null, gpCapsGen = -1, gpCamReady = false, gpSyncing = false;
+let gpLive = true;
+try { gpLive = localStorage.getItem('gplive') !== '0'; } catch (e) {}
+const gpCapsOn = () => !!(gpCamReady && gpCaps && gpCaps[2]);
+async function gpLoadCaps() {
+  try {
+    const r = await fetch('/api/camera/caps').then(x => x.json());
+    gpCaps = r && r.caps && Object.keys(r.caps).length ? r.caps : null;
+  } catch (e) { return; }
+  gpSyncing = false;
+  gpRender();
+}
+
+// ---- option order: the camera's enum order is arbitrary, so sort for reading ----
+const GP_ORD = {                       // explicit order by option value
+  121: [0, 4, 8, 10, 2, 3, 7, 12, 9, 11, 104, 13, 14],   // Wide, Linear(+HL), Narrow, Superview..., HyperView..., Ultra
+  135: [0, 1, 2, 3, 4, 100],
+  184: [0, 1, 2, 101],
+  108: [1, 0, 3, 5, 6, 4],
+  116: [100, 2, 1],                    // Vibrant, Natural, Flat
+  117: [2, 1, 0],                      // Low, Medium, High
+};
+const GP_RES_SIZE = ['8K', '5.6K', '5.3K', '5K', '4K', '2.7K', '1440', '1080', '900', '720'];   // large -> small
+const GP_RES_ASP = ['', '21:9', '4:3', '8:7', '1:1', '9:16', 'SPH'];
+function gpRank(id, o) {
+  const v = o[0], n = o[1];
+  if (GP_ORD[id]) { const i = GP_ORD[id].indexOf(v); return i < 0 ? 900 + v : i; }
+  switch (+id) {
+    case 2: {                          // 5.3K ... 720; plain 16:9 before 4:3 / 8:7 / ...; V2 after
+      const m = /^(\S+)\s*(.*)$/.exec(n) || [0, n, ''], rest = m[2].replace(/\s*V2/, '');
+      const si = GP_RES_SIZE.indexOf(m[1]), ai = GP_RES_ASP.indexOf(rest);
+      return (si < 0 ? 99 : si) * 100 + (ai < 0 ? 9 : ai) * 10 + (/V2/.test(m[2]) ? 5 : 0) + v / 1000;
+    }
+    case 3: case 118: return parseFloat(n);                    // fps and EV: numeric
+    case 13: case 102: return n === 'Auto' ? -1 : parseInt(n, 10);
+    case 115: return n === 'Auto' ? -2 : n === 'Native' ? -1 : parseInt(n, 10);   // Kelvin ascending
+    case 145: return gpDenom(v);                               // Auto (0) first, then 1/24 ... 1/3840
+    default: return v;
+  }
+}
+// The options to offer for a setting: the camera's current list if known, else all
+// of them; sorted for reading.
+function gpOpts(id) {
+  const all = GP_SET[id][1];
+  let o = all.slice();
+  const c = gpCapsOn() && gpCaps[id];
+  if (c) {
+    o = o.filter(x => c.includes(x[0]));
+    c.forEach(v => { if (!all.some(x => x[0] === v)) o.push([v, 'option ' + v]); });
+  }
+  return o.sort((a, b) => gpRank(id, a) - gpRank(id, b) || a[0] - b[0]);
+}
+// Show a setting? Never one already ticked; with live caps, only what the camera lists.
+const gpShown = (id, v) => v !== undefined || (gpCapsOn() ? !!gpCaps[id] : gpSupported(id));
+
+function gpFillShutter(sel, z) {
+  const fps = gpFpsNum(z), v = z[145], allowed = gpOpts(145);
+  let opts;
+  if (!fps) {
+    opts = allowed.map(o => [o[0], o[1]]);                      // no frame rate known: plain fractions
+  } else {
+    opts = [];
+    if (allowed.some(o => o[0] === 0)) opts.push([0, 'Auto']);
+    GP_ANGLES.forEach(a => { const o = gpShutterFor(a, fps);
+      if (o !== undefined && allowed.some(x => x[0] === o)) opts.push([o, fmtAngle(a) + ' (1/' + gpDenom(o) + ')']); });
+  }
+  if (v !== undefined && !opts.some(o => o[0] === v)) {        // stored value the list lacks
+    const a = fps ? gpAngleOf(v, fps) : 0;
+    opts.push([v, (a ? fmtAngle(a) + ' (1/' + gpDenom(v) + ')' : v === 0 ? 'Auto' : '1/' + gpDenom(v))
+                  + (gpCapsOn() ? ' (not available now)' : '')]);
+  }
+  return opts;
+}
+
+function gpBuild() {
+  $('#gp-rows').innerHTML = GP_GROUPS.map(([g, ids]) =>
+    `<h4>${g}</h4>` + ids.map(id =>
+      `<div class="gpr" data-id="${id}"><input type="checkbox" aria-label="Push ${GP_SET[id][0]}">` +
+      `<span>${GP_SET[id][0]}</span><select></select></div>`).join('')).join('');
+}
+function gpRender() {
+  if (!$('#gp-rows').firstChild) gpBuild();
+  const z = gpz[gpSel], capsOn = gpCapsOn();
+  $$('#gp-rows .gpr').forEach(r => {
+    const id = r.dataset.id, v = z[id], sel = r.querySelector('select');
+    let opts = id === '145' ? gpFillShutter(sel, z) : gpOpts(id).map(o => [o[0], o[1]]);
+    if (id !== '145' && v !== undefined && !opts.some(o => o[0] === v)) {
+      const base = GP_SET[id][1].find(x => x[0] === v);        // stored value the camera does not offer now
+      opts.push([v, (base ? base[1] : 'option ' + v) + (capsOn ? ' (not available now)' : '')]);
+    }
+    const sig = JSON.stringify(opts);
+    if (sel.dataset.sig !== sig) {                              // rebuild only on change: keeps an open list open
+      sel.dataset.sig = sig;
+      sel.innerHTML = opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
+    }
+    if (v !== undefined) sel.value = v;
+    r.classList.toggle('on', v !== undefined);
+    r.classList.toggle('bad', v !== undefined && capsOn && gpCaps[id] && !gpCaps[id].includes(v));
+    r.querySelector('input').checked = v !== undefined;
+    r.hidden = !gpShown(id, v);
+    r.title = v !== undefined && !capsOn && !gpSupported(id) ? gpModel + ' does not list this setting' : '';
+    if (id === '145' && z[3] === undefined) {
+      r.title = (r.title ? r.title + '. ' : '') + 'Angles use the camera’s current frame rate; tick Frame rate in this zone to fix it.';
+    }
+  });
+  $('#gp-model').textContent = gpSyncing ? 'Syncing with the camera…'
+    : capsOn ? 'Showing what ' + (gpModel || 'the camera') + ' offers right now' +
+        (gpLive ? ' — edits are also sent to the camera so dependent lists stay correct.' : '.')
+    : gpModel ? 'Showing the settings ' + gpModel + ' supports. Connect the camera (in a video preset) to filter the options too.'
+    : 'Connect the camera to hide settings and options it does not support.';
+  $('#gp-live').checked = gpLive;
+  const zt = $('#gp-zt');
+  while (zt.children.length < presetN) {
+    const i = zt.children.length, b = el('button', 'ghost');
+    b.type = 'button'; b.onclick = () => gpSelectZone(i);
+    zt.appendChild(b);
+  }
+  while (zt.children.length > presetN) zt.lastChild.remove();
+  [...zt.children].forEach((b, i) => {
+    b.classList.toggle('on', i === gpSel);
+    b.textContent = 'Zone ' + (i + 1) + (Object.keys(gpz[i] || {}).length ? ' \u00b7 ' + Object.keys(gpz[i]).length : '');
+  });
+}
+// Write the given settings of the current zone to the camera, in order, so its
+// capability lists follow what is being built. Disarmed + not recording only (server side).
+async function gpPushLive(ids, gapMs) {
+  const z = gpz[gpSel];
+  gpSyncing = true; gpRender();
+  for (const id of ids) {
+    if (z[id] === undefined) continue;
+    const r = await post('/api/camera/set', { id: +id, val: z[id] });
+    if (!r.ok) { gpSyncing = false; gpRender(); msg('camera did not take ' + GP_SET[id][0] + (r.error ? ': ' + r.error : '')); return; }
+    if (gapMs) await new Promise(res => setTimeout(res, gapMs));   // let the camera finish one setting (resolution) before the next
+  }
+  setTimeout(() => { if (gpSyncing) { gpSyncing = false; gpRender(); } }, 6000);   // no change came back
+}
+function gpEdit(row, on) {
+  const id = row.dataset.id, sel = row.querySelector('select'), z = gpz[gpSel];
+  const angle = (id === '3' && z[145] !== undefined && gpFpsNum(z)) ? gpAngleOf(z[145], gpFpsNum(z)) : 0;
+  if (on) z[id] = +sel.value; else delete z[id];
+  const push = on ? [id] : [];
+  if (angle && gpFpsNum(z)) {                                   // frame rate changed: keep the same angle
+    const nv = gpShutterFor(angle, gpFpsNum(z));
+    if (nv !== undefined && nv !== z[145]) { z[145] = nv; if (on) push.push('145'); }
+  }
+  gpRender(); setDirty(true);
+  if (gpLive && gpCamReady && push.length) gpPushLive(push);
+}
+$('#gp-live').onchange = e => { gpLive = e.target.checked;
+  try { localStorage.setItem('gplive', gpLive ? '1' : '0'); } catch (x) {} gpRender(); };
+$('#gp-rows').addEventListener('change', e => {
+  const row = e.target.closest('.gpr'); if (!row) return;
+  gpEdit(row, e.target.type === 'checkbox' ? e.target.checked : true);
+});
+// Selecting a zone shows it and -- with "keep the camera in step" on and the camera
+// connected -- applies it to the camera (disarmed, not recording), so the zone can be
+// checked on the spot and the option lists match it. `quiet` = show only (a new, empty zone).
+function gpSelectZone(i, quiet) {
+  gpSel = i; gpRender();
+  const z = gpz[i], ids = GP_GROUPS.flatMap(g => g[1]).filter(id => z[id] !== undefined);
+  if (!quiet && gpLive && gpCamReady && ids.length) {
+    msg('applying zone ' + (i + 1) + ' to the camera');
+    gpPushLive(ids, 350);
+  }
+}
+$('#gp-clear').onclick = () => { gpz[gpSel] = {}; gpRender(); setDirty(true); };
+$('#gp-capture').onclick = () => {
+  const gs = lastStatus && lastStatus.cam_state && lastStatus.cam_state.gp_set;
+  const ids = gs ? Object.keys(gs).filter(k => GP_SET[k]) : [];
+  if (!ids.length) { msg('camera has not reported its settings yet'); return; }
+  gpz[gpSel] = {}; ids.forEach(k => { gpz[gpSel][k] = gs[k]; });
+  gpRender(); setDirty(true);
+  msg('captured ' + ids.length + ' settings into zone ' + (gpSel + 1) + ' -- Save to keep');
+};
+function gpApplyText(za) {
+  if (!za || !za.zone) return '\u2014';
+  const n = { none: 'nothing to push', waiting: 'waiting for camera', applying: 'applying\u2026',
+              ok: 'applied', partial: 'partly applied', failed: 'not applied' }[za.state] || za.state;
+  return 'Zone ' + za.zone + ': ' + n +
+    (za.fail && za.fail.length ? ' (not accepted: ' + za.fail.map(i => GP_SET[i] ? GP_SET[i][0] : i).join(', ') + ')' : '');
+}
+
 // ---- config load/save ----
 function setField(name, val) {
   const el = document.querySelector(`[name="${CSS.escape(name)}"]`);
@@ -593,7 +885,7 @@ function fillConfig(c) {
 }
 
 function collectConfig() {
-  const c = { record:{switch:{}}, preset:{bands:[{},{},{}]}, osd:{lines:[],warn:{}},
+  const c = { record:{switch:{}}, preset:{bands:[]}, osd:{lines:[],warn:{}},
               clock:{}, gps_push:{}, hilight:{}, msp:{}, wifi:{} };
   const set = (path, val) => {
     const p = path.split('.'); let o = c;
@@ -610,6 +902,8 @@ function collectConfig() {
     if (name.startsWith('osd.lines.')) { c.osd.lines[+name.split('.')[2]] = val; return; }
     set(name, val);
   });
+  c.preset.n_zones = presetN;
+  for (let i = 0; i < presetN; i++) { c.preset.bands[i] = c.preset.bands[i] || {}; c.preset.bands[i].gp = gpz[i] || {}; }
   c.msp.baud = Number(c.msp.baud);
   return c;
 }
@@ -619,7 +913,12 @@ let rebootBaseline = '';      // msp.baud + swap_pins at last load, to detect re
 
 async function loadConfig() {
   const c = await fetch('/api/config').then(r => r.json());
+  const nz = (c.preset && c.preset.n_zones) || 3;
+  if (nz !== presetN) { presetN = nz; buildZoneRows(); buildBar($('#rb-preset')); }
   fillConfig(c);
+  gpz = Array.from({ length: presetN }, (_, i) => Object.assign({}, (((c.preset || {}).bands || [])[i] || {}).gp || {}));
+  if (gpSel >= presetN) gpSel = 0;
+  gpRender();
   osdLoad();
   if (c.ui_flags != null) { uiFlags = c.ui_flags | 0; setAdv(!!(uiFlags & 1), false); }
   cfgBrand = (c.camera && c.camera.brand) || '';
@@ -648,6 +947,9 @@ function applyGates() {
   setBarEnabled('preset', pOn);
 
   const isGP = cfgBrand === 'gopro', isDJI = cfgBrand === 'dji';
+  $('#gp-builder').hidden = isDJI;                       // DJI zones use a mode ID instead
+  $$('#zone-ids .zid').forEach(e => { e.hidden = !isDJI; });
+  $('#dji-zone-note').hidden = !isDJI;
   gate($('#lbl-check'),  isGP  || !cfgBrand, 'GoPro only');
   gate($('#lbl-resync'), isDJI || !cfgBrand, 'DJI only');
   const gp = !!isDJI;
@@ -813,10 +1115,6 @@ function renderFound(list) {
   });
 }
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera…' : 'failed');
-$$('[data-preset]').forEach(b => b.onclick = async () => {
-  const r = await post('/api/camera/preset', {slot: +b.dataset.preset});
-  msg(r.ok ? ('applied zone ' + (+b.dataset.preset + 1)) : ('failed: ' + (r.error || '')));
-});
 $('#camtest').onclick = async () => msg((await post('/api/camera/test')).ok ? 'recording 3 s…' : 'failed');
 
 // ---- Binding tab: paired-camera list ----
@@ -1003,7 +1301,10 @@ $('#flash-go').onclick = () => {
 const P = [['armed','Aircraft'],['camlink','Camera link'],['rec','Recording'],['warn','Warnings']];
 const D = [['fc','Flight controller'],['canvas','OSD grid (cols×rows)'],['gps','GPS'],['sig','Camera signal'],
            ['tleft','Time left'],['batt','Camera battery'],['sd','SD card'],['mode','Mode'],
-           ['res','Resolution'],['prof','Profile']];
+           ['res','Resolution'],['prof','Profile'],
+           ['isomax','ISO max'],['isomin','ISO min'],['shut','Shutter angle'],['ptune','Protune'],
+           ['wb','White balance'],['color','Color'],['sharp','Sharpness'],['ev','EV comp'],
+           ['p10','Protune 10-bit'],['zap','Zone settings']];
 function buildGrid(el, list) {
   el.innerHTML = list.map(r =>
     `<div class="k">${r[1]}</div><div class="v" id="s-${r[0]}">—</div>`).join('');
@@ -1112,6 +1413,28 @@ async function poll() {
       ? (cs.resolution.v + (cs.fps.v || '') + (cs.aspect.valid ? ' ' + cs.aspect.v : '')) : '—');
   put('prof', paired && cs.profile.valid
       ? (cs.profile.v + (cs.bit_depth.valid ? ' ' + cs.bit_depth.v + 'bit' : '')) : '—');
+
+  for (const [id, k] of [['isomax','iso_max'],['isomin','iso_min'],['ptune','protune'],
+                         ['wb','wb'],['color','color'],['sharp','sharpness'],['ev','ev'],['p10','tune_10bit']]) {
+    put(id, paired && cs[k] && cs[k].valid ? cs[k].v : '—');
+  }
+  { // shutter as an angle where the frame rate is known: "180° (1/60)"
+    const sh = cs && cs.shutter, fpsN = cs && cs.fps && cs.fps.valid ? +cs.fps.v : 0;
+    const m = sh && sh.valid ? /^1\/(\d+)$/.exec(sh.v) : null;
+    put('shut', !paired || !sh || !sh.valid ? '\u2014'
+        : m && fpsN ? fmtAngle(Math.round(360 * fpsN / +m[1] * 10) / 10) + ' (' + sh.v + ')' : sh.v); }
+
+  { const rdy = !!(c && c.link === 'READY');                 // capabilities only mean something while connected
+    if (rdy !== gpCamReady) { gpCamReady = rdy; gpRender(); }
+    if (cs && cs.caps_gen !== undefined && cs.caps_gen !== gpCapsGen) { gpCapsGen = cs.caps_gen; gpLoadCaps(); } }
+  if (cs && cs.model && cs.model !== gpModel) {        // learn the model once the camera reports it
+    gpModel = cs.model;
+    try { localStorage.setItem('gpmodel', gpModel); } catch (e) {}
+    gpRender();
+  }
+  { const za = cs && cs.zone_apply, t = paired ? gpApplyText(za) : '\u2014';
+    put('zap', t, za && (za.state === 'partial' || za.state === 'failed') ? 'warn' : za && za.state === 'ok' ? 'ok' : '');
+    const gs = $('#gp-state'); if (gs.textContent !== t) gs.textContent = paired ? 'Last apply \u2014 ' + t : ''; }
 
   $('#aux').textContent = (fcUp && m.aux && m.aux.length)
     ? m.aux.map((v, i) => 'ch' + (i + 1) + ':' + v).join('  ') : '—';

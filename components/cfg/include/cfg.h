@@ -11,9 +11,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "gp_preset.h"
 
 #define CFG_MAGIC   0x43424247u   // "CBBG"
-#define CFG_VERSION 4u
+#define CFG_VERSION 6u
+
+// Radio-switch zones (preset.bands). Zones 1-3 live in the original head fields;
+// zones 4..PRESET_ZONES_MAX in the v6 tail. Use the cfg_zone_* accessors below.
+#define PRESET_ZONES_MAX 6
+#define PRESET_ZONES_DEFAULT 3
 
 // Max simultaneously-bonded cameras (spec 7.1). One connected at a time; the
 // rest are candidates the reconnect scan picks from by RSSI.
@@ -81,6 +87,12 @@ typedef struct __attribute__((packed)) {
 // The blob. Layout is frozen per CFG_VERSION; changes require a bump + migration.
 // __attribute__((packed)) so the on-flash image is portable across compilers.
 // ---------------------------------------------------------------------------
+// One zone's GoPro settings: (setting id, option value) pairs, n of them.
+typedef struct __attribute__((packed)) {
+    uint8_t n;
+    struct { uint8_t id; uint8_t val; } s[GP_PSET_MAX];
+} cfg_gp_zone_t;
+
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint16_t version;
@@ -190,7 +202,49 @@ typedef struct __attribute__((packed)) {
     // ---- v4+ tail: RF transmit power presets (RF_PWR_*), one per radio.
     uint8_t  wifi_tx_power;      // portal AP -- applied every time it comes up
     uint8_t  ble_tx_power;       // camera link -- applied at boot; reboot to change
+
+    // ---- v5+ tail: GoPro zone presets as SETTINGS. Zone N (preset.bands[N]) pushes
+    // these (id, option value) pairs to the camera's active preset instead of
+    // loading a GoPro preset. n == 0: the zone leaves the camera alone. IDs are
+    // restricted to gp_preset.h's list (cfg_validate drops anything else).
+    cfg_gp_zone_t gp_preset[3];
+
+    // ---- v6+ tail: more than 3 zones. n_zones (0 in an older blob == 3) is how many
+    // zones exist, 2..PRESET_ZONES_MAX; the LAST zone's upper edge is fixed at 2100 us,
+    // every other zone has an editable edge. Zones 4.. are stored here (zones 1-3 stay
+    // in preset.bands[] / gp_preset[] above).
+    uint8_t  n_zones;
+    struct { uint16_t max_us; uint32_t id; } bands_x[PRESET_ZONES_MAX - 3];
+    cfg_gp_zone_t gp_preset_x[PRESET_ZONES_MAX - 3];
 } cfg_t;
+
+// ---- zone accessors (hide the head/tail split) -----------------------------------
+static inline int cfg_zones(const cfg_t *c)
+{
+    int n = c->n_zones;
+    return (n < 2 || n > PRESET_ZONES_MAX) ? PRESET_ZONES_DEFAULT : n;
+}
+static inline uint16_t cfg_zone_max_us(const cfg_t *c, int i)
+{
+    return i < 3 ? c->preset.bands[i].max_us : c->bands_x[i - 3].max_us;
+}
+static inline uint32_t cfg_zone_id(const cfg_t *c, int i)       // DJI mode value
+{
+    return i < 3 ? c->preset.bands[i].id : c->bands_x[i - 3].id;
+}
+static inline void cfg_zone_set(cfg_t *c, int i, uint16_t max_us, uint32_t id)
+{
+    if (i < 3) { c->preset.bands[i].max_us = max_us; c->preset.bands[i].id = id; }
+    else       { c->bands_x[i - 3].max_us = max_us;  c->bands_x[i - 3].id = id; }
+}
+static inline const cfg_gp_zone_t *cfg_zone_gp(const cfg_t *c, int i)
+{
+    return i < 3 ? &c->gp_preset[i] : &c->gp_preset_x[i - 3];
+}
+static inline cfg_gp_zone_t *cfg_zone_gp_mut(cfg_t *c, int i)
+{
+    return i < 3 ? &c->gp_preset[i] : &c->gp_preset_x[i - 3];
+}
 
 // -------- OSD token bit positions for cfg.osd.fields_mask --------------------
 enum {

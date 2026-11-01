@@ -74,4 +74,5 @@ typedef enum {
     CAM_OP_PUSH_GPS,
     CAM_OP_HILIGHT,
     CAM_OP_REFRESH,        // re-pull all camera state (portal "refresh" button)
+    CAM_OP_SET_SETTING,    // write ONE preset-able setting now; arg = (id << 8) | value
 } cam_op_t;

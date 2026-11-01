@@ -239,3 +239,24 @@ button:disabled{opacity:.45;cursor:default}
   *{transition:none!important}
   button:active{transform:none}
 }
+
+/* GoPro zone settings builder */
+.gpt{display:flex;gap:6px;margin:6px 0 10px}
+.gpt button{flex:1;padding:8px 6px}
+.gpt button.on{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
+#gp-rows h4{margin:12px 0 4px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.gpr{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+.gpr input[type=checkbox]{flex:none}
+.gpr span{flex:1 1 auto;font-size:14px;color:var(--mut)}
+.gpr.on span{color:var(--fg)}
+.gpr select{flex:0 1 55%;min-width:0;opacity:.55}
+.gpr.on select{opacity:1}
+.gpr[hidden]{display:none}
+.gpr.bad span,.gpr.bad select{color:var(--warn)}
+.gplive{font-size:13px;color:var(--mut)}
+.rangebar .seg.z3{background:#c084fc}
+.rangebar .seg.z4{background:#f472b6}
+.rangebar .seg.z5{background:#22d3ee}
+.gpt{flex-wrap:wrap}
+.gpt button{flex:1 1 28%}
+.zid[hidden]{display:none}

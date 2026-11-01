@@ -174,10 +174,18 @@ static void invalidate_cam_values(void)   // spec 8.5 step 1
     s_cs.aspect.valid = false;
     s_cs.profile.valid = false;
     s_cs.bit_depth.valid = false;
+    s_cs.iso_max.valid = s_cs.iso_min.valid = s_cs.shutter.valid = false;
+    s_cs.protune.valid = s_cs.wb.valid = s_cs.color.valid = false;
+    s_cs.sharpness.valid = s_cs.ev.valid = s_cs.tune_10bit.valid = false;
     s_cs.lens.valid = false;
     s_cs.mode.valid = false;
     s_cs.mode_name.valid = false;
     s_cs.cam_utc_ms.valid = false;
+    for (int i = 0; i < GP_PSET_MAX; i++) { s_cs.gp_set[i].valid = false; }
+    s_cs.model[0] = '\0';
+    s_cs.gp_apply_zone = 0;
+    s_cs.gp_apply_state = GPA_NONE;
+    s_cs.gp_apply_fail = 0;
     s_cs.sd_missing = s_cs.sd_full = s_cs.hot = false;
 }
 
@@ -432,6 +440,9 @@ static void exec_cmd(const cam_cmd_t *c)
     case CAM_OP_HILIGHT: s_drv->hilight(); break;
     case CAM_OP_REFRESH:
         if (s_drv->refresh) { s_drv->refresh(); }
+        break;
+    case CAM_OP_SET_SETTING:
+        if (s_drv->set_setting) { s_drv->set_setting((uint8_t)(c->arg >> 8), (uint8_t)c->arg); }
         break;
     }
 }

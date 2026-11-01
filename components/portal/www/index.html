@@ -177,7 +177,24 @@
         </span></label>
       <div class="rangebar" id="rb-preset" data-fn="preset"></div>
       <div id="zone-ids"></div>
-      <p class="muted">Each zone applies its Preset / mode ID (GoPro preset ID or DJI mode value).</p>
+      <div class="row">
+        <button type="button" class="ghost" id="zone-add">Add zone</button>
+        <button type="button" class="ghost" id="zone-del">Remove last zone</button>
+      </div>
+      <fieldset id="gp-builder">
+        <legend>Camera settings per zone</legend>
+        <div class="gpt" id="gp-zt"></div>
+        <p class="muted" id="gp-model"></p>
+        <label class="gplive"><input type="checkbox" id="gp-live"> Keep the camera in step while editing</label>
+        <div id="gp-rows"></div>
+        <div class="row">
+          <button type="button" class="ghost" id="gp-capture">Capture from camera</button>
+          <button type="button" class="ghost" id="gp-clear">Clear zone</button>
+        </div>
+        <p class="muted">Tick a setting to push it to the camera when this zone is selected; the rest stay as they are. Needs the camera in a video preset.</p>
+        <p class="muted" id="gp-state"></p>
+      </fieldset>
+      <p class="muted" id="dji-zone-note" hidden>Each zone applies its DJI mode value.</p>
     </fieldset>
     <details class="adv adv-only">
       <summary>Advanced &mdash; timing &amp; behaviour</summary>
@@ -185,14 +202,6 @@
         <input type="number" inputmode="numeric" name="preset.dwell_ms" min="50" max="5000" step="50"></label>
       <label>Allow zone changes while recording<input type="checkbox" name="preset.allow_during_record"></label>
     </details>
-    <fieldset class="adv-only">
-      <legend>Test now (acts on the camera)</legend>
-      <div class="row">
-        <button type="button" data-preset="0">Apply zone 1</button>
-        <button type="button" data-preset="1">Apply zone 2</button>
-        <button type="button" data-preset="2">Apply zone 3</button>
-      </div>
-    </fieldset>
   </div>
 
   <div class="card adv-only" id="hilight-card">

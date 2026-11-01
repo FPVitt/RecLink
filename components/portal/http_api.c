@@ -9,6 +9,7 @@
 #include "cfg.h"
 #include "fc_state.h"
 #include "cam_state.h"
+#include "cam_caps.h"
 #include "camera.h"
 #include "ble_central.h"
 #include "control.h"
@@ -266,6 +267,30 @@ static esp_err_t h_status(httpd_req_t *r)
     { cJSON *o = cJSON_AddObjectToObject(cs, "mode");
       cJSON_AddStringToObject(o, "v", cam.mode_name.v); cJSON_AddBoolToObject(o, "valid", cam.mode_name.valid); }
     VU("bit_depth", bit_depth);
+    #define VS(name, field) do { cJSON *o = cJSON_AddObjectToObject(cs, name); \
+        cJSON_AddStringToObject(o, "v", cam.field.v); cJSON_AddBoolToObject(o, "valid", cam.field.valid); } while (0)
+    VS("iso_max", iso_max); VS("iso_min", iso_min); VS("shutter", shutter);
+    VS("protune", protune); VS("wb", wb); VS("color", color);
+    VS("sharpness", sharpness); VS("ev", ev); VS("tune_10bit", tune_10bit);
+    #undef VS
+    // Raw option values of the settings a zone can push ({"<id>": value}), for the
+    // preset builder's "capture from camera"; and how the last zone apply went.
+    { cJSON *gs = cJSON_AddObjectToObject(cs, "gp_set");
+      for (int i = 0; i < GP_PSET_MAX; i++) {
+          if (!cam.gp_set[i].valid) { continue; }
+          char key[8]; snprintf(key, sizeof(key), "%u", cam.gp_set[i].id);
+          cJSON_AddNumberToObject(gs, key, cam.gp_set[i].v);
+      } }
+    { static const char *const k_ap[] = { "none", "waiting", "applying", "ok", "partial", "failed" };
+      cJSON *ap = cJSON_AddObjectToObject(cs, "zone_apply");
+      cJSON_AddNumberToObject(ap, "zone", cam.gp_apply_zone);
+      cJSON_AddStringToObject(ap, "state", k_ap[cam.gp_apply_state <= GPA_FAILED ? cam.gp_apply_state : 0]);
+      cJSON *fl = cJSON_AddArrayToObject(ap, "fail");
+      for (int i = 0; i < GP_PSET_MAX; i++) {
+          if (cam.gp_apply_fail & (1u << i)) { cJSON_AddItemToArray(fl, cJSON_CreateNumber(gp_pset_id(i))); }
+      } }
+    cJSON_AddStringToObject(cs, "model", cam.model);
+    cJSON_AddNumberToObject(cs, "caps_gen", cam_caps_gen());   // portal refetches /api/camera/caps when it changes
     cJSON_AddBoolToObject(cs, "sd_missing", cam.sd_missing);
     cJSON_AddBoolToObject(cs, "sd_full", cam.sd_full);
     cJSON_AddBoolToObject(cs, "hot", cam.hot);
@@ -427,6 +452,66 @@ static esp_err_t h_cam_poll(httpd_req_t *r)
     return send_json(r, resp, e == ESP_OK ? NULL : "400 Bad Request");
 }
 
+// GET /api/camera/caps -- what each preset-able setting may currently be set to,
+// as the camera reported it: {"gen":N,"caps":{"<setting id>":[option values],...}}.
+// Settings the camera did not list are absent. Streamed by hand: as a cJSON tree
+// this is ~400 nodes, far too much for the heap.
+static esp_err_t h_cam_caps(httpd_req_t *r)
+{
+    static cam_caps_t caps;                 // 540 B: static, httpd runs one handler at a time
+    cam_caps_get(&caps);
+    portal_note_client_activity();
+    jstream_t js;
+    js_open(&js, r);
+    char b[160];
+    int n = snprintf(b, sizeof(b), "\"gen\":%u,\"caps\":{", (unsigned)caps.gen);
+    js_put(&js, b, n);
+    bool first = true;
+    for (int i = 0; i < GP_PSET_MAX; i++) {
+        if (!caps.have[i]) { continue; }
+        n = snprintf(b, sizeof(b), "%s\"%u\":[", first ? "" : ",", gp_pset_id(i));
+        first = false;
+        bool comma = false;
+        for (int v = 0; v < 256; v++) {
+            if (!cam_caps_has(&caps, i, (uint8_t)v)) { continue; }
+            if (n > (int)sizeof(b) - 6) { js_put(&js, b, n); n = 0; }
+            n += snprintf(b + n, sizeof(b) - n, "%s%d", comma ? "," : "", v);
+            comma = true;
+        }
+        n += snprintf(b + n, sizeof(b) - n, "]");
+        js_put(&js, b, n);
+    }
+    js_put(&js, "}", 1);
+    return js_close(&js, cJSON_CreateObject());
+}
+
+// POST /api/camera/set {"id":N,"val":V} -- write ONE preset-able setting to the
+// camera now (the builder uses it to keep the camera's options in step with the
+// zone being edited). Explicit portal action: refused while armed; the driver
+// refuses while recording.
+static esp_err_t h_cam_set(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    char *body = read_body(r, 128);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *ji = j ? cJSON_GetObjectItem(j, "id") : NULL;
+    const cJSON *jv = j ? cJSON_GetObjectItem(j, "val") : NULL;
+    int id = cJSON_IsNumber(ji) ? (int)ji->valuedouble : -1;
+    int val = cJSON_IsNumber(jv) ? (int)jv->valuedouble : -1;
+    cJSON_Delete(j);
+
+    cJSON *resp = cJSON_CreateObject();
+    if (id < 1 || id > 255 || val < 0 || val > 255 || gp_pset_index((uint8_t)id) < 0) {
+        cJSON_AddBoolToObject(resp, "ok", false);
+        cJSON_AddStringToObject(resp, "error", "not a settable id/value");
+        return send_json(r, resp, "400 Bad Request");
+    }
+    cam_submit(CAM_OP_SET_SETTING, (id << 8) | val);
+    cJSON_AddBoolToObject(resp, "ok", true);
+    return send_json(r, resp, NULL);
+}
+
 static esp_err_t h_cam_preset(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
@@ -438,9 +523,9 @@ static esp_err_t h_cam_preset(httpd_req_t *r)
     cJSON_Delete(j);
 
     cJSON *resp = cJSON_CreateObject();
-    if (slot < 0 || slot > 2) {
+    if (slot < 0 || slot >= cfg_zones(cfg_get())) {
         cJSON_AddBoolToObject(resp, "ok", false);
-        cJSON_AddStringToObject(resp, "error", "slot must be 0..2");
+        cJSON_AddStringToObject(resp, "error", "no such zone");
         return send_json(r, resp, "400 Bad Request");
     }
     cam_submit(CAM_OP_SELECT_PRESET, slot);
@@ -706,6 +791,8 @@ void http_api_register(httpd_handle_t s)
         { "/api/camera/refresh", HTTP_POST, h_cam_refresh, NULL },
         { "/api/camera/poll",   HTTP_POST, h_cam_poll,    NULL },
         { "/api/camera/preset", HTTP_POST, h_cam_preset,  NULL },
+        { "/api/camera/caps",   HTTP_GET,  h_cam_caps,    NULL },
+        { "/api/camera/set",    HTTP_POST, h_cam_set,     NULL },
         { "/api/camera/test",   HTTP_POST, h_cam_test,    NULL },
         { "/api/clock/sync",    HTTP_POST, h_clock_sync,  NULL },
         { "/api/flags/ack",     HTTP_POST, h_flags_ack,   NULL },

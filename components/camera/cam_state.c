@@ -1,4 +1,5 @@
 #include "cam_state.h"
+#include "cam_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -19,6 +20,7 @@ static TaskHandle_t s_owner;      // set on first cam_scratch() call, for the as
 void cam_state_init(void)
 {
     s_mux = xSemaphoreCreateMutexStatic(&s_mux_buf);
+    cam_caps_init();
     memset(&s_scratch, 0, sizeof(s_scratch));
     s_scratch.link = CAM_LINK_IDLE;
     s_scratch.recording = TRIBOOL_UNKNOWN;

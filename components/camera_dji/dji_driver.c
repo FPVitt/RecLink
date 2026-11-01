@@ -189,9 +189,9 @@ static esp_err_t dji_record(bool start)
 
 static esp_err_t dji_select_preset(uint8_t slot)
 {
-    if (slot > 2) { return ESP_ERR_INVALID_ARG; }
     const cfg_t *c = cfg_get();
-    uint8_t mode = (uint8_t)c->preset.bands[slot].id;   // DJI: band id == mode value
+    if (slot >= cfg_zones(c)) { return ESP_ERR_INVALID_ARG; }
+    uint8_t mode = (uint8_t)cfg_zone_id(c, slot);   // DJI: zone id == mode value
     uint8_t p[9]; memset(p, 0, sizeof(p));
     put_u32(p, s_device_id);
     p[4] = mode;

@@ -21,10 +21,11 @@ static int decode_band(const cfg_t *cfg, const fc_state_t *fc)
     uint8_t idx = 3 + ch;
     if (fc->rc_channel_count <= idx) { return -1; }
     uint16_t v = fc->rc[idx];
-    for (int k = 0; k < 3; k++) {
-        if (v <= cfg->preset.bands[k].max_us) { return k; }
+    int nz = cfg_zones(cfg);
+    for (int k = 0; k < nz - 1; k++) {
+        if (v <= cfg_zone_max_us(cfg, k)) { return k; }
     }
-    return 2;   // catch-all
+    return nz - 1;   // catch-all: the last zone runs to 2100 us
 }
 
 void ctrl_preset_tick(const ctrl_ctx_t *c)
@@ -54,7 +55,7 @@ void ctrl_preset_tick(const ctrl_ctx_t *c)
     }
 
     cam_submit(CAM_OP_SELECT_PRESET, band);
-    applog_note("preset -> band %d (id %lu)", band, (unsigned long)cfg->preset.bands[band].id);
+    applog_note("preset -> zone %d", band + 1);
     S.current_band = band;
     S.reassert_pending = false;
 }

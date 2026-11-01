@@ -7,6 +7,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "bridge_types.h"
+#include "gp_preset.h"
+
+// Zone-preset apply progress (GoPro settings pushed by RecLink, see gp_preset.h).
+typedef enum {
+    GPA_NONE = 0,     // nothing requested / zone has no settings
+    GPA_WAITING,      // waiting for the camera (BLE-ready, or a video preset)
+    GPA_APPLYING,     // writing / verifying
+    GPA_OK,           // every setting confirmed on the camera
+    GPA_PARTIAL,      // some settings rejected or not confirmed
+    GPA_FAILED,       // none confirmed
+} gp_apply_state_t;
 
 typedef struct {
     cam_link_state_t link;
@@ -28,11 +39,30 @@ typedef struct {
     val_str_t lens;
     val_str_t profile;         // "STD" / "HDR" / "LOG" / "HLG"  (GoPro setting 184)
     val_u8_t  bit_depth;       // 8 or 10  (GoPro setting 183)
+    // GoPro Video + Protune (unofficial settings, portal status page only).
+    val_str_t iso_max;         // setting 13   (video only)
+    val_str_t iso_min;         // setting 102  (video only)
+    val_str_t shutter;         // setting 145  (video only)
+    val_str_t protune;         // setting 114  "ON"/"OFF"
+    val_str_t wb;              // setting 115
+    val_str_t color;           // setting 116
+    val_str_t sharpness;       // setting 117
+    val_str_t ev;              // setting 118
+    val_str_t tune_10bit;      // setting 174  "ON"/"OFF"
     val_u8_t  mode;             // brand enum value
     val_str_t mode_name;        // mapped string for OSD ("VID"/"PHOTO"/...)
     bool      sd_missing;       // status 33 / DJI capacity==0 -> "NO SD"
     bool      sd_full;
     bool      hot;              // GoPro status 6
+
+    // Raw option value the camera last reported for each setting a zone can push
+    // (gp_pset_id(i)). id is filled by the driver; used to verify an apply and by
+    // the portal's "capture from camera".
+    struct { uint8_t id; bool valid; uint8_t v; } gp_set[GP_PSET_MAX];
+    char     model[24];         // GoPro model name from Get Hardware Info ("HERO11 Black"); "" until known
+    uint8_t  gp_apply_zone;     // 1..3, 0 = none
+    uint8_t  gp_apply_state;    // gp_apply_state_t
+    uint16_t gp_apply_fail;     // bit i = gp_pset_id(i) was rejected / not confirmed
 
     // camera clock for F6. GoPro: real. DJI: never valid (blind sync).
     val_i64_t cam_utc_ms;

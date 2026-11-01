@@ -63,10 +63,42 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
 
     CLAMP(c->preset.channel, 0, 14);
     CLAMP(c->preset.dwell_ms, 50, 5000);
-    // Zone edges must be ascending and inside the band; zone 3's top is pinned.
-    CLAMP(c->preset.bands[0].max_us, 925, 2075);
-    CLAMP(c->preset.bands[1].max_us, c->preset.bands[0].max_us + 25, 2075);
-    c->preset.bands[2].max_us = 2100;
+    // Zones: 2..PRESET_ZONES_MAX. Every edge but the last zone's is editable and the
+    // edges must ascend with >= 25 us between them (leaving room for the zones above);
+    // the last zone's top is pinned at 2100. Zones beyond the count are unused: cleared,
+    // so one added later starts empty.
+    int nz = cfg_zones(c);
+    c->n_zones = (uint8_t)nz;
+    for (int k = 0; k < nz - 1; k++) {
+        int lo = k == 0 ? 925 : cfg_zone_max_us(c, k - 1) + 25;
+        int hi = 2075 - 25 * (nz - 2 - k);
+        int v = cfg_zone_max_us(c, k);
+        if (v < lo) { v = lo; } else if (v > hi) { v = hi; }
+        cfg_zone_set(c, k, (uint16_t)v, cfg_zone_id(c, k));
+    }
+    cfg_zone_set(c, nz - 1, 2100, cfg_zone_id(c, nz - 1));
+    for (int k = nz; k < PRESET_ZONES_MAX; k++) {
+        cfg_zone_set(c, k, 0, 0);
+        memset(cfg_zone_gp_mut(c, k), 0, sizeof(cfg_gp_zone_t));
+    }
+
+    // GoPro zone settings: keep only whitelisted ids, no duplicates, in the
+    // canonical apply order (gp_preset.h). Anything else is silently dropped.
+    for (int z = 0; z < nz; z++) {
+        cfg_gp_zone_t *g = cfg_zone_gp_mut(c, z);
+        uint8_t val[GP_PSET_MAX]; bool has[GP_PSET_MAX] = { false };
+        for (int k = 0; k < g->n && k < GP_PSET_MAX; k++) {
+            int idx = gp_pset_index(g->s[k].id);
+            if (idx >= 0) { has[idx] = true; val[idx] = g->s[k].val; }
+        }
+        memset(g, 0, sizeof(*g));
+        for (int idx = 0; idx < GP_PSET_MAX; idx++) {
+            if (!has[idx]) { continue; }
+            g->s[g->n].id  = gp_pset_id(idx);
+            g->s[g->n].val = val[idx];
+            g->n++;
+        }
+    }
 
     CLAMP(c->hilight.channel, 0, 14);
 

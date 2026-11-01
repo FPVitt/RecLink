@@ -43,12 +43,28 @@ static void migrate_3_to_4(cfg_t *c)
     c->version = 4;
 }
 
+// v4 -> v5: per-zone GoPro settings (gp_preset[]) appended at the very end. The
+// caller zeroed the tail, i.e. every zone has n == 0 ("push nothing"), so there
+// is nothing to fill in. A GoPro zone's old preset ID is no longer used.
+static void migrate_4_to_5(cfg_t *c)
+{
+    c->version = 5;
+}
+
+// v5 -> v6: variable zone count (n_zones, zones 4.. in the tail). Existing blobs
+// have exactly the 3 zones they always had.
+static void migrate_5_to_6(cfg_t *c)
+{
+    c->n_zones = PRESET_ZONES_DEFAULT;
+    c->version = 6;
+}
+
 typedef void (*migrate_fn)(cfg_t *);
 
 // index 0 -> migrate v1 to v2, index 1 -> v2 to v3, etc.
-#define N_MIGRATIONS 3
+#define N_MIGRATIONS 5
 #if N_MIGRATIONS > 0
-static const migrate_fn k_chain[N_MIGRATIONS] = { migrate_1_to_2, migrate_2_to_3, migrate_3_to_4 };
+static const migrate_fn k_chain[N_MIGRATIONS] = { migrate_1_to_2, migrate_2_to_3, migrate_3_to_4, migrate_4_to_5, migrate_5_to_6 };
 #endif
 
 // Returns true if the blob is now at CFG_VERSION; false if no path exists.

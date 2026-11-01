@@ -59,6 +59,7 @@ typedef struct {
 
     esp_err_t (*record)(bool start);
     esp_err_t (*select_preset)(uint8_t slot);
+    esp_err_t (*set_setting)(uint8_t id, uint8_t val);   // optional (GoPro): one setting, now
     esp_err_t (*set_datetime)(int64_t utc_ms, int16_t utc_off_min, bool dst);
     esp_err_t (*get_datetime)(void);
     esp_err_t (*push_gps)(const gps_fix_t *fix, int64_t utc_ms);
