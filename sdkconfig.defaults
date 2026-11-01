@@ -49,18 +49,24 @@ CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
 # ("bond failed"). Disable it -- one owner per resource.
 CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
 
-# --- Wi-Fi: AP only. Bump RX buffers so a sustained upload (OTA) doesn't
-#     collapse the TCP window when flash writes stall the receiver.
+# --- Wi-Fi: AP only. 8 static RX buffers (1.6 KB each, taken from the heap at
+#     Wi-Fi init), same as the gopro_ble_debug image whose OTA upload works; 12
+#     cost 6 KB of a ~35 KB heap that the portal needs for page loads.
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
-CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=12
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=8
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=24
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_RX_BA_WIN=12
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
 
-# --- lwIP: a real TCP window + receive queue for OTA uploads -------------
+# --- lwIP: a real TCP RECEIVE window + queue for OTA uploads -------------
+# The SEND buffer is deliberately small (4 x MSS). Every connection that has just
+# been sent a page asset keeps up to SND_BUF bytes of heap queued until the phone
+# ACKs; at 20 KB, a page refresh (app.js.gz ~20 KB + the JSON built right after)
+# exhausted the ~35 KB heap and the board stopped answering. The portal only ever
+# sends small responses, so a small buffer costs nothing but a few round trips.
 CONFIG_LWIP_TCP_WND_DEFAULT=20480
-CONFIG_LWIP_TCP_SND_BUF_DEFAULT=20480
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=5744
 CONFIG_LWIP_TCP_RECVMBOX_SIZE=16
 CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=32
 CONFIG_LWIP_TCP_MSS=1436

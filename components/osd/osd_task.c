@@ -63,7 +63,7 @@ static void osd_task(void *arg)
 void osd_start(void)
 {
     static StaticTask_t tcb;
-    static StackType_t stack[3072 / sizeof(StackType_t)];
+    static StackType_t stack[3584 / sizeof(StackType_t)];   // holds fc+cam copies (~580 B)
     xTaskCreateStatic(osd_task, "osd_task", sizeof(stack)/sizeof(stack[0]),
                       NULL, 8, stack, &tcb);
     ESP_LOGI(TAG, "osd_task started");

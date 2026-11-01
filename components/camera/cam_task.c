@@ -934,9 +934,9 @@ void cam_start(void)
 // a teardown + reconnect (not a reboot).
 void cam_liveness_check(void)
 {
-    cam_state_t s;
-    cam_state_get(&s);
-    if (s.link == CAM_LINK_READY && (now_ms() - s.last_rx_ms) > LIVENESS_STALL_MS) {
+    cam_link_state_t link; uint32_t last_rx;
+    cam_state_get_link(&link, &last_rx);     // not a full cam_state_t: housekeeping's stack is small
+    if (link == CAM_LINK_READY && (now_ms() - last_rx) > LIVENESS_STALL_MS) {
         iq_item_t it = { .kind = IQ_BLE_EVT, .ble = { .ev = BLE_EVT_DISCONNECTED, .status = 0 } };
         xQueueSend(s_iq, &it, 0);
     }

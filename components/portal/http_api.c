@@ -88,7 +88,13 @@ static esp_err_t h_status(httpd_req_t *r)
     cam_state_t cam; cam_state_get(&cam);
     const cfg_t *cfg = cfg_get();
 
+    // Streamed section by section (see portal_internal.h): after each FL() the
+    // pointers into the sections already sent (m, c, rd, bd, cs, ...) are gone.
+    portal_note_client_activity();
+    jstream_t js;
+    js_open(&js, r);
     cJSON *j = cJSON_CreateObject();
+    #define FL() js_flush(&js, j)
     const esp_app_desc_t *ad = esp_app_get_description();
     cJSON_AddStringToObject(j, "fw", ad->version);
     cJSON_AddNumberToObject(j, "uptime_s", now_ms() / 1000);
@@ -139,6 +145,7 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddNumberToObject(dbg, "link_up_first_ms", fc.link_up_first_ms);
     cJSON_AddNumberToObject(dbg, "osd_first_ms", fc.osd_first_ms);
 
+    FL();
     cJSON *clk = cJSON_AddObjectToObject(j, "clock");
     bool readable, last_ok, ever; int32_t delta_ms; uint32_t last_res;
     ctrl_clock_status(&readable, &delta_ms, &last_ok, &last_res, &ever);
@@ -153,6 +160,7 @@ static esp_err_t h_status(httpd_req_t *r)
         cJSON_AddStringToObject(ls, "result", last_ok ? "OK" : "FAILED");
     }
 
+    FL();
     cJSON *c = cJSON_AddObjectToObject(j, "camera");
     cJSON_AddStringToObject(c, "brand", cfg->camera.brand);
     const char *ls_names[] = { "IDLE","SCAN","CONNECTING","BONDING","SYNCING","READY","LOST" };
@@ -205,6 +213,7 @@ static esp_err_t h_status(httpd_req_t *r)
     // Record-trigger diagnostics (spec 8.1/8.2): what the switch/button decode
     // currently sees and intends, independent of whether the camera has caught
     // up yet. Lets a "why won't it stop" report be settled from the portal.
+    FL();
     cJSON *rd = cJSON_AddObjectToObject(j, "record");
     bool r_raw = false, r_sw = false, r_desired = false; uint8_t r_phase = 0, r_cmd = 0;
     ctrl_record_status(&r_raw, &r_sw, &r_desired, &r_phase, &r_cmd);
@@ -220,6 +229,7 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddStringToObject(rd, "last_cmd", cmd_names[r_cmd <= 2 ? r_cmd : 0]);  // last START/STOP we sent
 
     // BLE link diagnostics (Status tab).
+    FL();
     cJSON *bd = cJSON_AddObjectToObject(j, "ble");
     cJSON_AddStringToObject(bd, "link", ls_names[cam.link <= CAM_LINK_LOST ? cam.link : 0]);
     cJSON_AddNumberToObject(bd, "state_age_s", cam_link_age_ms() / 1000);
@@ -235,6 +245,7 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddNumberToObject(bd, "notify_drops", (double)cam_notify_drops());
     cJSON_AddBoolToObject(bd, "repair_needed", (bridge_flags_all() & FLAG_REPAIR_NEEDED) != 0);
 
+    FL();
     cJSON *cs = cJSON_AddObjectToObject(j, "cam_state");
     #define VU(name, field) do { cJSON *o = cJSON_AddObjectToObject(cs, name); \
         cJSON_AddNumberToObject(o, "v", cam.field.v); cJSON_AddBoolToObject(o, "valid", cam.field.valid); } while (0)
@@ -260,6 +271,7 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddBoolToObject(cs, "hot", cam.hot);
     #undef VU
 
+    FL();
     cJSON *wifi = cJSON_AddObjectToObject(j, "wifi");
     cJSON_AddBoolToObject(wifi, "portal", portal_active());
     cJSON_AddBoolToObject(wifi, "default_pw", strcmp(cfg->wifi.password, CFG_DEFAULT_WIFI_PW) == 0);
@@ -283,13 +295,15 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddItemToArray(errs, cJSON_CreateString(eb));
     if (cr.last_disconnect[0]) { cJSON_AddItemToArray(errs, cJSON_CreateString(cr.last_disconnect)); }
 
-    return send_json(r, j, NULL);
+    #undef FL
+    return js_close(&js, j);
 }
 
 // ---- GET/POST /api/config --------------------------------------
 static esp_err_t h_config_get(httpd_req_t *r)
 {
-    return send_json(r, cfg_to_json(cfg_get()), NULL);
+    portal_note_client_activity();
+    return cfg_to_json_stream(cfg_get(), r);
 }
 
 static esp_err_t h_config_post(httpd_req_t *r)

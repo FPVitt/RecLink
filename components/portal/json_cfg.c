@@ -10,9 +10,71 @@ static void addr_to_str(const uint8_t a[6], char *s, size_t n)
     snprintf(s, n, "%02X:%02X:%02X:%02X:%02X:%02X", a[0], a[1], a[2], a[3], a[4], a[5]);
 }
 
-cJSON *cfg_to_json(const cfg_t *c)
+// ---- streamed JSON (see portal_internal.h) ----------------------------------
+static void js_send(jstream_t *s)
+{
+    if (s->n && s->err == ESP_OK) { s->err = httpd_resp_send_chunk(s->r, s->buf, s->n); }
+    s->n = 0;
+}
+void js_put(jstream_t *s, const char *d, size_t len)
+{
+    if (s->err != ESP_OK) { return; }
+    if (len > sizeof(s->buf) - s->n) {
+        js_send(s);
+        if (len >= sizeof(s->buf)) {                 // bigger than the buffer: straight out
+            if (s->err == ESP_OK) { s->err = httpd_resp_send_chunk(s->r, d, len); }
+            return;
+        }
+    }
+    memcpy(s->buf + s->n, d, len);
+    s->n = (uint16_t)(s->n + len);
+}
+void js_open(jstream_t *s, httpd_req_t *r)
+{
+    memset(s, 0, sizeof(*s));
+    s->r = r;
+    s->first = true;
+    httpd_resp_set_type(r, "application/json");
+    js_put(s, "{", 1);
+}
+void js_flush(jstream_t *s, cJSON *root)
+{
+    while (root->child) {
+        cJSON *it = root->child;
+        cJSON_DetachItemViaPointer(root, it);
+        if (s->err == ESP_OK) {
+            char *v = cJSON_PrintUnformatted(it);
+            if (v) {
+                if (!s->first) { js_put(s, ",", 1); }
+                js_put(s, "\"", 1);
+                js_put(s, it->string ? it->string : "", strlen(it->string ? it->string : ""));
+                js_put(s, "\":", 2);
+                js_put(s, v, strlen(v));
+                s->first = false;
+                free(v);
+            } else {
+                s->err = ESP_ERR_NO_MEM;
+            }
+        }
+        cJSON_Delete(it);
+    }
+}
+esp_err_t js_close(jstream_t *s, cJSON *root)
+{
+    js_flush(s, root);
+    cJSON_Delete(root);
+    js_put(s, "}", 1);
+    js_send(s);
+    if (s->err == ESP_OK) { s->err = httpd_resp_send_chunk(s->r, NULL, 0); }   // end of body
+    return s->err;
+}
+
+// Builds the config object. With a stream, each top-level section is sent and freed
+// as soon as it is complete (FL), so only one section is ever in memory.
+static cJSON *cfg_build(const cfg_t *c, jstream_t *js)
 {
     cJSON *r = cJSON_CreateObject();
+    #define FL() do { if (js) { js_flush(js, r); } } while (0)
 
     cJSON *cam = cJSON_AddObjectToObject(r, "camera");
     cJSON_AddStringToObject(cam, "brand", c->camera.brand);
@@ -22,6 +84,7 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON_AddStringToObject(cam, "name", c->camera.name);
     cJSON_AddNumberToObject(cam, "dji_device_id", c->camera.dji_device_id);
 
+    FL();
     cJSON *rec = cJSON_AddObjectToObject(r, "record");
     cJSON_AddNumberToObject(rec, "mode", c->record.mode);
     cJSON_AddNumberToObject(rec, "arm_delay_ms", c->record.arm_delay_ms);
@@ -33,6 +96,7 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON_AddNumberToObject(sw, "threshold_us", c->record.sw.threshold_us);
     cJSON_AddNumberToObject(sw, "mode", c->record.sw.mode);
 
+    FL();
     cJSON *pre = cJSON_AddObjectToObject(r, "preset");
     cJSON_AddBoolToObject(pre, "enabled", c->preset.enabled);
     cJSON_AddNumberToObject(pre, "channel", c->preset.channel);
@@ -46,6 +110,7 @@ cJSON *cfg_to_json(const cfg_t *c)
         cJSON_AddItemToArray(bands, b);
     }
 
+    FL();
     cJSON *osd = cJSON_AddObjectToObject(r, "osd");
     cJSON_AddNumberToObject(osd, "refresh_hz", c->osd.refresh_hz);
     cJSON_AddNumberToObject(osd, "type", c->osd.type);
@@ -60,6 +125,7 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON_AddBoolToObject(warn, "show_on_lost", c->osd.warn.show_on_lost);
     cJSON_AddNumberToObject(osd, "units", c->osd.units);
 
+    FL();
     cJSON *clk = cJSON_AddObjectToObject(r, "clock");
     cJSON_AddBoolToObject(clk, "enabled", c->clock.enabled);
     cJSON_AddBoolToObject(clk, "require_gps", c->clock.require_gps);
@@ -77,6 +143,7 @@ cJSON *cfg_to_json(const cfg_t *c)
 
     cJSON_AddNumberToObject(cJSON_AddObjectToObject(r, "hilight"), "channel", c->hilight.channel);
 
+    FL();
     cJSON *msp = cJSON_AddObjectToObject(r, "msp");
     cJSON_AddNumberToObject(msp, "baud", c->msp.baud);
     cJSON_AddNumberToObject(msp, "swap_pins", c->msp_swap_pins);
@@ -91,10 +158,20 @@ cJSON *cfg_to_json(const cfg_t *c)
     cJSON_AddNumberToObject(r, "led_brightness", c->led_brightness);
     cJSON_AddNumberToObject(r, "ui_flags", c->ui_flags);
 
+    FL();
     cJSON *radio = cJSON_AddObjectToObject(r, "radio");
     cJSON_AddNumberToObject(radio, "wifi_power", c->wifi_tx_power);   // RF_PWR_*
     cJSON_AddNumberToObject(radio, "ble_power", c->ble_tx_power);     // RF_PWR_*, applies after reboot
     return r;
+}
+
+cJSON *cfg_to_json(const cfg_t *c) { return cfg_build(c, NULL); }
+
+esp_err_t cfg_to_json_stream(const cfg_t *c, httpd_req_t *r)
+{
+    jstream_t js;
+    js_open(&js, r);
+    return js_close(&js, cfg_build(c, &js));
 }
 
 // ---- merge helpers ------------------------------------------------

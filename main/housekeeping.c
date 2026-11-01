@@ -10,6 +10,7 @@
 #include "control.h"
 #include "portal.h"
 
+#include <stdio.h>
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
@@ -17,6 +18,24 @@
 #include "freertos/task.h"
 
 static const char *TAG = "hk";
+
+// Stack headroom per task (bytes never used). cam_state_t / ctrl_ctx_t growth
+// silently eats these; a small number here is the early warning. Logged at the
+// 60 s baseline and every 2 min after, so a Wi-Fi client / OTA excursion shows up.
+static void log_stacks(void)
+{
+    static const char *const names[] = { "housekeeping", "osd_task", "ctrl_task",
+                                         "cam_task", "msp_task", "portal" };
+    char sb[96]; size_t o = 0;
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        TaskHandle_t th = xTaskGetHandle(names[i]);
+        if (th && o < sizeof(sb)) {
+            o += snprintf(sb + o, sizeof(sb) - o, " %s=%u", names[i],
+                          (unsigned)uxTaskGetStackHighWaterMark(th));
+        }
+    }
+    ESP_LOGI(TAG, "stack free (low-water B):%s", sb);
+}
 
 // spec 12.1: after 60 s uptime the system is in steady state -- no code path
 // outside the vendor stacks should still be allocating. Latch the heap
@@ -34,9 +53,12 @@ static void heap_watch(void)
         if (up >= 60000) {
             baseline_lwm = warned_at = lwm;
             ESP_LOGI(TAG, "steady-state heap low-water baseline: %lu B", (unsigned long)lwm);
+            log_stacks();
         }
         return;
     }
+    static uint32_t last_stack_ms;
+    if (up - last_stack_ms >= 120000) { last_stack_ms = up; log_stacks(); }
     // Report each fresh 4 KB of regression, at most once every 10 s.
     if (lwm + 4096 < warned_at && up - last_log_ms > 10000) {
         last_log_ms = up;
@@ -146,7 +168,10 @@ static void hk_task(void *arg)
 void housekeeping_start(void)
 {
     static StaticTask_t tcb;
-    static StackType_t stack[2560 / sizeof(StackType_t)];
+    // 4 KB: it holds an fc_state_t + cam_state_t (~580 B) and calls into logging
+    // (vfprintf is deep). 2.5 KB overflowed once cam_state_t grew -- stack
+    // protection fault on the first Wi-Fi client join.
+    static StackType_t stack[4096 / sizeof(StackType_t)];
     xTaskCreateStatic(hk_task, "housekeeping", sizeof(stack)/sizeof(stack[0]),
                       NULL, 3, stack, &tcb);
     ESP_LOGI(TAG, "housekeeping started");

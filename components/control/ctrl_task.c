@@ -127,7 +127,7 @@ void ctrl_extras_tick(const ctrl_ctx_t *c)
 void ctrl_start(void)
 {
     static StaticTask_t tcb;
-    static StackType_t stack[3584 / sizeof(StackType_t)];
+    static StackType_t stack[4096 / sizeof(StackType_t)];   // ctrl_ctx_t is ~610 B
     xTaskCreateStatic(ctrl_task, "ctrl_task", sizeof(stack)/sizeof(stack[0]),
                       NULL, 9, stack, &tcb);
     ESP_LOGI(TAG, "ctrl_task started");

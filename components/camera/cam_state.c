@@ -33,6 +33,14 @@ void cam_state_get(cam_state_t *dst)
     xSemaphoreGive(s_mux);
 }
 
+void cam_state_get_link(cam_link_state_t *link, uint32_t *last_rx_ms)
+{
+    xSemaphoreTake(s_mux, portMAX_DELAY);
+    *link = s_shared.link;
+    *last_rx_ms = s_shared.last_rx_ms;
+    xSemaphoreGive(s_mux);
+}
+
 cam_state_t *cam_scratch(void)
 {
     if (s_owner == NULL) {

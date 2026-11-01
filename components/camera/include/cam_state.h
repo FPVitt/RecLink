@@ -44,6 +44,10 @@ void cam_state_init(void);
 // External readers (osd_task / ctrl_task / portal / housekeeping): atomic copy.
 void cam_state_get(cam_state_t *dst);
 
+// Just the link state + last-RX time, for callers that must not afford a whole
+// cam_state_t on a small task stack (it is ~450 B; housekeeping has 4 KB).
+void cam_state_get_link(cam_link_state_t *link, uint32_t *last_rx_ms);
+
 // cam_task context ONLY (cam_task + the driver callbacks it invokes). Returns
 // the single shared scratch; mutate in place then call cam_state_commit().
 // Asserts if called from any other task.
