@@ -123,6 +123,7 @@ static bool     s_was_ready;      // link reached READY since the last go_lost
 // bond is dead and every retry fails identically -- so after a few, erase the
 // bond and raise FLAG_REPAIR_NEEDED instead of hammering forever.
 static int      s_bond_fails;
+static uint8_t  s_bond_fail_addr[6];     // the camera s_bond_fails counts for
 // Portal scan-pause exemption: set when the link reaches READY, re-armed at the
 // start of each portal session (see cam_ble_pause_scan / scan_wanted / apply_scan).
 static bool     s_connected_this_session;
@@ -146,7 +147,14 @@ static void set_link(cam_link_state_t st)
     if (s_cs.link == st) { return; }
     s_cs.link = st;
     s_state_since_ms = now_ms();
-    if (st == CAM_LINK_READY) { s_was_ready = true; s_connected_this_session = true; }
+    if (st == CAM_LINK_READY) {
+        s_was_ready = true; s_connected_this_session = true;
+        // Anything queued before this session is stale (spec 13 item 5): a command that
+        // ctrl/portal enqueued around a LOST episode must not run the moment the next
+        // session is READY. ctrl_task only submits after it sees the READY event below,
+        // so nothing legitimate is lost here.
+        xQueueReset(s_cmdq);
+    }
     cam_state_commit();
     cam_event_t e = { .type = CAM_EV_LINK, .value = (int32_t)st };
     xQueueSend(s_evq, &e, 0);
@@ -288,11 +296,15 @@ esp_err_t cam_submit(cam_op_t op, int32_t arg)
         xQueueReceive(s_cmdq, &drop, 0);
         xQueueSend(s_cmdq, &c, 0);
     }
+    // cam_task blocks on s_iq: without a nudge a command waits for the next event or
+    // its 100 ms timeout (spec 12.4: enqueued -> on air <= 50 ms).
+    iq_item_t wake = { .kind = IQ_NOTIFY_WAKE };
+    xQueueSend(s_iq, &wake, 0);
     return ESP_OK;
 }
 esp_err_t cam_submit_datetime(int64_t utc_ms, int16_t off, bool dst)
 {
-    cam_cmd_t c = { .op = CAM_OP_SET_DATETIME, .arg = ((int32_t)off << 8) | (dst ? 1 : 0), .arg64 = utc_ms };
+    cam_cmd_t c = { .op = CAM_OP_SET_DATETIME, .arg = (int32_t)(((uint32_t)(uint16_t)off << 8) | (dst ? 1u : 0u)), .arg64 = utc_ms };
     xQueueSend(s_cmdq, &c, 0);
     return ESP_OK;
 }
@@ -366,6 +378,7 @@ void cam_ble_suspend(void)
 }
 static volatile bool s_throttle;
 void cam_throttle(bool on) { s_throttle = on; }
+bool cam_portal_up(void) { return s_throttle; }
 
 // Portal Wi-Fi AP is up: on the single-radio C3 the aggressive active BLE scan
 // starves the macOS association handshake (auth/assoc/EAPOL/DHCP) and HTTP. See
@@ -566,9 +579,15 @@ static void handle_ble_evt(int ev, int status)
         // On a bonded reconnect, repeated identical pairing failures mean the
         // camera dropped its side of the bond -- erasing ours and asking for a
         // re-pair is the only real fix (spec 3.6 / 11.0 FLAG_REPAIR_NEEDED).
+        // Counted per camera, and only THAT camera's bond is dropped: three failures at the
+        // edge of range, or one camera re-paired elsewhere, must not wipe the other bonds.
+        if (!s_first_pair && memcmp(s_bond_fail_addr, s_target_addr, 6) != 0) {
+            memcpy(s_bond_fail_addr, s_target_addr, 6);
+            s_bond_fails = 0;
+        }
         if (!s_first_pair && ++s_bond_fails >= 3) {
-            applog_note("cam: pairing failed x%d -- bond stale, erasing + REPAIR_NEEDED", s_bond_fails);
-            ble_central_erase_all_bonds();
+            applog_note("cam: pairing failed x%d -- bond stale, forgetting it + REPAIR_NEEDED", s_bond_fails);
+            ble_central_forget_bond_any(s_target_addr);
             bridge_flag_set(FLAG_REPAIR_NEEDED);
             s_bond_fails = 0;
             go_lost("bond stale (repair needed)", false);
@@ -609,7 +628,8 @@ static void handle_ble_evt(int ev, int status)
         go_lost("gatt discovery failed", false);
         break;
     case BLE_EVT_DISCONNECTED:
-        if (s_cs.link != CAM_LINK_IDLE) { go_lost("gatt disconnect", false); }
+        // go_lost() itself initiates a disconnect; its GAP event must not count as a second loss.
+        if (s_cs.link != CAM_LINK_IDLE && s_cs.link != CAM_LINK_LOST) { go_lost("gatt disconnect", false); }
         break;
     }
 }
@@ -844,6 +864,7 @@ static void cam_task(void *arg)
         {
             uint32_t drv_iv = cfg_active_poll_ms();
             if (s_throttle && drv_iv < 1500) { drv_iv = 1500; }
+            if (s_cs.link == CAM_LINK_READY && s_drv && s_drv->tick_fast) { s_drv->tick_fast(); }
             if (s_cs.link == CAM_LINK_READY && s_drv && s_drv->tick_1s &&
                 now - last_drv_poll >= drv_iv) {
                 last_drv_poll = now;

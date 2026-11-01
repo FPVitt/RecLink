@@ -32,6 +32,7 @@ void rtcnv_boot_update(void)
     case ESP_RST_TASK_WDT:
     case ESP_RST_INT_WDT:
     case ESP_RST_WDT:
+    case ESP_RST_PANIC:       // a stack overflow / assert / fault is a recovery boot too (fault LED, no portal)
         s_stats.wdt_recoveries++;
         s_wdt_unacked = true;
         break;

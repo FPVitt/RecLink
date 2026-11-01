@@ -25,7 +25,7 @@ static const char *TAG = "hk";
 static void log_stacks(void)
 {
     static const char *const names[] = { "housekeeping", "osd_task", "ctrl_task",
-                                         "cam_task", "msp_task", "portal" };
+                                         "cam_task", "msp_task", "portal_task" };
     char sb[96]; size_t o = 0;
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         TaskHandle_t th = xTaskGetHandle(names[i]);
@@ -68,16 +68,16 @@ static void heap_watch(void)
     }
 }
 
-static led_pattern_t pick_led(const fc_state_t *fc, const cam_state_t *cam)
+static led_pattern_t pick_led(const fc_state_t *fc, cam_link_state_t link, tribool_t recording)
 {
     if (portal_active())               { return LED_PORTAL; }
     // A watchdog-recovery boot flashes LED_FAULT until roughly the point the
     // link would normally be up; the sticky flag stays until acked in the
     // portal. Kept short so it doesn't read as a dead board.
     if (bridge_flag_get(FLAG_WDT_RECOVERED) && now_ms() < 3000) { return LED_FAULT; }
-    if (cam->recording == TRIBOOL_TRUE) { return LED_RECORDING; }
+    if (recording == TRIBOOL_TRUE) { return LED_RECORDING; }
     if (!fc->link_up)                  { return LED_FC_DOWN; }
-    switch (cam->link) {
+    switch (link) {
     case CAM_LINK_READY: return LED_CAM_IDLE;
     case CAM_LINK_LOST:  return LED_CAM_LOST;
     case CAM_LINK_IDLE:  return LED_CAM_IDLE;
@@ -93,7 +93,8 @@ static void hk_task(void *arg)
 
     for (;;) {
         fc_state_t fc; fc_state_get(&fc);
-        cam_state_t cam; cam_state_get(&cam);
+        cam_link_state_t cam_link; tribool_t cam_rec;
+        cam_state_get_brief(&cam_link, &cam_rec);          // not the whole ~450 B cam_state_t
 
         // --- flags upkeep -------------------------------------------
         if (fc.link_up) { bridge_flag_clear(FLAG_FC_OFFLINE); }
@@ -111,7 +112,7 @@ static void hk_task(void *arg)
         }
 
         // --- LED -------------------------------------------------
-        led_request(pick_led(&fc, &cam));
+        led_request(pick_led(&fc, cam_link, cam_rec));
         led_service();
 
         // --- button --------------------------------------------
@@ -133,7 +134,9 @@ static void hk_task(void *arg)
         // --- portal supervision (spec 10.1) -------------------
         const cfg_t *c = cfg_get();
         bool always = (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED);
-        bool trig = always && !fc.armed && fc.link_up;
+        // Arm state must be KNOWN (decoded from MSP_STATUS this link session), not just
+        // "link up and armed == false (the zero default)" -- spec 13.3.
+        bool trig = always && fc.link_up && fc.armed_valid && !fc.armed;
         // FC link down: bench case (spec 10.1) -- but never open the AP on a
         // flying aircraft after a mid-flight reboot. Refuse if the FC has
         // reported armed at any point this boot, within the first 5 s, or on a

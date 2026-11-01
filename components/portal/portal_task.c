@@ -103,6 +103,7 @@ static void portal_bringup(void)
     esp_err_t e = esp_wifi_init(&ic);
     if (e != ESP_OK && e != ESP_ERR_WIFI_INIT_STATE) { ESP_LOGE(TAG, "wifi_init %s", esp_err_to_name(e)); }
 
+    if (s_want_stop) { return; }     // armed while we were setting up: never bring the radio up
     wifi_ap_up();
 
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();
@@ -182,7 +183,11 @@ void portal_stop(void)
     TaskHandle_t t = s_task;
     if (!t) { return; }
     s_want_stop = true;
-    xTaskNotifyGive(t);              // wake it now -> fast teardown
+    // Radio first, right here (esp_wifi_stop is thread-safe): the AP must be off within
+    // ~100 ms of the armed edge (spec 12.4) and portal_task's own teardown can wait
+    // behind a running HTTP handler (httpd_stop blocks until it returns).
+    esp_wifi_stop();
+    xTaskNotifyGive(t);              // wake it now -> finish the teardown
 }
 
 bool portal_active(void) { return s_running || s_task != NULL; }

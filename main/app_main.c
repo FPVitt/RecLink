@@ -70,14 +70,14 @@ void app_main(void)
     osd_start();
     housekeeping_start();
 
-    // --- step 7: portal open condition -----------------------------
-    // Force-open-via-button is runtime-only now (housekeeping's BTN_LONG ->
-    // portal_supervise), since GPIO9 can't be sampled safely at boot -- see
-    // platform.h.
-    const cfg_t *c = cfg_get();
-    fc_state_t fc; fc_state_get(&fc);
-    bool want_portal = (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED && !fc.armed);
-    if (want_portal) { portal_start(); }
+    // --- step 7: portal ------------------------------------------------
+    // Deliberately NOT started here. At this point the arm state is unknown
+    // (fc.armed is just its zero default), so starting the AP now would put Wi-Fi
+    // on the air for a few hundred ms after an in-flight reboot -- spec 13.3
+    // forbids it. housekeeping opens the portal once the arm state is KNOWN
+    // (fc.armed_valid) and disarmed, or on the bench case with no FC. Force-open
+    // via the button is runtime-only too (BTN_LONG -> portal_supervise), since
+    // GPIO9 can't be sampled safely at boot -- see platform.h.
 
     // init got this far cleanly -> tell the bootloader this image is good, so an
     // OTA-installed build isn't rolled back on the next reboot.

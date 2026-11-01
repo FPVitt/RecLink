@@ -207,7 +207,7 @@ static void mnum_u(const cJSON *o, const char *k, void *dst, size_t sz)
     if (!jnum(J_OBJ(o, k), &v)) { return; }
     if (v < 0) { v = 0; }
     switch (sz) {
-    case 1: { uint8_t  t = (uint8_t)v;  memcpy(dst, &t, 1); break; }
+    case 1: { uint8_t  t = (v > 255.0) ? 0xFF : (uint8_t)v; memcpy(dst, &t, 1); break; }
     case 2: { uint16_t t = (v > 65535.0) ? 0xFFFF : (uint16_t)v; memcpy(dst, &t, 2); break; }
     case 4: { uint32_t t = (v > 4294967295.0) ? 0xFFFFFFFFu : (uint32_t)v; memcpy(dst, &t, 4); break; }
     }

@@ -114,6 +114,7 @@ bool msp_parse_frame(const msp_frame_t *f, fc_state_t *s, msp_parse_ctx_t *ctx)
 
         if (ctx->arm_bit_index >= 0) {
             s->armed = (modeflags >> ctx->arm_bit_index) & 1u;
+            s->armed_valid = true;
         }
         // FIXME(protocol-verifier -> implementer): the previous fixed-offset
         // heuristic below reads the WRONG u32 (for the common BC=0 / len=25 case

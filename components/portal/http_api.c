@@ -28,6 +28,17 @@
 
 static const char *TAG = "api";
 
+// One scratch area for the handlers that need a big temporary buffer: the OTA accumulation
+// buffer, the log dump and the capability snapshot. httpd runs its handlers one at a time on
+// a single task, so they never overlap -- and sharing saves ~4.6 KB of a ~35 KB heap.
+#define OTA_BUF 16384
+static union {
+    uint8_t     ota[OTA_BUF];
+    char        logs[APPLOG_RING_BYTES + 1];
+    cam_caps_t  caps;
+} s_scratch;
+_Static_assert(sizeof(((typeof(s_scratch) *)0)->logs) <= OTA_BUF, "log dump must fit the shared scratch");
+
 // embedded gzip assets
 extern const uint8_t idx_start[] asm("_binary_index_html_gz_start");
 extern const uint8_t idx_end[]   asm("_binary_index_html_gz_end");
@@ -458,22 +469,22 @@ static esp_err_t h_cam_poll(httpd_req_t *r)
 // this is ~400 nodes, far too much for the heap.
 static esp_err_t h_cam_caps(httpd_req_t *r)
 {
-    static cam_caps_t caps;                 // 540 B: static, httpd runs one handler at a time
-    cam_caps_get(&caps);
+    cam_caps_t *caps = &s_scratch.caps;     // shared scratch: httpd runs one handler at a time
+    cam_caps_get(caps);
     portal_note_client_activity();
     jstream_t js;
     js_open(&js, r);
     char b[160];
-    int n = snprintf(b, sizeof(b), "\"gen\":%u,\"caps\":{", (unsigned)caps.gen);
+    int n = snprintf(b, sizeof(b), "\"gen\":%u,\"caps\":{", (unsigned)caps->gen);
     js_put(&js, b, n);
     bool first = true;
     for (int i = 0; i < GP_PSET_MAX; i++) {
-        if (!caps.have[i]) { continue; }
+        if (!caps->have[i]) { continue; }
         n = snprintf(b, sizeof(b), "%s\"%u\":[", first ? "" : ",", gp_pset_id(i));
         first = false;
         bool comma = false;
         for (int v = 0; v < 256; v++) {
-            if (!cam_caps_has(&caps, i, (uint8_t)v)) { continue; }
+            if (!cam_caps_has(caps, i, (uint8_t)v)) { continue; }
             if (n > (int)sizeof(b) - 6) { js_put(&js, b, n); n = 0; }
             n += snprintf(b + n, sizeof(b) - n, "%s%d", comma ? "," : "", v);
             comma = true;
@@ -538,9 +549,16 @@ static esp_err_t h_cam_test(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
     cam_submit(CAM_OP_RECORD_START, 0);
-    const esp_timer_create_args_t ta = { .callback = test_stop_cb, .name = "camtest" };
-    esp_timer_handle_t th;
-    if (esp_timer_create(&ta, &th) == ESP_OK) { esp_timer_start_once(th, 3000000); }
+    // One timer, reused (a new one per press was never deleted).
+    static esp_timer_handle_t s_test_timer;
+    if (!s_test_timer) {
+        const esp_timer_create_args_t ta = { .callback = test_stop_cb, .name = "camtest" };
+        if (esp_timer_create(&ta, &s_test_timer) != ESP_OK) { s_test_timer = NULL; }
+    }
+    if (s_test_timer) {
+        esp_timer_stop(s_test_timer);                    // restart the 3 s if pressed again
+        esp_timer_start_once(s_test_timer, 3000000);
+    }
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", true);
     return send_json(r, resp, NULL);
@@ -603,8 +621,8 @@ static esp_err_t h_reboot(httpd_req_t *r)
 static esp_err_t h_logs(httpd_req_t *r)
 {
     portal_note_client_activity();
-    static char buf[APPLOG_RING_BYTES + 1];
-    size_t n = applog_dump(buf, sizeof(buf));
+    char *buf = s_scratch.logs;
+    size_t n = applog_dump(buf, sizeof(s_scratch.logs));
     httpd_resp_set_type(r, "text/plain");
     return httpd_resp_send(r, buf, n);
 }
@@ -656,8 +674,7 @@ static esp_err_t h_ota(httpd_req_t *r)
     // duration of every tiny flash write (which collapsed the transfer at ~58%).
     // Static, not malloc'd: heap is tight during the portal and this must not
     // fail. 16 KB .bss, only meaningful on a build with the portal.
-    #define OTA_BUF 16384
-    static uint8_t buf[OTA_BUF];
+    uint8_t *buf = s_scratch.ota;
 
     int  remaining = total;
     bool started = false;

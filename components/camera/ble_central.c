@@ -38,7 +38,7 @@ static bool     s_host_synced;
 // management, internal services). Too small a table silently hides the later
 // ones -- including the control/query characteristics we need.
 #define MAX_CHRS 48
-static struct { ble_uuid_any_t uuid; uint16_t def_handle; uint16_t val_handle; uint16_t cccd_handle; } s_chrs[MAX_CHRS];
+static struct { ble_uuid_any_t uuid; uint16_t def_handle; uint16_t val_handle; uint16_t cccd_handle; uint8_t props; } s_chrs[MAX_CHRS];
 static int s_chr_n;
 static int s_dsc_idx;       // characteristic whose descriptors are being discovered
 
@@ -276,6 +276,9 @@ static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
 static void disc_next_dsc(uint16_t conn)
 {
     for (; s_dsc_idx < s_chr_n; s_dsc_idx++) {
+        // Only a notify/indicate characteristic has a CCCD worth finding; skipping the
+        // rest saves one ATT round trip each (~25 of a GoPro's ~30) on every connection.
+        if (!(s_chrs[s_dsc_idx].props & (BLE_GATT_CHR_PROP_NOTIFY | BLE_GATT_CHR_PROP_INDICATE))) { continue; }
         uint16_t start = s_chrs[s_dsc_idx].val_handle + 1;
         uint16_t end = (s_dsc_idx + 1 < s_chr_n) ? (uint16_t)(s_chrs[s_dsc_idx + 1].def_handle - 1)
                                                  : 0xffff;
@@ -295,6 +298,7 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
         if (s_chr_n < MAX_CHRS) {
             ble_uuid_copy(&s_chrs[s_chr_n].uuid, &chr->uuid.u);
             s_chrs[s_chr_n].def_handle = chr->def_handle;
+            s_chrs[s_chr_n].props = chr->properties;
             s_chrs[s_chr_n].val_handle = chr->val_handle;
             s_chrs[s_chr_n].cccd_handle = 0;
             s_chr_n++;

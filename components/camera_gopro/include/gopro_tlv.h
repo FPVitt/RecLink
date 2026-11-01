@@ -11,20 +11,23 @@
 //   continuation: 1 byte 0x80, follows for multi-packet payloads
 // (spec 6.2). We only ever *send* short packets; we must *reassemble* on RX.
 
-// Reassembly buffer sized for the largest message we ever ask for: a get-all
-// response (0x12/0x13), which exceeds 512 B. Anything longer is dropped, not
-// truncated -- `drops` counts that (and lost/stray packets) so a camera or
-// firmware that sends something unexpectedly large is diagnosable instead of
-// just appearing silent. Preset-status protobufs can run to several KB, but
-// this firmware never requests them.
+// Reassembly buffer: caller-provided, per characteristic, sized for the largest
+// message that characteristic can carry (the query characteristic needs ~1 KB for
+// a get-all reply; command and settings replies are tiny). Anything longer is
+// dropped, not truncated -- `drops` counts that (and lost/stray packets) so a
+// camera or firmware that sends something unexpectedly large is diagnosable
+// instead of just appearing silent. Preset-status protobufs can run to several KB,
+// but this firmware never requests them.
 typedef struct {
-    uint8_t  buf[1024];
+    uint8_t *buf;
+    uint16_t cap;        // size of buf
     uint16_t have;       // bytes accumulated
     uint16_t need;       // total expected (0 = idle)
     uint8_t  counter;    // next expected 4-bit continuation counter
     uint16_t drops;      // messages discarded: overflow, lost or stray packet
 } gopro_reasm_t;
 
+void gopro_reasm_init(gopro_reasm_t *r, uint8_t *buf, uint16_t cap);
 void gopro_reasm_reset(gopro_reasm_t *r);
 
 // Feed one raw notification. Returns true + sets *out/*out_len when a full

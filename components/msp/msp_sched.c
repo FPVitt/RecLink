@@ -39,7 +39,8 @@ static entry_t s_tbl[] = {
     { MSP_STATUS,           50, 0, 0, 0, 0 },   // 20 Hz
     { MSP_RC,              100, 0, 0, 0, 0 },   // 10 Hz
     { MSP_BATTERY_STATE,  500, 0, 0, 0, 0 },    // 2 Hz
-    { MSP_ANALOG,         500, 0, 0, 0, 0 },    // 2 Hz
+    // MSP_ANALOG deliberately not polled: nothing parses the reply (battery state comes from
+    // MSP_BATTERY_STATE), so the slot and the UART time were wasted.
     { MSP_RAW_GPS,        500, 1, 0, 0, 0 },    // 2 Hz, gps-gated
     { MSP_RTC,          15000, 0, 0, 0, 0 },    // every 15 s, always
 };

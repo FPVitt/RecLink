@@ -22,6 +22,8 @@ typedef struct {
     bool     osd_supported;         // api >= 1.47
 
     bool     armed;
+    bool     armed_valid;           // armed was decoded from MSP_STATUS with the arm bit resolved
+                                    // since the FC link last came up; false = arm state UNKNOWN
     uint32_t arming_disable_flags;
     int8_t   arm_bit_index;         // BOXARM bit in flightModeFlags (from MSP_BOXIDS); -1 = unresolved
 

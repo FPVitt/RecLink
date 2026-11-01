@@ -66,6 +66,7 @@ typedef struct {
     esp_err_t (*hilight)(void);
 
     esp_err_t (*tick_1s)(void);
+    void      (*tick_fast)(void);                // optional: every cam_task pass (<= 100 ms) while READY
     esp_err_t (*refresh)(void);                 // re-pull all state (optional)
 
     // GATT notification fan-in (cam_task routes every notify here).
@@ -101,6 +102,7 @@ int  cam_found_list(cam_found_t *out, int max);   // returns count copied
 esp_err_t cam_refresh(void);                    // portal: re-pull all camera state
 void      cam_ble_suspend(void);                // drop the BLE link (for OTA)
 void      cam_throttle(bool on);                // slow driver polling (portal up)
+bool      cam_portal_up(void);                  // the portal AP is up (set by cam_throttle)
 void      cam_ble_pause_scan(bool on);          // pause the camera hunt (portal AP up; keeps a READY link)
 uint32_t  cam_notify_drops(void);              // BLE notifications lost to a full queue (monotonic)
 uint32_t  cam_link_age_ms(void);              // time in the current link state

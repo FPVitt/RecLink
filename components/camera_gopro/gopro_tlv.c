@@ -1,6 +1,13 @@
 #include "gopro_tlv.h"
 #include <string.h>
 
+void gopro_reasm_init(gopro_reasm_t *r, uint8_t *buf, uint16_t cap)
+{
+    r->buf = buf;
+    r->cap = cap;
+    gopro_reasm_reset(r);
+}
+
 void gopro_reasm_reset(gopro_reasm_t *r)
 {
     r->have = 0; r->need = 0; r->counter = 0; r->drops = 0;
@@ -60,14 +67,20 @@ bool gopro_reasm_feed(gopro_reasm_t *r, const uint8_t *pkt, uint16_t len,
         // concatenating what follows would silently produce a corrupt message
         // of the right length, so drop the whole thing and resync on the next
         // start packet.
-        if ((pkt[0] & 0x80) == 0) { discard(r); return false; }
+        if ((pkt[0] & 0x80) == 0) {
+            // A START packet while a message is still incomplete: the tail of the previous
+            // one was lost. Count it, then parse THIS packet as the start of the next message
+            // instead of throwing it away too (a lost last packet must cost one message, not two).
+            discard(r);
+            return gopro_reasm_feed(r, pkt, len, out, out_len);
+        }
         if ((pkt[0] & 0x0F) != r->counter) { discard(r); return false; }
         r->counter = (uint8_t)((r->counter + 1) & 0x0F);
         i = 1;
     }
 
     uint16_t n = len - i;
-    if (r->have + n > sizeof(r->buf)) { discard(r); return false; }
+    if (r->have + n > r->cap) { discard(r); return false; }
     memcpy(r->buf + r->have, pkt + i, n);
     r->have += n;
 

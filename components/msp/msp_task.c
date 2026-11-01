@@ -68,11 +68,36 @@ static bool msp_func_forbidden(uint16_t func)
     }
 }
 
+// Allowlist (belt and braces with the denylist above): the only opcodes this
+// firmware ever puts on the wire -- the read requests it polls and MSP2_SET_TEXT
+// for the OSD slots. A bug cannot make it transmit anything else (SET_MOTOR,
+// SET_PID, SET_MODE_RANGE, ...). Extend deliberately if a feature needs more.
+static bool msp_func_allowed(uint16_t func)
+{
+    switch (func) {
+    case MSP_API_VERSION:
+    case MSP_FC_VARIANT:
+    case MSP_STATUS:
+    case MSP_RC:
+    case MSP_RAW_GPS:
+    case MSP_ANALOG:
+    case MSP_BOXIDS:
+    case MSP_BATTERY_STATE:
+    case MSP_OSD_CANVAS:
+    case MSP_RTC:
+    case MSP2_GET_TEXT:      // craft name (type 2)
+    case MSP2_SET_TEXT:
+        return true;
+    default:
+        return false;
+    }
+}
+
 // ---- public API -------------------------------------------------------
 esp_err_t msp_send(uint16_t func, const uint8_t *payload, uint16_t len)
 {
-    if (msp_func_forbidden(func)) {
-        ESP_LOGE(TAG, "REFUSED forbidden MSP func %u (passenger guard)", func);
+    if (msp_func_forbidden(func) || !msp_func_allowed(func)) {
+        ESP_LOGE(TAG, "REFUSED MSP func %u (passenger guard)", func);
         return ESP_ERR_NOT_ALLOWED;
     }
     if (len > sizeof(((msp_cmd_t *)0)->payload)) { return ESP_ERR_INVALID_SIZE; }
@@ -115,8 +140,8 @@ static void uart_write_frame(uint16_t func, const uint8_t *payload, uint16_t len
 {
     // Last line of defence: nothing forbidden ever reaches the wire, even if a
     // bug enqueued it or called here directly.
-    if (msp_func_forbidden(func)) {
-        ESP_LOGE(TAG, "BLOCKED forbidden MSP func %u at TX", func);
+    if (msp_func_forbidden(func) || !msp_func_allowed(func)) {
+        ESP_LOGE(TAG, "BLOCKED MSP func %u at TX", func);
         return;
     }
     uint8_t buf[MSP_MAX_PAYLOAD + 16];
@@ -248,6 +273,16 @@ static void msp_task(void *arg)
                 applog_note("FC link lost");
                 msp_sched_rearm_oneshots();     // re-handshake on recovery
                 ready_emitted = false;
+                // The FC may have rebooted with a different mode order: forget the arm
+                // bit and the arm state until BOXIDS + STATUS are decoded again, so a
+                // stale bit index can never be applied to the new session's frames and
+                // nothing treats "armed" as known in the meantime (spec 13.3).
+                pctx.arm_bit_index = -1;
+                pctx.boxids_ok = false;
+                st.arm_bit_index = -1;
+                st.armed_valid = false;
+                fc_state_publish(&st);
+                published = true;
             }
         }
 
