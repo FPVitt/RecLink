@@ -421,11 +421,9 @@ def build_index(lang):
                         ("Installa il firmware", "Scegli la scheda e la versione, poi caricala via USB o aggiornala via Wi-Fi.", "Apri l'installer"))
     cards += (f'<article class="card" id="fw"><span class="ico">{ICONS["fw"]}</span><h2>{fw_t}</h2><p>{fw_d}</p>'
               f'<div class="actions"><a class="btn" href="../flash/">{fw_b}</a></div></article>')
-    cards += (f'<article class="card" id="gh"><span class="ico">{GH_SVG}</span><h2>{s["gh_t"]}</h2><p>{s["gh_d"]}</p>'
-              f'<div class="actions"><a class="btn" href="{GH_URL}" target="_blank" rel="noopener">{GH_SVG}{s["gh"]}</a></div></article>')
     which = "".join(f"<li>{w}</li>" for w in s["which"])
     meta = "".join(f"<span>{html.escape(m)}</span>" for m in s["meta"])
-    main = (f'<div class="hero"><p class="eyebrow">{s["site"]}</p><h1>RecLink</h1><p class="sub">{s["home_sub"]}</p><div class="meta">{meta}</div></div>'
+    main = (f'<div class="hero"><p class="eyebrow">{s["site"]}</p><h1>RecLink</h1><p class="sub">{s["home_sub"]}</p><div class="meta">{meta}</div><p class="gh-row"><a class="btn ghost" href="{GH_URL}" target="_blank" rel="noopener">{GH_SVG}{s["gh"]}</a></p></div>'
             f'<div class="callout danger"><span class="tag">{s["pre_tag"]}</span><p>{s["pre"]}</p></div>'
             f'<div class="cards">{cards}</div><h2 class="plain">{s["which_h"]}</h2><ul class="which">{which}</ul>')
     alt_href = f"../{other}/index.html"

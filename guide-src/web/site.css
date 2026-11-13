@@ -236,3 +236,4 @@ svg .onacc{fill:var(--acc-fg)}
 .ico{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin-bottom:.9rem;border-radius:12px;background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc-ink)}
 .ico svg{width:24px;height:24px}
 #gh .ico{background:var(--well);color:var(--fg)}
+.gh-row{margin:1.1rem 0 0}
