@@ -299,3 +299,6 @@ body[data-doc="board"] .layout{max-width:none;padding:0}
 .pts{list-style:none;margin:.7rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
 .pts li{padding:.2rem .7rem;border-radius:999px;background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc-ink);font-weight:650;font-size:.88rem}
 @media (max-width:640px){.pts li{font-size:.78rem;padding:.15rem .55rem}}
+
+.logo-h1{display:flex;align-items:center;gap:.28em}
+.logo-h1 .mark{height:.72em;width:auto;color:var(--acc-ink);flex:none}
