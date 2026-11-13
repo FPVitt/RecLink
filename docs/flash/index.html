@@ -20,6 +20,7 @@ html[lang=en] .it,html[lang=it] .en{display:none}
 .board:hover{border-color:var(--acc)}.board[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
 .board .ph{height:150px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:var(--radius-lg);margin-bottom:.7rem}
 .board .ph img{max-height:138px;max-width:100%}.board b{display:block;font-size:1.05rem}.board span.s{font-size:.85rem;color:var(--mut)}
+.boards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 #panels>div{display:none}#panels>div.on{display:block}
 select{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-md);padding:.5rem .7rem;font:inherit}
 .mpick{display:flex;gap:.5rem;margin:.4rem 0 1rem}.mbtn{background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-md);padding:.4rem 1.1rem;font:inherit;font-weight:600;cursor:pointer}
