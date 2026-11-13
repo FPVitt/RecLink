@@ -291,3 +291,7 @@ body[data-doc="board"] .layout{max-width:none;padding:0}
 @media (max-width:640px){.exp.full{height:380vh}.exp.full .exp-steps{height:8rem}}
 .exp.full.started .exp-hint{opacity:0}
 @media (max-width:760px){.exp .exp-hint{display:none}}
+
+/* main page: four cards, two per row */
+.cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:640px){.cards{grid-template-columns:1fr}}

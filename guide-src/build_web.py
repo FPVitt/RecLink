@@ -71,6 +71,7 @@ GH_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path 
 ICONS = {
     "qs": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
     "guide": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19a2 2 0 0 0 2 2h13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    "board": '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
     "fw": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 }
 MARK = ('<svg class="mark" viewBox="0 0 168 80" aria-hidden="true"><path fill="currentColor" d="M6 6h30v12H18v44h18v12H6zM132 6h30v68h-30V62h18V18h-18z"/>'
@@ -501,6 +502,11 @@ def build_index(lang):
     for doc, t, d in (("qs", s["qs_t"], s["qs_d"]), ("guide", s["gd_t"], s["gd_d"])):
         cards += (f'<article class="card"><span class="ico">{ICONS[doc]}</span><h2>{t}</h2><p>{d}</p><div class="actions"><a class="btn" href="{PAGES[(lang, doc)]}">{s["read"]}</a></div>'
                   '</article>')
+    bd_t, bd_d, bd_b = (("The board", "The custom RecLink PCB: explore it in 3D, layer by layer. In development.", "Explore the board")
+                        if lang == "en" else
+                        ("La scheda", "Il PCB personalizzato RecLink: esplorala in 3D, strato per strato. In sviluppo.", "Esplora la scheda"))
+    cards += (f'<article class="card" id="bd"><span class="ico">{ICONS["board"]}</span><h2>{bd_t}</h2><p>{bd_d}</p>'
+              f'<div class="actions"><a class="btn" href="{PAGES[(lang, "board")]}">{bd_b}</a></div></article>')
     fw_t, fw_d, fw_b = (("Install the firmware", "Pick your board, choose a version, then flash it by USB or update it over Wi-Fi.", "Open the installer")
                         if lang == "en" else
                         ("Installa il firmware", "Scegli la scheda e la versione, poi caricala via USB o aggiornala via Wi-Fi.", "Apri l'installer"))
