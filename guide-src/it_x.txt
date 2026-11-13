@@ -78,3 +78,5 @@ When it finishes, unplug and replug the board. It is ready: carry on with step 1
 SuperMini: FC TX to <b>GPIO7</b>, FC RX from <b>GPIO6</b>. S3: FC TX to <b>GPIO4</b>, FC RX from <b>GPIO5</b>. Power from the FC 5 V and GND (full table in the User guide).|||SuperMini: TX della FC a <b>GPIO7</b>, RX della FC da <b>GPIO6</b>. S3: TX della FC a <b>GPIO4</b>, RX della FC da <b>GPIO5</b>. Alimentazione da 5 V e GND della FC (tabella completa nella Guida utente).
 Your board|||La tua scheda
 GPIO number on each board|||Numero GPIO su ogni scheda
+If you have the <b>RecLink board</b>, you can skip this part, but make sure its firmware is up to date: update it over Wi-Fi from the web installer (System tab → Firmware update).|||Se hai la <b>scheda RecLink</b> puoi saltare questa parte, ma controlla che il firmware sia aggiornato: aggiornalo via Wi-Fi dall'installer web (scheda Sistema → Aggiornamento firmware).
+A <b>SuperMini</b> or <b>S3</b> board must be flashed once, from the web installer. Follow the steps below.|||Una scheda <b>SuperMini</b> o <b>S3</b> va caricata una volta con l'installer web. Segui i passi qui sotto.
