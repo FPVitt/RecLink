@@ -378,7 +378,7 @@ ROOT_INDEX = '''<!doctype html>
 (function () {
   var l = null;
   try { l = localStorage.getItem('rl-lang'); } catch (e) {}
-  if (l !== 'en' && l !== 'it') l = /^it\\b/i.test(navigator.language || '') ? 'it' : 'en';
+  if (l !== 'en' && l !== 'it') l = (function(){var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<a.length;i++){if(/^it\\b/i.test(a[i]))return 'it';if(/^en\\b/i.test(a[i]))return 'en';}return 'en';})();
   location.replace(l + '/' + location.hash);
 })();
 </script>

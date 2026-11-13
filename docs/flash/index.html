@@ -67,7 +67,7 @@ code{background:var(--well);padding:1px 5px;border-radius:4px}.card ol{padding-l
 <script>
 (function(){
 var L='en';try{L=localStorage.getItem('rl-lang')}catch(e){}
-if(L!=='en'&&L!=='it')L=/^it\b/i.test(navigator.language||'')?'it':'en';
+if(L!=='en'&&L!=='it')L=(function(){var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<a.length;i++){if(/^it\b/i.test(a[i]))return 'it';if(/^en\b/i.test(a[i]))return 'en';}return 'en';})();
 var segs=document.querySelectorAll('.seg a[data-lang]');
 function setL(l){L=l;document.documentElement.lang=l;segs.forEach(function(a){if(a.dataset.lang===l)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current')});try{localStorage.setItem('rl-lang',l)}catch(e){}}
 segs.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();setL(a.dataset.lang)})});setL(L);

@@ -39,7 +39,7 @@
   var cur = $('.seg a[aria-current="true"]');
   /* first visit (no saved choice): Italian browsers get the Italian pages, everyone else English */
   if (cur && !store.get('rl-lang')) {
-    var want = /^it\b/i.test(navigator.language || '') ? 'it' : 'en';
+    var want = (function(){var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<a.length;i++){if(/^it\b/i.test(a[i]))return 'it';if(/^en\b/i.test(a[i]))return 'en';}return 'en';})();
     var alt = $('.seg a[data-lang="' + want + '"]');
     if (want !== cur.dataset.lang && alt && alt.getAttribute('href') !== '#') {
       store.set('rl-lang', want);
