@@ -40,7 +40,7 @@ PIDs, or navigation.
   DJI each zone selects a camera mode. Zones and their settings are built in the
   portal, with option lists that follow what the camera actually allows.
 - **Highlight tags** punched into the recording from a momentary switch.
-- **Up to 4 paired cameras.** Any mix of GoPro and DJI. On power-up RecLink
+- **Up to 4 paired cameras.** Any mix of GoPro and (experimental) DJI. On power-up RecLink
   connects to whichever paired camera has the strongest signal — one at a time.
 - **Camera clock sync** from the FC's GPS time, so your footage timestamps are
   right.
@@ -56,8 +56,8 @@ PIDs, or navigation.
 
 | Brand | Models | Protocol |
 |---|---|---|
-| GoPro | HERO 11 / 12 / 13 (and newer with the same BLE API) | [Open GoPro](https://gopro.github.io/OpenGoPro/) BLE |
-| DJI | Osmo Action 4 / 5 / 6, Osmo 360 | DUML over BLE |
+| GoPro | **Supported:** HERO 9 / 10 / 11 / 12 / 13 (and newer with the same BLE API); HERO11 Black is the bench-tested one. **Mission 1 / Mission 1 Pro: expected, unverified** (may need two-byte setting ids this firmware does not speak; BLE advertising unknown). HERO8 and older are not supported (no Open GoPro BLE) | [Open GoPro](https://gopro.github.io/OpenGoPro/) BLE |
+| DJI | **Experimental / unverified:** Osmo Action 4 / 5 Pro / 6, Osmo Nano, Osmo 360 — no DJI camera has been tested yet; record, mode switch and status are implemented from DJI's open-source demo, but behaviour per model is not confirmed | DUML over BLE |
 
 ### Requirements
 

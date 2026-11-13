@@ -548,8 +548,30 @@ static esp_err_t gp_select_preset(uint8_t slot)
     return ESP_OK;
 }
 
+// Older firmware (HERO9/10) may not know the DST-aware date-time commands. When 0x0F / 0x10
+// is refused we switch to the 7-byte no-timezone pair 0x0D / 0x0E (local time only) for the
+// rest of the session; the offset we last wrote is remembered to turn a read-back into UTC.
+static bool    dt_legacy;
+static int64_t dt_last_utc_ms;
+static int16_t dt_last_off;
+static bool    dt_last_dst;
+
+static void gp_send_datetime_legacy(void)
+{
+    time_t local = (time_t)(dt_last_utc_ms / 1000) + dt_last_off * 60;
+    struct tm tm; gmtime_r(&local, &tm);
+    int y = tm.tm_year + 1900;
+    uint8_t b[9] = { 0x0D, 0x07, (uint8_t)(y >> 8), (uint8_t)y, (uint8_t)(tm.tm_mon + 1),
+                     (uint8_t)tm.tm_mday, (uint8_t)tm.tm_hour, (uint8_t)tm.tm_min, (uint8_t)tm.tm_sec };
+    wr(h_cmd, b, sizeof(b));
+    applog_note("gopro set clock (legacy 0x0D) %04d-%02d-%02d %02d:%02d:%02d", y, tm.tm_mon + 1,
+                tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
+
 static esp_err_t gp_set_datetime(int64_t utc_ms, int16_t off_min, bool dst)
 {
+    dt_last_utc_ms = utc_ms; dt_last_off = off_min; dt_last_dst = dst;
+    if (dt_legacy) { gp_send_datetime_legacy(); return ESP_OK; }
     time_t local = (time_t)(utc_ms / 1000) + off_min * 60;
     struct tm tm;
     gmtime_r(&local, &tm);
@@ -579,7 +601,7 @@ static esp_err_t gp_get_datetime(void)
 {
     // verified: SDK CmdId.GET_DATE_TIME_DST = 0x10 (0x0E = GET_DATE_TIME, no tz).
     // We set with the DST variant (0x0F) so we must read back tz+dst too -> 0x10.
-    uint8_t b[1] = { 0x10 };
+    uint8_t b[1] = { dt_legacy ? 0x0E : 0x10 };
     wr(h_cmd, b, 1);
     return ESP_OK;
 }
@@ -725,6 +747,7 @@ static esp_err_t gp_link_up(bool first_pair)
     last_status_poll_ms = now_ms();
     ble_ready = false;
     hw_ok = false;
+    dt_legacy = false;
     aspect108_seen = false;
     poll_full = false; poll_err = 0;
     q12_n = 0; lw_n = 0;
@@ -1048,6 +1071,23 @@ static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
             gp_pull_all();
             caps_request(300);
         }
+        return;
+    }
+    if ((cmd_id == 0x0F || cmd_id == 0x10) && status != 0 && !dt_legacy) {
+        dt_legacy = true;                               // DST variants refused: older firmware
+        applog_note("gopro: 0x%02X refused (status %u) -- using legacy date-time 0x0D/0x0E", cmd_id, status);
+        if (cmd_id == 0x0F) { gp_send_datetime_legacy(); } else { uint8_t g[1] = { 0x0E }; wr(h_cmd, g, 1); }
+        return;
+    }
+    if (cmd_id == 0x0E && status == 0 && len >= 10) {
+        // GET_DATE_TIME (0x0E): [id][status][len][yyyy BE][mm][dd][hh][mi][ss], local time, no offset.
+        int y = (p[3] << 8) | p[4];
+        int64_t local_epoch = epoch_from_civil_utc(y, p[5], p[6], p[7], p[8], p[9]);
+        cam_state_t *s = cam_scratch();
+        s->cam_utc_ms.valid = true;
+        s->cam_utc_ms.v = (local_epoch - dt_last_off * 60) * 1000;
+        s->cam_clock_read_uptime_ms = now_ms();
+        if (CB->on_state_dirty) { CB->on_state_dirty(); }
         return;
     }
     if (cmd_id == 0x10 && status == 0 && len >= 13) {

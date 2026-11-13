@@ -1,6 +1,6 @@
 // gopro_enums.h -- setting-value -> OSD string maps (spec 6.5 / 16.B).
 // VERIFY every row against the Open GoPro BLE spec revision for the target
-// camera (HERO 11/12/13 differ). Tracked in VERIFY.md.
+// camera (HERO 9-13 differ). Tracked in VERIFY.md.
 #pragma once
 #include <stdint.h>
 

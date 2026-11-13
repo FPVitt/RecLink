@@ -1,4 +1,4 @@
-// camera_gopro.h -- Open GoPro BLE driver (spec 6). HERO 11+.
+// camera_gopro.h -- Open GoPro BLE driver (spec 6). HERO 9-13 (Mission 1 unverified).
 #pragma once
 #include "camera.h"
 
