@@ -22,7 +22,7 @@ DOCS = os.path.join(ROOT, "docs")
 ASSETS = os.path.join(DOCS, "assets")
 IMG = os.path.join(ASSETS, "img")
 PDFDIR = os.path.join(DOCS, "pdf")
-REPO_URL = "https://github.com/ShadowM06/RecLink"
+REPO_URL = "https://github.com/FPVitt/RecLink"
 FW = "0.1.0"
 
 PAGES = {  # (lang, doc) -> file name
