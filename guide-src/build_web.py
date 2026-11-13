@@ -29,8 +29,8 @@ OG_IMG = SITE + "assets/og.png"
 
 
 PAGES = {  # (lang, doc) -> file name
-    ("en", "index"): "index.html", ("en", "qs"): "quick-start.html", ("en", "guide"): "user-guide.html",
-    ("it", "index"): "index.html", ("it", "qs"): "guida-rapida.html", ("it", "guide"): "guida-utente.html",
+    ("en", "index"): "index.html", ("en", "qs"): "quick-start.html", ("en", "guide"): "user-guide.html", ("en", "board"): "the-board.html",
+    ("it", "index"): "index.html", ("it", "qs"): "guida-rapida.html", ("it", "guide"): "guida-utente.html", ("it", "board"): "la-scheda.html",
 }
 
 S = {
@@ -45,7 +45,7 @@ S = {
         gd_t="User guide", gd_d="Every feature, setting and indicator, explained with diagrams and screenshots of the web configurator. 14 chapters and a reference.",
         read="Read online", dl="Download PDF", meta=["Betaflight 2025.12+", "GoPro HERO 9–13", "DJI Osmo (experimental)"],
         lang_label="Language", on_page="On this page", pdf_title="Download this guide as a PDF", gh="View on GitHub", gh_t="Source code", gh_d="Browse the firmware, read the spec, report an issue or download releases.",
-        which_h="Which one do I need?", which=["New to RecLink? Start with the <b>Quick start</b>.", "Want every detail, or something is not working? Open the <b>User guide</b>."],
+        which_h="Which one do I need?", which=["New to RecLink? Start with the <b>Quick start</b>.", "Want every detail, or something is not working? Open the <b>User guide</b>.", "Curious about the hardware? See <b>The board</b> (in development)."],
         desc_qs="RecLink quick start: wire the board, set up Betaflight, pair your GoPro or DJI camera, record from arm or a radio switch.",
         desc_gd="RecLink user guide: wiring, Betaflight setup, the web configurator, recording control, zones, OSD, clock sync, troubleshooting.",
     ),
@@ -60,7 +60,7 @@ S = {
         gd_t="Guida utente", gd_d="Ogni funzione, impostazione e indicatore, spiegati con diagrammi e schermate del configuratore web. 14 capitoli e un riferimento.",
         read="Leggi online", dl="Scarica il PDF", meta=["Betaflight 2025.12+", "GoPro HERO 9–13", "DJI Osmo (experimental)"],
         lang_label="Lingua", on_page="In questa pagina", pdf_title="Scarica questa guida in PDF", gh="Vedi su GitHub", gh_t="Codice sorgente", gh_d="Sfoglia il firmware, leggi le specifiche, segnala un problema o scarica le release.",
-        which_h="Quale mi serve?", which=["Sei nuovo con RecLink? Parti dalla <b>Guida rapida</b>.", "Vuoi ogni dettaglio, oppure qualcosa non funziona? Apri la <b>Guida utente</b>."],
+        which_h="Quale mi serve?", which=["Sei nuovo con RecLink? Parti dalla <b>Guida rapida</b>.", "Vuoi ogni dettaglio, oppure qualcosa non funziona? Apri la <b>Guida utente</b>.", "Curioso dell'hardware? Guarda <b>La scheda</b> (in sviluppo)."],
         desc_qs="Guida rapida RecLink: cabla la scheda, configura Betaflight, abbina la GoPro o la DJI, registra con l'arm o con un interruttore della radio.",
         desc_gd="Guida utente RecLink: cablaggio, configurazione di Betaflight, configuratore web, controllo della registrazione, zone, OSD, sincronizzazione orologio, risoluzione dei problemi.",
     ),
@@ -262,6 +262,7 @@ def header(lang, doc, rel, alt_href):
     for key in ("qs", "guide"):
         cur = ' aria-current="page"' if key == doc else ""
         tabs += f'<a href="{PAGES[(lang, key)]}"{cur}>{s[key]}</a>'
+    tabs += f'<a href="{PAGES[(lang, "board")]}"{' aria-current="page"' if doc == "board" else ""}>{"The board" if lang == "en" else "La scheda"}</a>'
     tabs += f'<a href="../flash/">{"Install firmware" if lang == "en" else "Installa firmware"}</a>'
     langs = ""
     for code in ("en", "it"):
@@ -272,7 +273,7 @@ def header(lang, doc, rel, alt_href):
     if doc in ("qs", "guide"):
         links = "".join(f'<a href="{h}" download>{t}<small>{sz}</small></a>' for t, h, sz in pdf_links(lang, doc, rel))
         pdf = f'<details class="menu pdf"><summary title="{s["pdf_title"]}">{s["pdf"]}</summary><div class="menu-body">{links}</div></details>'
-    toc_btn = f'<button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="{s["menu"]}"><span>{s["menu"]}</span></button>' if doc != "index" else ""
+    toc_btn = f'<button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="{s["menu"]}"><span>{s["menu"]}</span></button>' if doc not in ("index", "board") else ""
     return f'''<header class="topbar"><div class="bar">
 <a class="brand" href="index.html" aria-label="RecLink">{MARK}<span>RecLink</span></a>
 <nav class="tabs" aria-label="Guides">{tabs}</nav>
@@ -409,6 +410,86 @@ def build_doc(doc, lang):
     return page(lang, doc, title, desc, main_html, toc=toc_html(toc, lang), alt_href=alt_href)
 
 
+BOARD = {
+    "en": dict(
+        title="The board", eyebrow="RecLink hardware",
+        sub="The custom RecLink PCB: an ESP32-C3 with its own antenna, about the size of a fingernail, with four solder pads to the flight controller.",
+        desc="The RecLink board: a custom 12 x 13 mm four-layer PCB with an ESP32-C3, chip antenna and four castellated solder pads (GND, 5V, TX, RX). Currently in development.",
+        tag="In development",
+        warn="The RecLink board is <b>currently in development</b>. What you see here is the work-in-progress design: dimensions, pad layout and components may still change, and it is not a finished product yet. Until then, any ESP32-C3 or ESP32-S3 dev board works (see the Quick start).",
+        h3d="3D model", hint="Drag to rotate, scroll or pinch to zoom.",
+        views=("Top", "Bottom", "Angled"), alt3d="3D model of the RecLink board",
+        hphotos="Top and bottom", cap_top="Top side: ESP32-C3, chip antenna (top left), status LED and the supporting parts.",
+        cap_bot="Bottom side: the four solder pads are labelled GND, 5V, TX and RX.",
+        hfacts="At a glance",
+        facts=[("Size", "about 12 × 13.3 mm"), ("Thickness", "1.0 mm"), ("Layers", "4 (top, two inner, bottom)"),
+               ("Processor", "ESP32-C3 (RISC-V, Bluetooth LE 5, Wi-Fi), bare QFN-32 chip"),
+               ("Antenna", "3.2 × 1.6 mm ceramic chip antenna"),
+               ("Indicator", "one status LED (GPIO10, active-high)"),
+               ("Test points", "three, for programming and debug"),
+               ("Connection", "four castellated solder pads along one edge"),
+               ("Firmware", "default board profile of the RecLink firmware")],
+        hpads="The four pads", pads_intro="Solder four wires from the flight controller to the four pads along the board's edge, in the order printed on its bottom side (left to right when you look at that side):",
+        padrows=[("GND", "FC ground", "Common ground."), ("5V", "FC 5V", "Power. The board regulates it down on its own."),
+                 ("TX", "FC UART RX", "Board transmit (GPIO21, through a 470 Ω series resistor)."), ("RX", "FC UART TX", "Board receive (GPIO20).")],
+        padhead=("Pad", "Connect to", "Notes"),
+        pads_note="TX and RX are named from the board's side, so TX goes to the flight controller's RX. If you cross them by mistake, you can fix it in the web configurator (MSP tab, <i>Swap MSP TX/RX pins</i>) without re-soldering.",
+        hnext="Next steps", next=['Wiring step by step: <a href="quick-start.html">Quick start</a>.', 'Put the firmware on the board, or update it over Wi-Fi: <a href="../flash/">Install firmware</a>.'],
+        foot="Dimensions and part list are taken from the current design files and may change while the board is in development."),
+    "it": dict(
+        title="La scheda", eyebrow="Hardware RecLink",
+        sub="Il PCB personalizzato RecLink: un ESP32-C3 con la sua antenna, grande quanto un'unghia, con quattro pad da saldare al flight controller.",
+        desc="La scheda RecLink: un PCB personalizzato a quattro strati di 12 x 13 mm con ESP32-C3, antenna ceramica e quattro pad castellati (GND, 5V, TX, RX). Attualmente in sviluppo.",
+        tag="In sviluppo",
+        warn="La scheda RecLink è <b>attualmente in sviluppo</b>. Quello che vedi qui è il progetto in corso d'opera: dimensioni, disposizione dei pad e componenti possono ancora cambiare, e non è ancora un prodotto finito. Nel frattempo va bene qualsiasi scheda di sviluppo ESP32-C3 o ESP32-S3 (vedi la Guida rapida).",
+        h3d="Modello 3D", hint="Trascina per ruotare, scorri o pizzica per ingrandire.",
+        views=("Sopra", "Sotto", "Inclinata"), alt3d="Modello 3D della scheda RecLink",
+        hphotos="Sopra e sotto", cap_top="Lato superiore: ESP32-C3, antenna ceramica (in alto a sinistra), LED di stato e i componenti di contorno.",
+        cap_bot="Lato inferiore: i quattro pad da saldare sono marcati GND, 5V, TX e RX.",
+        hfacts="In breve",
+        facts=[("Dimensioni", "circa 12 × 13,3 mm"), ("Spessore", "1,0 mm"), ("Strati", "4 (sopra, due interni, sotto)"),
+               ("Processore", "ESP32-C3 (RISC-V, Bluetooth LE 5, Wi-Fi), chip QFN-32 nudo"),
+               ("Antenna", "antenna ceramica 3,2 × 1,6 mm"),
+               ("Indicatore", "un LED di stato (GPIO10, attivo alto)"),
+               ("Punti di test", "tre, per programmazione e debug"),
+               ("Collegamento", "quattro pad castellati da saldare lungo un bordo"),
+               ("Firmware", "profilo scheda predefinito del firmware RecLink")],
+        hpads="I quattro pad", pads_intro="Salda quattro fili dal flight controller ai quattro pad lungo il bordo della scheda, nell'ordine stampato sul lato inferiore (da sinistra a destra guardando quel lato):",
+        padrows=[("GND", "Massa FC", "Massa comune."), ("5V", "5V FC", "Alimentazione. La scheda la regola da sola."),
+                 ("TX", "RX UART FC", "Trasmissione della scheda (GPIO21, con resistenza in serie da 470 Ω)."), ("RX", "TX UART FC", "Ricezione della scheda (GPIO20).")],
+        padhead=("Pad", "Collega a", "Note"),
+        pads_note="TX e RX sono indicati dal punto di vista della scheda, quindi TX va all'RX del flight controller. Se li incroci per errore, puoi correggere dal configuratore web (scheda MSP, <i>Inverti pin TX/RX MSP</i>) senza risaldare.",
+        hnext="Prossimi passi", next=['Il cablaggio passo per passo: <a href="guida-rapida.html">Guida rapida</a>.', 'Installa il firmware sulla scheda, o aggiornalo via Wi-Fi: <a href="../flash/">Installa firmware</a>.'],
+        foot="Dimensioni ed elenco componenti derivano dai file di progetto attuali e possono cambiare mentre la scheda è in sviluppo."),
+}
+
+
+def build_board(lang):
+    b = BOARD[lang]
+    other = "it" if lang == "en" else "en"
+    A = "../assets/board/"
+    facts = "".join(f"<tr><td>{html.escape(k)}</td><td>{html.escape(v)}</td></tr>" for k, v in b["facts"])
+    pads = "".join(f'<tr><td><b>{a}</b></td><td>{html.escape(c)}</td><td class="wrap">{html.escape(n)}</td></tr>' for a, c, n in b["padrows"])
+    th = "".join(f"<th>{h}</th>" for h in b["padhead"])
+    nxt = "".join(f"<li>{n}</li>" for n in b["next"])
+    main = f"""<div class="hero"><p class="eyebrow">{b["eyebrow"]}</p><h1>{b["title"]}</h1><p class="sub">{b["sub"]}</p></div>
+<div class="callout warn"><span class="tag">{b["tag"]}</span><p>{b["warn"]}</p></div>
+<h2 class="plain">{b["h3d"]}</h2>
+<div class="viewer"><model-viewer id="bv" src="{A}reclink-board.glb" poster="{A}board-iso.webp" alt="{b["alt3d"]}" camera-controls touch-action="pan-y" auto-rotate auto-rotate-delay="1500" rotation-per-second="18deg" camera-orbit="35deg 55deg auto" min-camera-orbit="auto 0deg auto" max-camera-orbit="auto 180deg auto" field-of-view="22deg" min-field-of-view="8deg" max-field-of-view="40deg" shadow-intensity="0.6" shadow-softness="1" exposure="1.1" interaction-prompt="none" loading="eager"><noscript><img src="{A}board-iso.webp" alt="{b["alt3d"]}"></noscript></model-viewer>
+<div class="vbar"><span class="vhint">{b["hint"]}</span><span class="vbtns"><button type="button" data-o="0deg 0deg auto">{b["views"][0]}</button><button type="button" data-o="180deg 179deg auto">{b["views"][1]}</button><button type="button" data-o="35deg 55deg auto">{b["views"][2]}</button></span></div></div>
+<h2 class="plain">{b["hphotos"]}</h2>
+<div class="pair"><figure class="shot"><img src="{A}board-top.webp" alt="{html.escape(b["cap_top"], quote=True)}" width="800" height="803" loading="lazy"><figcaption>{b["cap_top"]}</figcaption></figure>
+<figure class="shot"><img src="{A}board-bottom.webp" alt="{html.escape(b["cap_bot"], quote=True)}" width="800" height="801" loading="lazy"><figcaption>{b["cap_bot"]}</figcaption></figure></div>
+<h2 class="plain">{b["hfacts"]}</h2><div class="tbl"><table><tbody>{facts}</tbody></table></div>
+<h2 class="plain">{b["hpads"]}</h2><p>{b["pads_intro"]}</p><div class="tbl"><table><thead><tr>{th}</tr></thead><tbody>{pads}</tbody></table></div>
+<p>{b["pads_note"]}</p>
+<h2 class="plain">{b["hnext"]}</h2><ul class="which">{nxt}</ul>
+<p class="fine">{b["foot"]}</p>
+<script type="module" src="{A}model-viewer.min.js"></script>
+<script>(function(){{var m=document.getElementById('bv');if(!m)return;document.querySelectorAll('.vbtns button').forEach(function(x){{x.addEventListener('click',function(){{m.removeAttribute('auto-rotate');m.cameraOrbit=x.dataset.o;}});}});}})();</script>"""
+    return page(lang, "board", b["title"], b["desc"], main, alt_href=f"../{other}/{PAGES[(other, 'board')]}")
+
+
 def build_index(lang):
     s = S[lang]
     other = "it" if lang == "en" else "en"
@@ -473,10 +554,12 @@ def main():
         os.makedirs(os.path.join(DOCS, sub), exist_ok=True)
     for f in ("site.css", "site.js", "favicon.svg"):
         shutil.copy(os.path.join(HERE, "web", f), os.path.join(ASSETS, f))
+    shutil.copytree(os.path.join(HERE, "web", "board"), os.path.join(ASSETS, "board"), dirs_exist_ok=True)
     # drop images from a previous build so renamed/unused ones do not pile up
     used = set()
     for lang in ("en", "it"):
         open(os.path.join(DOCS, lang, "index.html"), "w", encoding="utf-8").write(build_index(lang))
+        open(os.path.join(DOCS, lang, PAGES[(lang, "board")]), "w", encoding="utf-8").write(build_board(lang))
         for doc in ("qs", "guide"):
             out = build_doc(doc, lang)
             open(os.path.join(DOCS, lang, PAGES[(lang, doc)]), "w", encoding="utf-8").write(out)
@@ -488,9 +571,9 @@ def main():
     open(os.path.join(DOCS, "index.html"), "w", encoding="utf-8").write(ROOT_INDEX)
     open(os.path.join(DOCS, ".nojekyll"), "w").close()
     make_og()
-    urls = [SITE] + [page_url(l, d) for d in ("index", "qs", "guide") for l in ("en", "it")] + [SITE + "flash/"]
+    urls = [SITE] + [page_url(l, d) for d in ("index", "qs", "guide", "board") for l in ("en", "it")] + [SITE + "flash/"]
     def alt(u):
-        for d in ("index", "qs", "guide"):
+        for d in ("index", "qs", "guide", "board"):
             for l in ("en", "it"):
                 if u == page_url(l, d):
                     return "".join(f'<xhtml:link rel="alternate" hreflang="{x}" href="{page_url(x, d)}"/>' for x in ("en", "it"))

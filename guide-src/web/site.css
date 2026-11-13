@@ -237,3 +237,17 @@ svg .onacc{fill:var(--acc-fg)}
 .ico svg{width:24px;height:24px}
 #gh .ico{background:var(--well);color:var(--fg)}
 .gh-row{margin:1.1rem 0 0}
+
+/* ---------- the board page ---------- */
+.viewer{border:1px solid var(--line);border-radius:var(--radius-xl);background:var(--card);overflow:hidden;margin:0 0 1rem}
+.viewer model-viewer{display:block;width:100%;height:min(62vw,460px);--poster-color:transparent;background:radial-gradient(70% 90% at 50% 40%,color-mix(in srgb,var(--acc) 12%,var(--well)),var(--well))}
+.vbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem;padding:.6rem .9rem;border-top:1px solid var(--line)}
+.vhint{color:var(--mut);font-size:.88rem}
+.vbtns{display:flex;gap:.4rem}
+.vbtns button{font:inherit;font-size:.88rem;font-weight:600;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:var(--radius-md);padding:.3rem .8rem;cursor:pointer}
+.vbtns button:hover{background:var(--well)}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:1rem;margin:0 0 1.2rem}
+.pair figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:.8rem}
+.pair img{display:block;width:100%;height:auto;border-radius:var(--radius-md)}
+.pair figcaption{color:var(--mut);font-size:.88rem;margin-top:.6rem}
+.fine{color:var(--mut);font-size:.85rem;margin-top:1.6rem}
