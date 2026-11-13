@@ -76,3 +76,5 @@ On a computer, open <b>https://fpvitt.github.io/RecLink/flash/</b> in <b>Chrome 
 Plug the board in by USB, choose <b>USB</b>, press the flash button and pick the serial port. If the port is not found, hold <b>BOOT</b> while plugging it in.|||Collega la scheda via USB, scegli <b>USB</b>, premi il pulsante di flash e scegli la porta seriale. Se la porta non compare, tieni premuto <b>BOOT</b> mentre la colleghi.
 When it finishes, unplug and replug the board. It is ready: carry on with step 1.|||Quando ha finito, scollega e ricollega la scheda. È pronta: continua con il passo 1.
 SuperMini: FC TX to <b>GPIO7</b>, FC RX from <b>GPIO6</b>. S3: FC TX to <b>GPIO4</b>, FC RX from <b>GPIO5</b>. Power from the FC 5 V and GND (full table in the User guide).|||SuperMini: TX della FC a <b>GPIO7</b>, RX della FC da <b>GPIO6</b>. S3: TX della FC a <b>GPIO4</b>, RX della FC da <b>GPIO5</b>. Alimentazione da 5 V e GND della FC (tabella completa nella Guida utente).
+Your board|||La tua scheda
+GPIO number on each board|||Numero GPIO su ogni scheda
