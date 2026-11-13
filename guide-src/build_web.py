@@ -340,7 +340,7 @@ def make_og():
     mid = ImageFont.truetype(fp, 42, index=0)
     small = ImageFont.truetype(fp, 30, index=0)
     d.text((80, 345), "RecLink", font=big, fill="#f2f4f8")
-    d.text((80, 485), "Betaflight  \u2194  GoPro / DJI camera bridge", font=mid, fill="#a7b0be")
+    d.text((80, 485), "Betaflight to GoPro / DJI camera bridge", font=mid, fill="#a7b0be")
     d.text((80, 545), "Wiring, pairing, recording control, OSD and web configurator", font=small, fill="#a7b0be")
     im.save(out, optimize=True)
 
