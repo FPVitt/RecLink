@@ -106,8 +106,9 @@ function start() {
     const spread = 1 + cur.e2 * 5.2;
     layers.forEach((l) => { l.p.position.y = l.y0 * spread + (l.y0 > 0 ? 0.004 : -0.004); });
     slabs.forEach((s, i) => { s.position.y = ((LY[i] + LY[i + 1]) / 2) * spread; });
-    top.position.y = LY[0] * spread + cur.e1 * 2.4;
-    bottomParts.position.y = LY[3] * spread - cur.e1 * 2.4;
+    // part meshes already carry their own height above the board surface (y = 0.5 at the top face)
+    top.position.y = LY[0] * (spread - 1) + cur.e1 * 2.4;
+    bottomParts.position.y = LY[3] * (spread - 1) - cur.e1 * 2.4;
     const az = (cur.az + off.az) * Math.PI / 180;
     const pol = Math.min(176, Math.max(4, cur.pol + off.pol)) * Math.PI / 180;
     const d = cur.d * (camera.aspect < 1 ? 2.2 : 1.32);
