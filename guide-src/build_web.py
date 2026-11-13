@@ -24,6 +24,9 @@ IMG = os.path.join(ASSETS, "img")
 PDFDIR = os.path.join(DOCS, "pdf")
 REPO_URL = "https://github.com/FPVitt/RecLink"
 FW = "0.2.0"
+SITE = "https://fpvitt.github.io/RecLink/"
+OG_IMG = SITE + "assets/og.png"
+
 
 PAGES = {  # (lang, doc) -> file name
     ("en", "index"): "index.html", ("en", "qs"): "quick-start.html", ("en", "guide"): "user-guide.html",
@@ -284,6 +287,64 @@ def toc_html(toc, lang):
     return f'<aside class="sidebar" id="toc" aria-label="{s["toc"]}"><div class="side-in"><p class="toc-title">{s["toc"]}</p><ol>{li}</ol></div></aside>'
 
 
+def page_url(lang, doc):
+    return SITE + lang + "/" + ("" if doc == "index" else PAGES[(lang, doc)])
+
+
+def seo_head(lang, doc, title, desc):
+    import json
+    other = "it" if lang == "en" else "en"
+    url, other_url = page_url(lang, doc), page_url(other, doc)
+    t = html.escape(title + " · RecLink", quote=True)
+    d = html.escape(desc, quote=True)
+    loc, oloc = ("en_US", "it_IT") if lang == "en" else ("it_IT", "en_US")
+    if doc == "index":
+        ld = {"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "RecLink",
+              "applicationCategory": "DeveloperApplication", "operatingSystem": "ESP32 (ESP-IDF)",
+              "softwareVersion": FW, "description": desc, "url": url, "image": OG_IMG,
+              "downloadUrl": REPO_URL + "/releases", "codeRepository": REPO_URL,
+              "license": REPO_URL, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}}
+    else:
+        ld = {"@context": "https://schema.org", "@type": "TechArticle", "headline": title + " · RecLink",
+              "description": desc, "inLanguage": lang, "url": url, "image": OG_IMG,
+              "about": "RecLink, an ESP32 bridge between a Betaflight flight controller and a GoPro / DJI action camera",
+              "isPartOf": {"@type": "WebSite", "name": "RecLink", "url": SITE}}
+    return (f'<link rel="canonical" href="{url}">\n'
+            f'<link rel="alternate" hreflang="{lang}" href="{url}">\n'
+            f'<link rel="alternate" hreflang="{other}" href="{other_url}">\n'
+            f'<link rel="alternate" hreflang="x-default" href="{page_url("en", doc)}">\n'
+            f'<meta property="og:url" content="{url}">\n<meta property="og:site_name" content="RecLink">\n'
+            f'<meta property="og:locale" content="{loc}"><meta property="og:locale:alternate" content="{oloc}">\n'
+            f'<meta property="og:image" content="{OG_IMG}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">\n'
+            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{t}">'
+            f'<meta name="twitter:description" content="{d}"><meta name="twitter:image" content="{OG_IMG}">\n'
+            f'<script type="application/ld+json">{json.dumps(ld, ensure_ascii=False)}</script>')
+
+
+def make_og():
+    from PIL import ImageDraw, ImageFont
+    fp = "/System/Library/Fonts/Helvetica.ttc"
+    out = os.path.join(ASSETS, "og.png")
+    if not os.path.exists(fp):
+        return
+    im = Image.new("RGB", (1200, 630), "#0f1216")
+    d = ImageDraw.Draw(im)
+    g = "#2ea043"
+    d.rectangle([0, 0, 1200, 10], fill=g)
+    ox, oy, k = 80, 120, 2.4
+    for x, y, w, h in ((6, 6, 30, 12), (6, 6, 12, 68), (6, 62, 30, 12), (132, 6, 30, 12), (150, 6, 12, 68), (132, 62, 30, 12)):
+        d.rectangle([ox + x * k, oy + y * k, ox + (x + w) * k, oy + (y + h) * k], fill=g)
+    cx, cy, r = ox + 84 * k, oy + 40 * k, 21 * k
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=g)
+    big = ImageFont.truetype(fp, 120, index=1)
+    mid = ImageFont.truetype(fp, 42, index=0)
+    small = ImageFont.truetype(fp, 30, index=0)
+    d.text((80, 345), "RecLink", font=big, fill="#f2f4f8")
+    d.text((80, 485), "Betaflight  \u2194  GoPro / DJI camera bridge", font=mid, fill="#a7b0be")
+    d.text((80, 545), "Wiring, pairing, recording control, OSD and web configurator", font=small, fill="#a7b0be")
+    im.save(out, optimize=True)
+
+
 def page(lang, doc, title, desc, main_html, rel="../", toc="", alt_href="#"):
     s = S[lang]
     other = "it" if lang == "en" else "en"
@@ -302,7 +363,7 @@ def page(lang, doc, title, desc, main_html, rel="../", toc="", alt_href="#"):
 <meta property="og:description" content="{html.escape(desc, quote=True)}">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="{rel}assets/favicon.svg">
-{alts}
+{seo_head(lang, doc, title, desc)}
 <script>try{{var t=localStorage.getItem('rl-theme');if(t)document.documentElement.dataset.theme=t}}catch(e){{}}</script>
 <link rel="stylesheet" href="{rel}assets/site.css">
 </head>
@@ -371,11 +432,19 @@ ROOT_INDEX = '''<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RecLink guides</title>
+<title>RecLink · Betaflight to GoPro / DJI camera bridge (ESP32)</title>
+<meta name="description" content="RecLink is an ESP32 bridge between a Betaflight flight controller and a GoPro or DJI action camera: OSD status, record on arm, switch-controlled presets, GPS clock sync. Guides and firmware installer.">
+<link rel="canonical" href="https://fpvitt.github.io/RecLink/">
+<meta property="og:title" content="RecLink · Betaflight to GoPro / DJI camera bridge">
+<meta property="og:description" content="ESP32 bridge between a Betaflight FC and a GoPro / DJI action camera. Guides and firmware installer.">
+<meta property="og:type" content="website"><meta property="og:url" content="https://fpvitt.github.io/RecLink/">
+<meta property="og:image" content="https://fpvitt.github.io/RecLink/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0f1216">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-<link rel="alternate" hreflang="en" href="en/">
-<link rel="alternate" hreflang="it" href="it/">
+<link rel="alternate" hreflang="en" href="https://fpvitt.github.io/RecLink/en/">
+<link rel="alternate" hreflang="it" href="https://fpvitt.github.io/RecLink/it/">
+<link rel="alternate" hreflang="x-default" href="https://fpvitt.github.io/RecLink/en/">
 <script>
 (function () {
   var l = null;
@@ -415,6 +484,19 @@ def main():
             os.remove(os.path.join(IMG, f))
     open(os.path.join(DOCS, "index.html"), "w", encoding="utf-8").write(ROOT_INDEX)
     open(os.path.join(DOCS, ".nojekyll"), "w").close()
+    make_og()
+    urls = [SITE] + [page_url(l, d) for d in ("index", "qs", "guide") for l in ("en", "it")] + [SITE + "flash/"]
+    def alt(u):
+        for d in ("index", "qs", "guide"):
+            for l in ("en", "it"):
+                if u == page_url(l, d):
+                    return "".join(f'<xhtml:link rel="alternate" hreflang="{x}" href="{page_url(x, d)}"/>' for x in ("en", "it"))
+        return ""
+    sm = ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+          'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' +
+          "".join(f"<url><loc>{u}</loc>{alt(u)}</url>\n" for u in urls) + "</urlset>\n")
+    open(os.path.join(DOCS, "sitemap.xml"), "w", encoding="utf-8").write(sm)
+    open(os.path.join(DOCS, "robots.txt"), "w").write(f"User-agent: *\nAllow: /\n\nSitemap: {SITE}sitemap.xml\n")
     print("images:", len(used))
 
 
