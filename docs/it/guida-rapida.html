@@ -23,7 +23,7 @@
 <button class="icon theme-btn" type="button" title="Passa al tema chiaro / scuro" aria-label="Passa al tema chiaro / scuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button><button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="Indice"><span>Indice</span></button></div>
 </div><div id="progress" aria-hidden="true"></div></header>
 <div class="layout has-toc">
-<aside class="sidebar" id="toc" aria-label="In questa pagina"><div class="side-in"><p class="toc-title">In questa pagina</p><ol><li data-id="step1"><a href="#step1"><b>1</b><span>Cablaggio</span></a></li><li data-id="step2"><a href="#step2"><b>2</b><span>Configura Betaflight</span></a></li><li data-id="step3"><a href="#step3"><b>3</b><span>Apri il configuratore</span></a></li><li data-id="step4"><a href="#step4"><b>4</b><span>Abbina la camera</span></a></li><li data-id="step5"><a href="#step5"><b>5</b><span>Fai registrare la camera</span></a></li><li data-id="step6"><a href="#step6"><b>6</b><span>Guardalo sull&#x27;OSD</span></a></li><li data-id="step7"><a href="#step7"><b>7</b><span>Verifica a banco</span></a></li><li data-id="ref-1"><a href="#ref-1"><span>Il LED</span></a></li><li data-id="ref-2"><a href="#ref-2"><span>Il pulsante</span></a></li><li data-id="ref-3"><a href="#ref-3"><span>Se qualcosa non va</span></a></li></ol></div></aside>
+<aside class="sidebar" id="toc" aria-label="In questa pagina"><div class="side-in"><p class="toc-title">In questa pagina</p><ol><li data-id="step1"><a href="#step1"><b>1</b><span>Metti il firmware sulla tua scheda</span></a></li><li data-id="step1"><a href="#step1"><b>1</b><span>Cablaggio</span></a></li><li data-id="step2"><a href="#step2"><b>2</b><span>Configura Betaflight</span></a></li><li data-id="step3"><a href="#step3"><b>3</b><span>Apri il configuratore</span></a></li><li data-id="step4"><a href="#step4"><b>4</b><span>Abbina la camera</span></a></li><li data-id="step5"><a href="#step5"><b>5</b><span>Fai registrare la camera</span></a></li><li data-id="step6"><a href="#step6"><b>6</b><span>Guardalo sull&#x27;OSD</span></a></li><li data-id="step7"><a href="#step7"><b>7</b><span>Verifica a banco</span></a></li><li data-id="ref-1"><a href="#ref-1"><span>Il LED</span></a></li><li data-id="ref-2"><a href="#ref-2"><span>Il pulsante</span></a></li><li data-id="ref-3"><a href="#ref-3"><span>Se qualcosa non va</span></a></li></ol></div></aside>
 <main id="main" class="content">
 <div class="hero"><p class="eyebrow">Guida rapida</p><h1>RecLink</h1><p class="sub">RecLink collega il tuo flight controller alla tua action cam. La camera registra quando armi e il suo stato compare sull&#x27;OSD. Questa pagina ti porta dalla scatola alla tua prima registrazione.</p><div class="meta"><span>Betaflight 2025.12+</span><span>GoPro HERO 9–13</span><span>DJI Osmo (experimental)</span></div></div><div class="intro"><section class="qshead">
 <div class="callout danger"><span class="tag">Firmware pre-release</span>
@@ -32,10 +32,10 @@
 <div class="grow">
 <h3>Ti serve</h3>
 <ul>
-<li>La scheda RecLink</li>
+<li>La scheda RecLink, oppure una scheda ESP32-C3 SuperMini / ESP32-S3</li>
 <li>Un flight controller con <b>Betaflight 2025.12 o successivo</b> e una UART libera</li>
 <li>Una GoPro (HERO 9 o successiva) o, in via sperimentale, una DJI Osmo, carica e con una scheda SD</li>
-<li>Un telefono o un portatile</li>
+<li>Un telefono o un portatile e, per una scheda di sviluppo, un computer con Chrome o Edge e un cavo USB</li>
 </ul>
 </div>
 <div class="grow">
@@ -44,6 +44,15 @@
 </div>
 </div>
 </section></div><section class="chapter" id="step1">
+<p class="chno">Prima del passo 1</p>
+<h1 class="ch">Metti il firmware sulla tua scheda<a aria-label="link" class="anchor" href="#step1">#</a></h1>
+<p>La <b>scheda RecLink</b> ha già quanto serve: vai al <a class="xref" href="#step1">passo 1</a>. Una scheda <b>SuperMini</b> o <b>S3</b> va caricata una volta con l'installer web.</p>
+<ol class="steps">
+<li><div>Da un computer, apri <b>https://fpvitt.github.io/RecLink/flash/</b> con <b>Chrome o Edge</b> e scegli la tua scheda (SuperMini o S3).</div></li>
+<li><div>Collega la scheda via USB, scegli <b>USB</b>, premi il pulsante di flash e scegli la porta seriale. Se la porta non compare, tieni premuto <b>BOOT</b> mentre la colleghi.</div></li>
+<li><div>Quando ha finito, scollega e ricollega la scheda. È pronta: continua con il <a class="xref" href="#step1">passo 1</a>.</div></li>
+</ol>
+</section><section class="chapter" id="step1">
 <p class="chno">Passo 1</p>
 <h1 class="ch">Cablaggio<a aria-label="link" class="anchor" href="#step1">#</a></h1>
 <div class="cols">
@@ -74,6 +83,7 @@
 <div style="width:70mm;flex:none">
 <ul>
 <li>Collega i quattro fili come nel disegno. <b>TX va a RX e RX va a TX.</b></li>
+<li>SuperMini: TX della FC a <b>GPIO7</b>, RX della FC da <b>GPIO6</b>. S3: TX della FC a <b>GPIO4</b>, RX della FC da <b>GPIO5</b>. Alimentazione da 5 V e GND della FC (tabella completa nella Guida utente).</li>
 <li>Se la scheda si riavvia da sola, aggiungi un condensatore da <b>220 µF</b> sui suoi pad dei 5 V.</li>
 <li>Montala vicino alla camera, lontano dalla fibra di carbonio.</li>
 <li>Fili incrociati per errore? Correggi dopo nel configuratore (Network → Swap TX/RX pins). Niente saldature.</li>

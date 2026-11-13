@@ -23,7 +23,7 @@
 <button class="icon theme-btn" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button><button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="Contents"><span>Contents</span></button></div>
 </div><div id="progress" aria-hidden="true"></div></header>
 <div class="layout has-toc">
-<aside class="sidebar" id="toc" aria-label="On this page"><div class="side-in"><p class="toc-title">On this page</p><ol><li data-id="step1"><a href="#step1"><b>1</b><span>Wire it</span></a></li><li data-id="step2"><a href="#step2"><b>2</b><span>Set up Betaflight</span></a></li><li data-id="step3"><a href="#step3"><b>3</b><span>Open the configurator</span></a></li><li data-id="step4"><a href="#step4"><b>4</b><span>Pair your camera</span></a></li><li data-id="step5"><a href="#step5"><b>5</b><span>Make it record</span></a></li><li data-id="step6"><a href="#step6"><b>6</b><span>See it on your OSD</span></a></li><li data-id="step7"><a href="#step7"><b>7</b><span>Check it on the bench</span></a></li><li data-id="ref-1"><a href="#ref-1"><span>The LED</span></a></li><li data-id="ref-2"><a href="#ref-2"><span>The button</span></a></li><li data-id="ref-3"><a href="#ref-3"><span>If something is wrong</span></a></li></ol></div></aside>
+<aside class="sidebar" id="toc" aria-label="On this page"><div class="side-in"><p class="toc-title">On this page</p><ol><li data-id="step1"><a href="#step1"><b>1</b><span>Put the firmware on your board</span></a></li><li data-id="step1"><a href="#step1"><b>1</b><span>Wire it</span></a></li><li data-id="step2"><a href="#step2"><b>2</b><span>Set up Betaflight</span></a></li><li data-id="step3"><a href="#step3"><b>3</b><span>Open the configurator</span></a></li><li data-id="step4"><a href="#step4"><b>4</b><span>Pair your camera</span></a></li><li data-id="step5"><a href="#step5"><b>5</b><span>Make it record</span></a></li><li data-id="step6"><a href="#step6"><b>6</b><span>See it on your OSD</span></a></li><li data-id="step7"><a href="#step7"><b>7</b><span>Check it on the bench</span></a></li><li data-id="ref-1"><a href="#ref-1"><span>The LED</span></a></li><li data-id="ref-2"><a href="#ref-2"><span>The button</span></a></li><li data-id="ref-3"><a href="#ref-3"><span>If something is wrong</span></a></li></ol></div></aside>
 <main id="main" class="content">
 <div class="hero"><p class="eyebrow">Quick start</p><h1>RecLink</h1><p class="sub">RecLink links your flight controller to your action camera. The camera records when you arm, and its status appears on your OSD. This page takes you from the box to your first recording.</p><div class="meta"><span>Betaflight 2025.12+</span><span>GoPro HERO 9–13</span><span>DJI Osmo (experimental)</span></div></div><div class="intro"><section class="qshead">
 <div class="callout danger"><span class="tag">Pre-release firmware</span>
@@ -32,10 +32,10 @@
 <div class="grow">
 <h3>You need</h3>
 <ul>
-<li>The RecLink board</li>
+<li>The RecLink board, or an ESP32-C3 SuperMini / ESP32-S3 dev board</li>
 <li>A flight controller with <b>Betaflight 2025.12 or newer</b> and a free UART</li>
 <li>A GoPro (HERO 9 or newer) or, experimentally, a DJI Osmo, charged, with an SD card</li>
-<li>A phone or laptop</li>
+<li>A phone or laptop, and for a dev board a computer with Chrome or Edge and a USB cable</li>
 </ul>
 </div>
 <div class="grow">
@@ -44,6 +44,15 @@
 </div>
 </div>
 </section></div><section class="chapter" id="step1">
+<p class="chno">Before step 1</p>
+<h1 class="ch">Put the firmware on your board<a aria-label="link" class="anchor" href="#step1">#</a></h1>
+<p>The <b>RecLink board</b> already has what it needs; skip to <a class="xref" href="#step1">step 1</a>. A <b>SuperMini</b> or <b>S3</b> board must be flashed once, from the web installer.</p>
+<ol class="steps">
+<li><div>On a computer, open <b>https://fpvitt.github.io/RecLink/flash/</b> in <b>Chrome or Edge</b> and pick your board (SuperMini or S3).</div></li>
+<li><div>Plug the board in by USB, choose <b>USB</b>, press the flash button and pick the serial port. If the port is not found, hold <b>BOOT</b> while plugging it in.</div></li>
+<li><div>When it finishes, unplug and replug the board. It is ready: carry on with <a class="xref" href="#step1">step 1</a>.</div></li>
+</ol>
+</section><section class="chapter" id="step1">
 <p class="chno">Step 1</p>
 <h1 class="ch">Wire it<a aria-label="link" class="anchor" href="#step1">#</a></h1>
 <div class="cols">
@@ -74,6 +83,7 @@
 <div style="width:70mm;flex:none">
 <ul>
 <li>Connect the four wires as drawn. <b>TX goes to RX, and RX goes to TX.</b></li>
+<li>SuperMini: FC TX to <b>GPIO7</b>, FC RX from <b>GPIO6</b>. S3: FC TX to <b>GPIO4</b>, FC RX from <b>GPIO5</b>. Power from the FC 5 V and GND (full table in the User guide).</li>
 <li>If the board resets by itself, add a <b>220 µF</b> capacitor across its 5 V pads.</li>
 <li>Mount it near the camera, away from carbon fibre.</li>
 <li>Wires crossed by mistake? Fix it later in the configurator (Network → Swap TX/RX pins). No soldering.</li>
