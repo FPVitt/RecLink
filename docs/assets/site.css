@@ -237,3 +237,6 @@ svg .onacc{fill:var(--acc-fg)}
 .ico svg{width:24px;height:24px}
 #gh .ico{background:var(--well);color:var(--fg)}
 .gh-row{margin:1.1rem 0 0}
+.cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:640px){.cards{grid-template-columns:1fr}}
+.card{display:flex;flex-direction:column}.card p{flex:1}
