@@ -1,32 +1,47 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Install RecLink firmware</title><meta name="theme-color" content="#0f1216">
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Install firmware · RecLink</title>
+<meta name="description" content="Install the RecLink firmware: pick your board, then flash by USB or update over Wi-Fi.">
+<meta name="theme-color" content="#0f1216">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<script>try{var t=localStorage.getItem('rl-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="../assets/site.css">
 <style>
-body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#0f1216;color:#f2f4f8}main{max-width:760px;margin:0 auto;padding:24px 16px}
-h1{margin:0 0 4px}a{color:#2ea043}.mut{color:#a7b0be;font-size:14px}.card{background:#1a1f27;border:1px solid #333c49;border-radius:10px;padding:16px;margin:14px 0}
-.warn{border-color:#e5484d}.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.board{background:#1a1f27;border:2px solid #333c49;border-radius:10px;padding:10px;cursor:pointer;color:inherit;font:inherit;text-align:center}
-.board:hover,.board[aria-pressed=true]{border-color:#2ea043}.board .ph{height:150px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;margin-bottom:8px}
-.board .ph img{max-height:140px;max-width:100%}.board b{display:block}.board span.s{font-size:13px;color:#a7b0be}
-.btn,esp-web-install-button button{display:inline-block;background:#2ea043;color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:15px;cursor:pointer;text-decoration:none}
-#panels>div{display:none}#panels>div.on{display:block}ol{padding-left:20px}code{background:#11151b;padding:1px 5px;border-radius:4px}
-.mpick{display:flex;gap:8px;margin:6px 0 12px}.mbtn{background:#11151b;color:#f2f4f8;border:2px solid #333c49;border-radius:6px;padding:8px 18px;font:inherit;cursor:pointer}.mbtn[aria-pressed=true]{border-color:#2ea043}
-select{background:#11151b;color:#f2f4f8;border:1px solid #333c49;border-radius:6px;padding:8px 10px;font:inherit}
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
-#lang{background:transparent;border:1px solid #333c49;color:#f2f4f8;border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
 html[lang=en] .it,html[lang=it] .en{display:none}
-</style></head><body><main>
-<div class="top"><h1><span class="en">Install RecLink firmware</span><span class="it">Installa il firmware RecLink</span></h1><button id="lang" type="button" aria-label="Language">IT</button></div>
-<p class="mut">RecLink 0.2.0 (pre-release) · <a href="../index.html"><span class="en">Guides</span><span class="it">Guide</span></a></p>
-<div class="card warn"><p class="mut" style="margin:0"><span class="en">Pre-release: bench-tested only, <b>not flight tested</b>. Remove props and disconnect the flight battery while flashing.</span><span class="it">Pre-release: provato solo a banco, <b>non provato in volo</b>. Togli le eliche e scollega la batteria mentre carichi il firmware.</span></p></div>
-<h2>1. <span class="en">Which board do you have?</span><span class="it">Che scheda hai?</span></h2>
-<div class="boards" role="group" aria-label="Board">
-<button class="board" data-b="reclink" aria-pressed="false"><div class="ph"><img src="img/reclink-board.webp" alt="RecLink board"></div><b>RecLink board</b><span class="s"><span class="en">The RecLink PCB (ESP32-C3) → update over Wi-Fi (OTA)</span><span class="it">La PCB RecLink (ESP32-C3) → aggiornamento via Wi-Fi (OTA)</span></span></button>
-<button class="board" data-b="supermini" aria-pressed="false"><div class="ph"><img src="img/supermini.webp" alt="ESP32-C3 SuperMini"></div><b>ESP32-C3 SuperMini</b><span class="s"><span class="en">Generic dev board → flash by USB</span><span class="it">Scheda di sviluppo generica → flash via USB</span></span></button>
-<button class="board" data-b="s3" aria-pressed="false"><div class="ph"><img src="img/esp32s3.webp" alt="ESP32-S3 board"></div><b>ESP32-S3</b><span class="s"><span class="en">Dev board (e.g. S3-Zero) → flash by USB</span><span class="it">Scheda di sviluppo (es. S3-Zero) → flash via USB</span></span></button>
+.board{text-align:center;cursor:pointer;font:inherit;color:var(--fg);padding:1rem}
+.board:hover{border-color:var(--acc)}.board[aria-pressed=true]{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.board .ph{height:150px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:var(--radius-lg);margin-bottom:.7rem}
+.board .ph img{max-height:138px;max-width:100%}.board b{display:block;font-size:1.05rem}.board span.s{font-size:.85rem;color:var(--mut)}
+#panels>div{display:none}#panels>div.on{display:block}
+select{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-md);padding:.5rem .7rem;font:inherit}
+.mpick{display:flex;gap:.5rem;margin:.4rem 0 1rem}.mbtn{background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:var(--radius-md);padding:.4rem 1.1rem;font:inherit;font-weight:600;cursor:pointer}
+.mbtn[aria-pressed=true]{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
+esp-web-install-button{--esp-tools-button-color:var(--acc);--esp-tools-button-text-color:var(--acc-fg);--esp-tools-button-border-radius:8px}
+code{background:var(--well);padding:1px 5px;border-radius:4px}.card ol{padding-left:1.2rem;color:var(--mut)}
+</style>
+</head>
+<body data-doc="flash">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><div class="bar">
+<a class="brand" href="../en/index.html" aria-label="RecLink"><svg class="mark" viewBox="0 0 168 80" aria-hidden="true"><path fill="currentColor" d="M6 6h30v12H18v44h18v12H6zM132 6h30v68h-30V62h18V18h-18z"/><circle fill="currentColor" cx="84" cy="40" r="21"/></svg><span>RecLink</span></a>
+<nav class="tabs" aria-label="Pages"><a href="../en/quick-start.html"><span class="en">Quick start</span><span class="it">Guida rapida</span></a><a href="../en/user-guide.html"><span class="en">User guide</span><span class="it">Guida utente</span></a><a href="./" aria-current="page"><span class="en">Install firmware</span><span class="it">Installa firmware</span></a></nav>
+<div class="tools"><div class="seg" role="group" aria-label="Language"><a href="#" hreflang="en" lang="en" data-lang="en" aria-current="true">EN</a><a href="#" hreflang="it" lang="it" data-lang="it">IT</a></div>
+<button class="icon theme-btn" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button></div>
+</div><div id="progress" aria-hidden="true"></div></header>
+<div class="layout">
+<main id="main" class="content">
+<div class="hero"><p class="eyebrow"><span class="en">Firmware</span><span class="it">Firmware</span></p><h1><span class="en">Install RecLink</span><span class="it">Installa RecLink</span></h1><p class="sub"><span class="en">Pick your board, then flash it by USB or update it over Wi-Fi.</span><span class="it">Scegli la tua scheda, poi caricala via USB o aggiornala via Wi-Fi.</span></p></div>
+<div class="callout danger"><span class="tag"><span class="en">Pre-release</span><span class="it">Pre-release</span></span><p><span class="en">Bench-tested only, <b>not flight tested</b>. Do every step with the <b>propellers removed</b>.</span><span class="it">Provato solo a banco, <b>non provato in volo</b>. Esegui ogni passo con le <b>eliche rimosse</b>.</span></p></div>
+<h2 class="plain">1. <span class="en">Which board do you have?</span><span class="it">Che scheda hai?</span></h2>
+<div class="cards boards" role="group" aria-label="Board">
+<button class="card board" data-b="reclink" aria-pressed="false"><div class="ph"><img src="img/reclink-board.webp" alt="RecLink board"></div><b>RecLink board</b><span class="s"><span class="en">The RecLink PCB (ESP32-C3) → update over Wi-Fi (OTA)</span><span class="it">La PCB RecLink (ESP32-C3) → aggiornamento via Wi-Fi (OTA)</span></span></button>
+<button class="card board" data-b="supermini" aria-pressed="false"><div class="ph"><img src="img/supermini.webp" alt="ESP32-C3 SuperMini"></div><b>ESP32-C3 SuperMini</b><span class="s"><span class="en">Generic dev board → flash by USB</span><span class="it">Scheda di sviluppo generica → flash via USB</span></span></button>
+<button class="card board" data-b="s3" aria-pressed="false"><div class="ph"><img src="img/esp32s3.webp" alt="ESP32-S3 board"></div><b>ESP32-S3</b><span class="s"><span class="en">Dev board (e.g. S3-Zero) → flash by USB</span><span class="it">Scheda di sviluppo (es. S3-Zero) → flash via USB</span></span></button>
 </div>
-<h2>2. <span class="en">Which version?</span><span class="it">Quale versione?</span></h2>
+<h2 class="plain">2. <span class="en">Which version?</span><span class="it">Quale versione?</span></h2>
 <div class="card"><select id="ver-sel" aria-label="Version"><option value="">…</option></select> <span class="mut" id="ver-note"></span></div>
 <div id="panels">
 <div id="p-reclink" class="card"><h2><span class="en">RecLink board: update over Wi-Fi (OTA)</span><span class="it">Scheda RecLink: aggiornamento via Wi-Fi (OTA)</span></h2>
@@ -46,13 +61,16 @@ html[lang=en] .it,html[lang=it] .en{display:none}
 </div>
 <p class="mut"><span class="en">Later updates for any board: System tab → Firmware update with the OTA images from the <a href="https://github.com/FPVitt/RecLink/releases">Releases</a> page.</span><span class="it">Aggiornamenti successivi per qualsiasi scheda: scheda Sistema → Aggiornamento firmware con le immagini OTA dalla pagina <a href="https://github.com/FPVitt/RecLink/releases">Releases</a>.</span></p>
 </main>
+</div>
+<footer class="site-foot"><div><span>Firmware 0.2.0 (pre-release) · Betaflight 2025.12+</span><a href="https://github.com/FPVitt/RecLink">Source on GitHub</a><a href="#top" class="to-top">Back to top</a></div></footer>
+<script src="../assets/site.js" defer></script>
 <script>
 (function(){
 var L='en';try{L=localStorage.getItem('rl-lang')}catch(e){}
 if(L!=='en'&&L!=='it')L=/^it\b/i.test(navigator.language||'')?'it':'en';
-var b=document.getElementById('lang');
-function setL(l){L=l;document.documentElement.lang=l;b.textContent=l==='en'?'IT':'EN';try{localStorage.setItem('rl-lang',l)}catch(e){}}
-b.onclick=function(){setL(L==='en'?'it':'en')};setL(L);
+var segs=document.querySelectorAll('.seg a[data-lang]');
+function setL(l){L=l;document.documentElement.lang=l;segs.forEach(function(a){if(a.dataset.lang===l)a.setAttribute('aria-current','true');else a.removeAttribute('aria-current')});try{localStorage.setItem('rl-lang',l)}catch(e){}}
+segs.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();setL(a.dataset.lang)})});setL(L);
 var bs=document.querySelectorAll('.board'),ps=document.querySelectorAll('#panels>div');
 function pick(x){bs.forEach(function(e){e.setAttribute('aria-pressed',e.dataset.b===x)});ps.forEach(function(p){p.classList.toggle('on',p.id==='p-'+x)});try{history.replaceState(null,'','#'+x)}catch(e){}}
 bs.forEach(function(e){e.onclick=function(){pick(e.dataset.b)}});
