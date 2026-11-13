@@ -11,6 +11,7 @@ h1{margin:0 0 4px}a{color:#2ea043}.mut{color:#a7b0be;font-size:14px}.card{backgr
 .board .ph img{max-height:140px;max-width:100%}.board b{display:block}.board span.s{font-size:13px;color:#a7b0be}
 .btn,esp-web-install-button button{display:inline-block;background:#2ea043;color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:15px;cursor:pointer;text-decoration:none}
 #panels>div{display:none}#panels>div.on{display:block}ol{padding-left:20px}code{background:#11151b;padding:1px 5px;border-radius:4px}
+select{background:#11151b;color:#f2f4f8;border:1px solid #333c49;border-radius:6px;padding:8px 10px;font:inherit}
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
 #lang{background:transparent;border:1px solid #333c49;color:#f2f4f8;border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
 html[lang=en] .it,html[lang=it] .en{display:none}
@@ -24,6 +25,8 @@ html[lang=en] .it,html[lang=it] .en{display:none}
 <button class="board" data-b="supermini" aria-pressed="false"><div class="ph"><img src="img/supermini.webp" alt="ESP32-C3 SuperMini"></div><b>ESP32-C3 SuperMini</b><span class="s"><span class="en">Generic dev board → flash by USB</span><span class="it">Scheda di sviluppo generica → flash via USB</span></span></button>
 <button class="board" data-b="s3" aria-pressed="false"><div class="ph"><img src="img/esp32s3.webp" alt="ESP32-S3 board"></div><b>ESP32-S3</b><span class="s"><span class="en">Dev board (e.g. S3-Zero) → flash by USB</span><span class="it">Scheda di sviluppo (es. S3-Zero) → flash via USB</span></span></button>
 </div>
+<h2>2. <span class="en">Which version?</span><span class="it">Quale versione?</span></h2>
+<div class="card"><select id="ver-sel" aria-label="Version"><option value="">…</option></select> <span class="mut" id="ver-note"></span></div>
 <div id="panels">
 <div id="p-reclink" class="card"><h2><span class="en">RecLink board: update over Wi-Fi (OTA)</span><span class="it">Scheda RecLink: aggiornamento via Wi-Fi (OTA)</span></h2>
 <p><a class="btn" id="dl" href="https://github.com/FPVitt/RecLink/releases" data-asset="fc_cam_bridge-esp32c3.bin"><span class="en">Download firmware</span><span class="it">Scarica il firmware</span> (fc_cam_bridge-esp32c3.bin)</a> <span class="mut" id="ver"></span></p>
@@ -33,11 +36,11 @@ html[lang=en] .it,html[lang=it] .en{display:none}
 <li><span class="en">Wait for the upload to finish; the board reboots by itself (do not unplug it). The previous version stays in the other slot, so you can boot back to it from the same page.</span><span class="it">Attendi la fine del caricamento; la scheda si riavvia da sola (non scollegarla). La versione precedente resta nell'altro slot e si può riavviare dalla stessa pagina.</span></li></ol>
 <p class="mut"><span class="en">OTA works only while disarmed, and only on a board that already runs RecLink firmware.</span><span class="it">L'OTA funziona solo da disarmato e solo su una scheda che esegue già il firmware RecLink.</span></p></div>
 <div id="p-supermini" class="card"><h2><span class="en">ESP32-C3 SuperMini: flash by USB</span><span class="it">ESP32-C3 SuperMini: flash via USB</span></h2>
-<esp-web-install-button manifest="manifest-supermini.json"><span slot="unsupported"><span class="en">This browser has no Web Serial: use Chrome or Edge on a computer.</span><span class="it">Questo browser non ha Web Serial: usa Chrome o Edge da computer.</span></span></esp-web-install-button>
+<div class="usb"><esp-web-install-button manifest="manifest-supermini.json"><span slot="unsupported"><span class="en">This browser has no Web Serial: use Chrome or Edge on a computer.</span><span class="it">Questo browser non ha Web Serial: usa Chrome o Edge da computer.</span></span></esp-web-install-button></div><p class="mut nousb" hidden><span class="en">There is no USB image for this version on this page — pick the latest version, or flash it once and update over Wi-Fi (OTA) with the release file.</span><span class="it">Per questa versione non c'è un'immagine USB su questa pagina: scegli l'ultima versione, oppure caricala una volta e aggiorna via Wi-Fi (OTA) con il file della release.</span></p>
 <p class="mut"><span class="en">LED on GPIO8 (active-low), flight controller on UART1 GPIO6/7. Flashing <b>erases the whole flash</b> (settings and pairings).</span><span class="it">LED su GPIO8 (attivo basso), flight controller su UART1 GPIO6/7. Il flash <b>cancella tutta la memoria</b> (impostazioni e abbinamenti).</span></p>
 <ol><li><span class="en">Use <b>Chrome or Edge</b>, plug the board in by USB (hold BOOT while plugging if it is not detected).</span><span class="it">Usa <b>Chrome o Edge</b>, collega la scheda via USB (tieni premuto BOOT mentre la colleghi se non viene rilevata).</span></li><li><span class="en">Press the button, pick the serial port, confirm.</span><span class="it">Premi il pulsante, scegli la porta seriale, conferma.</span></li><li><span class="en">Unplug and replug; join <b>RECLINK-XXXX</b> and open <b>http://10.0.0.1</b>.</span><span class="it">Scollega e ricollega; entra in <b>RECLINK-XXXX</b> e apri <b>http://10.0.0.1</b>.</span></li></ol></div>
 <div id="p-s3" class="card"><h2><span class="en">ESP32-S3: flash by USB</span><span class="it">ESP32-S3: flash via USB</span></h2>
-<esp-web-install-button manifest="manifest-s3.json"><span slot="unsupported"><span class="en">This browser has no Web Serial: use Chrome or Edge on a computer.</span><span class="it">Questo browser non ha Web Serial: usa Chrome o Edge da computer.</span></span></esp-web-install-button>
+<div class="usb"><esp-web-install-button manifest="manifest-s3.json"><span slot="unsupported"><span class="en">This browser has no Web Serial: use Chrome or Edge on a computer.</span><span class="it">Questo browser non ha Web Serial: usa Chrome o Edge da computer.</span></span></esp-web-install-button></div><p class="mut nousb" hidden><span class="en">There is no USB image for this version on this page — pick the latest version, or flash it once and update over Wi-Fi (OTA) with the release file.</span><span class="it">Per questa versione non c'è un'immagine USB su questa pagina: scegli l'ultima versione, oppure caricala una volta e aggiorna via Wi-Fi (OTA) con il file della release.</span></p>
 <p class="mut"><span class="en">Development target (4 MB flash image). Flashing <b>erases the whole flash</b>. Same steps as the SuperMini. Pin settings are the default ones — check them for your board.</span><span class="it">Target di sviluppo (immagine per flash da 4 MB). Il flash <b>cancella tutta la memoria</b>. Stessi passi della SuperMini. I pin sono quelli di default: verificali per la tua scheda.</span></p></div>
 </div>
 <p class="mut"><span class="en">Later updates for any board: System tab → Firmware update with the OTA images from the <a href="https://github.com/FPVitt/RecLink/releases">Releases</a> page.</span><span class="it">Aggiornamenti successivi per qualsiasi scheda: scheda Sistema → Aggiornamento firmware con le immagini OTA dalla pagina <a href="https://github.com/FPVitt/RecLink/releases">Releases</a>.</span></p>
@@ -53,8 +56,18 @@ var bs=document.querySelectorAll('.board'),ps=document.querySelectorAll('#panels
 function pick(x){bs.forEach(function(e){e.setAttribute('aria-pressed',e.dataset.b===x)});ps.forEach(function(p){p.classList.toggle('on',p.id==='p-'+x)});try{history.replaceState(null,'','#'+x)}catch(e){}}
 bs.forEach(function(e){e.onclick=function(){pick(e.dataset.b)}});
 var h=(location.hash||'').slice(1);if(h)pick(h);
-fetch('https://api.github.com/repos/FPVitt/RecLink/releases?per_page=1').then(function(r){return r.json()}).then(function(a){var r=a&&a[0];if(!r)return;
-document.getElementById('ver').textContent=r.tag_name+(r.prerelease?' (pre-release)':'');(r.assets||[]).forEach(function(x){if(x.name==='fc_cam_bridge-esp32c3.bin')document.getElementById('dl').href=x.browser_download_url})}).catch(function(){});
+var USB={'v0.2.0':true};      // versions whose full USB flash images are bundled in this folder
+var sel=document.getElementById('ver-sel'),rels=[];
+function pickAsset(r){var as=r.assets||[],f=null;as.forEach(function(x){if(x.name==='fc_cam_bridge-esp32c3.bin')f=x});
+ if(!f)as.forEach(function(x){if(/\.bin$/.test(x.name)&&!/supermini|s3/i.test(x.name)&&!f)f=x});return f}
+function apply(){var r=rels[sel.selectedIndex];if(!r)return;var a=pickAsset(r),d=document.getElementById('dl');
+ d.href=a?a.browser_download_url:r.html_url;document.getElementById('ver').textContent=r.tag_name+(r.prerelease?' (pre-release)':'')+(a?' · '+a.name:'');
+ var u=!!USB[r.tag_name];document.querySelectorAll('.usb').forEach(function(e){e.hidden=!u});document.querySelectorAll('.nousb').forEach(function(e){e.hidden=u});}
+sel.onchange=apply;
+fetch('https://api.github.com/repos/FPVitt/RecLink/releases?per_page=20').then(function(r){return r.json()}).then(function(a){
+ rels=(a||[]).filter(function(r){return !r.draft});sel.innerHTML='';
+ rels.forEach(function(r,i){var o=document.createElement('option');o.textContent=r.tag_name+(r.prerelease?' (pre-release)':'')+(i===0?' · latest':'');sel.appendChild(o)});apply();
+}).catch(function(){document.getElementById('ver-note').textContent='(offline: showing 0.2.0)'});
 })();
 </script>
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
