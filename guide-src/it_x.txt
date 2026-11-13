@@ -35,7 +35,7 @@ Tick Custom message 1, 2, 3 and 4.|||Spunta Custom message 1, 2, 3 e 4.
 Drag the four messages in the preview to a free spot, one under the other. Do not forget to <b>Save</b>.|||Trascina i quattro messaggi nell'anteprima in un punto libero, uno sotto l'altro. Non dimenticare di premere <b>Save</b>.
 Receiver tab: the bar of your switch moves when you flip it.|||Scheda Receiver: la barra del tuo interruttore si muove quando lo azioni.
 AUX 2 moves to 2000 when the switch is flipped.|||AUX 2 va a 2000 quando azioni l'interruttore.
-Put the firmware on your board|||Metti il firmware sulla tua scheda
+Install the firmware|||Installa il firmware
 Open the <b>web installer</b> at https://fpvitt.github.io/RecLink/flash/, pick your board and a firmware version, and follow the steps. Do this on the bench, with the flight battery disconnected.|||Apri l'<b>installer web</b> su https://fpvitt.github.io/RecLink/flash/, scegli la scheda e una versione del firmware e segui i passi. Fallo sul banco, con la batteria di volo scollegata.
 Board|||Scheda
 How you install it|||Come si installa
@@ -70,7 +70,7 @@ The serial wires cross: FC TX goes to the board's RX, and the board's TX goes to
 The RecLink board, or an ESP32-C3 SuperMini / ESP32-S3 dev board|||La scheda RecLink, oppure una scheda ESP32-C3 SuperMini / ESP32-S3
 A phone or laptop, and for a dev board a computer with Chrome or Edge and a USB cable|||Un telefono o un portatile e, per una scheda di sviluppo, un computer con Chrome o Edge e un cavo USB
 Before step 1|||Prima del passo 1
-Put the firmware on your board|||Metti il firmware sulla tua scheda
+Install the firmware|||Installa il firmware
 The <b>RecLink board</b> already has what it needs; skip to step 1. A <b>SuperMini</b> or <b>S3</b> board must be flashed once, from the web installer.|||La <b>scheda RecLink</b> ha già quanto serve: vai al passo 1. Una scheda <b>SuperMini</b> o <b>S3</b> va caricata una volta con l'installer web.
 On a computer, open <b>https://fpvitt.github.io/RecLink/flash/</b> in <b>Chrome or Edge</b> and pick your board (SuperMini or S3).|||Da un computer, apri <b>https://fpvitt.github.io/RecLink/flash/</b> con <b>Chrome o Edge</b> e scegli la tua scheda (SuperMini o S3).
 Plug the board in by USB, choose <b>USB</b>, press the flash button and pick the serial port. If the port is not found, hold <b>BOOT</b> while plugging it in.|||Collega la scheda via USB, scegli <b>USB</b>, premi il pulsante di flash e scegli la porta seriale. Se la porta non compare, tieni premuto <b>BOOT</b> mentre la colleghi.
