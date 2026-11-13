@@ -32,7 +32,7 @@ function start() {
   }, undefined, rej));
 
   const LY = [0.5, 0.17, -0.17, -0.5];            // assembled layer heights (mm)
-  const names = ['top', 'inner1', 'inner2', 'bottom', 'bottomcu'];
+  const names = ['top', 'inner1', 'inner2', 'bottom'];
   const layers = [];                              // {plane, y0}
   const slabs = [];
   const top = new THREE.Group(), bottomParts = new THREE.Group();
@@ -54,19 +54,12 @@ function start() {
     // layer artwork
     names.forEach((n, i) => {
       const geo = new THREE.PlaneGeometry(tj.w, tj.h); geo.rotateX(-Math.PI / 2);
-      if (i === 4) return;                        // inside face of the bottom layer, handled with layer 3
       const outer = i === 0 || i === 3;
-      const mk = (map, side) => new THREE.MeshStandardMaterial({
-        map, transparent: true, alphaTest: outer ? 0.5 : 0, depthWrite: outer,
-        side, roughness: outer ? 0.42 : 0.55, metalness: outer ? 0.05 : 0.35,
+      const mat = new THREE.MeshStandardMaterial({
+        map: tx[i], transparent: true, alphaTest: outer ? 0.5 : 0, depthWrite: outer,
+        side: THREE.DoubleSide, roughness: outer ? 0.42 : 0.55, metalness: outer ? 0.05 : 0.35,
       });
-      const ps = [];
-      if (i === 3) {
-        // the bottom layer faces down: its artwork shows only from below, and from above you see its copper
-        ps.push(new THREE.Mesh(geo, mk(tx[3], THREE.BackSide)), new THREE.Mesh(geo, mk(tx[4], THREE.FrontSide)));
-      } else ps.push(new THREE.Mesh(geo, mk(tx[i], THREE.DoubleSide)));
-      ps.forEach((p) => { p.renderOrder = i; board.add(p); });
-      layers.push({ ps, y0: LY[i] });
+      const p = new THREE.Mesh(geo, mat); p.renderOrder = i; board.add(p); layers.push({ p, y0: LY[i] });
     });
     // components
     const addParts = (list, grp) => list.forEach((m) => {
@@ -112,7 +105,7 @@ function start() {
     cur.e1 += (k[3] - cur.e1) * f; cur.e2 += (k[4] - cur.e2) * f;
     cur.d += (k[5] - cur.d) * f; cur.sy += (k[6] - cur.sy) * f;
     const spread = 1 + cur.e2 * 13;
-    layers.forEach((l) => l.ps.forEach((p) => { p.position.y = l.y0 * spread + (l.y0 > 0 ? 0.004 : -0.004); }));
+    layers.forEach((l) => { l.p.position.y = l.y0 * spread + (l.y0 > 0 ? 0.004 : -0.004); });
     slabs.forEach((s, i) => { s.position.y = ((LY[i] + LY[i + 1]) / 2) * spread; });
     // the dielectric turns glassy as the stack opens, so the inner copper reads clearly
     const so = 1 - 0.88 * cur.e2;
