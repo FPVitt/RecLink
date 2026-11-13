@@ -346,10 +346,8 @@ def build_index(lang):
     other = "it" if lang == "en" else "en"
     cards = ""
     for doc, t, d in (("qs", s["qs_t"], s["qs_d"]), ("guide", s["gd_t"], s["gd_d"])):
-        pdfs = "".join(f'<a class="btn ghost" href="../pdf/{build2.NAMES[(doc, lang, o)]}.pdf" download>{s["dl"]} · {s[k]}</a>'
-                       for o, k in (("port", "portrait"), ("land", "landscape")))
         cards += (f'<article class="card"><h2>{t}</h2><p>{d}</p><div class="actions"><a class="btn" href="{PAGES[(lang, doc)]}">{s["read"]}</a></div>'
-                  f'<div class="actions sub">{pdfs}</div></article>')
+                  '</article>')
     fw_t, fw_d, fw_b = (("Install the firmware", "Pick your board, choose a version, then flash it by USB or update it over Wi-Fi.", "Open the installer")
                         if lang == "en" else
                         ("Installa il firmware", "Scegli la scheda e la versione, poi caricala via USB o aggiornala via Wi-Fi.", "Apri l'installer"))
