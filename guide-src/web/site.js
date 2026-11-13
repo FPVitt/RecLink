@@ -34,9 +34,29 @@
     function update() { if (base && base !== '#') a.setAttribute('href', base.split('#')[0] + location.hash); }
     update();
     window.addEventListener('hashchange', update);
-    a.addEventListener('click', function () { store.set('rl-lang', a.dataset.lang); });
+    a.addEventListener('click', function () {
+      store.set('rl-lang', a.dataset.lang);
+      if (!base || base === '#') return;
+      /* keep the reader's place: link to the section on screen (ids match across languages);
+         also remember the scroll ratio as a fallback */
+      var best = null;
+      $$('h1[id],h2[id],h3[id],section[id]').forEach(function (el) {
+        var top = el.getBoundingClientRect().top;
+        if (top <= 140 && (!best || top > best.top)) best = { id: el.id, top: top };
+      });
+      if (best) a.setAttribute('href', base.split('#')[0] + '#' + best.id);
+      try { sessionStorage.setItem('rl-scroll', JSON.stringify({ r: window.scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight), t: Date.now() })); } catch (e) {}
+    });
   });
-  var cur = $('.seg a[aria-current="true"]');
+  /* arriving from a language switch with no section id: restore the scroll position */
+  try {
+    var sv = JSON.parse(sessionStorage.getItem('rl-scroll') || 'null');
+    sessionStorage.removeItem('rl-scroll');
+    if (sv && Date.now() - sv.t < 5000 && !location.hash) {
+      window.addEventListener('load', function () { window.scrollTo(0, sv.r * (document.documentElement.scrollHeight - innerHeight)); });
+    }
+  } catch (e) {}
+  var cur =$('.seg a[aria-current="true"]');
   /* first visit (no saved choice): Italian browsers get the Italian pages, everyone else English */
   if (cur && !store.get('rl-lang')) {
     var want = (function(){var a=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||''];for(var i=0;i<a.length;i++){if(/^it\b/i.test(a[i]))return 'it';if(/^en\b/i.test(a[i]))return 'en';}return 'en';})();
