@@ -417,8 +417,13 @@ BOARD = {
         desc="The RecLink board: a custom 12 x 13 mm four-layer PCB with an ESP32-C3, chip antenna and four castellated solder pads (GND, 5V, TX, RX). Currently in development.",
         tag="In development",
         warn="The RecLink board is <b>currently in development</b>. What you see here is the work-in-progress design: dimensions, pad layout and components may still change, and it is not a finished product yet. Until then, any ESP32-C3 or ESP32-S3 dev board works (see the Quick start).",
-        h3d="3D model", hint="Drag to rotate, scroll or pinch to zoom.",
-        views=("Top", "Bottom", "Angled"), alt3d="3D model of the RecLink board",
+        h3d="Explore the board", hint="Scroll to take the board apart. Drag to look around.", alt3d="The RecLink board",
+        steps=[("The assembled board", "12 × 13 mm, one ESP32-C3 and a handful of tiny parts. Keep scrolling to take it apart."),
+               ("Components", "The ESP32-C3 chip, ceramic antenna, crystal, status LED and about twenty tiny resistors and capacitors."),
+               ("Top layer", "Solder mask, exposed pads, silkscreen and the first copper layer."),
+               ("Inner layers", "Two copper layers hidden inside the board give the routing room it needs on such a small board."),
+               ("Bottom layer", "The bottom side carries the four solder pads and the test points."),
+               ("Four wires", "GND, 5V, TX and RX are all that connects the board to the flight controller.")],
         hphotos="Top and bottom", cap_top="Top side: ESP32-C3, chip antenna (top left), status LED and the supporting parts.",
         cap_bot="Bottom side: the four solder pads are labelled GND, 5V, TX and RX.",
         hfacts="At a glance",
@@ -442,8 +447,13 @@ BOARD = {
         desc="La scheda RecLink: un PCB personalizzato a quattro strati di 12 x 13 mm con ESP32-C3, antenna ceramica e quattro pad castellati (GND, 5V, TX, RX). Attualmente in sviluppo.",
         tag="In sviluppo",
         warn="La scheda RecLink è <b>attualmente in sviluppo</b>. Quello che vedi qui è il progetto in corso d'opera: dimensioni, disposizione dei pad e componenti possono ancora cambiare, e non è ancora un prodotto finito. Nel frattempo va bene qualsiasi scheda di sviluppo ESP32-C3 o ESP32-S3 (vedi la Guida rapida).",
-        h3d="Modello 3D", hint="Trascina per ruotare, scorri o pizzica per ingrandire.",
-        views=("Sopra", "Sotto", "Inclinata"), alt3d="Modello 3D della scheda RecLink",
+        h3d="Esplora la scheda", hint="Scorri per smontare la scheda. Trascina per guardarla da altre angolazioni.", alt3d="La scheda RecLink",
+        steps=[("La scheda assemblata", "12 × 13 mm, un ESP32-C3 e pochi componenti minuscoli. Continua a scorrere per smontarla."),
+               ("Componenti", "Il chip ESP32-C3, l'antenna ceramica, il quarzo, il LED di stato e una ventina di resistenze e condensatori minuscoli."),
+               ("Strato superiore", "Solder mask, pad scoperti, serigrafia e il primo strato di rame."),
+               ("Strati interni", "Due strati di rame nascosti dentro la scheda danno alle piste lo spazio che serve su una scheda così piccola."),
+               ("Strato inferiore", "Il lato inferiore porta i quattro pad da saldare e i punti di test."),
+               ("Quattro fili", "GND, 5V, TX e RX sono tutto ciò che collega la scheda al flight controller.")],
         hphotos="Sopra e sotto", cap_top="Lato superiore: ESP32-C3, antenna ceramica (in alto a sinistra), LED di stato e i componenti di contorno.",
         cap_bot="Lato inferiore: i quattro pad da saldare sono marcati GND, 5V, TX e RX.",
         hfacts="In breve",
@@ -472,21 +482,24 @@ def build_board(lang):
     pads = "".join(f'<tr><td><b>{a}</b></td><td>{html.escape(c)}</td><td class="wrap">{html.escape(n)}</td></tr>' for a, c, n in b["padrows"])
     th = "".join(f"<th>{h}</th>" for h in b["padhead"])
     nxt = "".join(f"<li>{n}</li>" for n in b["next"])
+    n_steps = len(b["steps"])
+    steps = "".join(f'<li class="exp-step" data-from="{[0, .12, .30, .50, .70, .88][k]}" data-to="{[.12, .30, .50, .70, .88, 1.01][k]}"><b>{html.escape(t)}</b><span>{html.escape(d)}</span></li>'
+                    for k, (t, d) in enumerate(b["steps"]))
     main = f"""<div class="hero"><p class="eyebrow">{b["eyebrow"]}</p><h1>{b["title"]}</h1><p class="sub">{b["sub"]}</p></div>
 <div class="callout warn"><span class="tag">{b["tag"]}</span><p>{b["warn"]}</p></div>
-<h2 class="plain">{b["h3d"]}</h2>
-<div class="viewer"><model-viewer id="bv" src="{A}reclink-board.glb" poster="{A}board-iso.webp" alt="{b["alt3d"]}" camera-controls touch-action="pan-y" auto-rotate auto-rotate-delay="1500" rotation-per-second="18deg" camera-orbit="35deg 55deg auto" min-camera-orbit="auto 0deg auto" max-camera-orbit="auto 180deg auto" field-of-view="22deg" min-field-of-view="8deg" max-field-of-view="40deg" shadow-intensity="0.6" shadow-softness="1" exposure="1.1" interaction-prompt="none" loading="eager"><noscript><img src="{A}board-iso.webp" alt="{b["alt3d"]}"></noscript></model-viewer>
-<div class="vbar"><span class="vhint">{b["hint"]}</span><span class="vbtns"><button type="button" data-o="0deg 0deg auto">{b["views"][0]}</button><button type="button" data-o="180deg 179deg auto">{b["views"][1]}</button><button type="button" data-o="35deg 55deg auto">{b["views"][2]}</button></span></div></div>
+<section class="exp" id="exp" aria-label="{b["h3d"]}"><div class="exp-sticky"><canvas id="bc" role="img" aria-label="{b["alt3d"]}"></canvas><img class="exp-poster" src="{A}board-iso.webp" alt="{b["alt3d"]}">
+<p class="exp-hint">{b["hint"]}</p>
+<ol class="exp-steps">{steps}</ol><div class="exp-bar" aria-hidden="true"><i></i></div></div></section>
 <h2 class="plain">{b["hphotos"]}</h2>
-<div class="pair"><figure class="shot"><img src="{A}board-top.webp" alt="{html.escape(b["cap_top"], quote=True)}" width="800" height="803" loading="lazy"><figcaption>{b["cap_top"]}</figcaption></figure>
-<figure class="shot"><img src="{A}board-bottom.webp" alt="{html.escape(b["cap_bot"], quote=True)}" width="800" height="801" loading="lazy"><figcaption>{b["cap_bot"]}</figcaption></figure></div>
+<div class="pair"><figure class="shot"><img src="{A}board-top.webp" alt="{html.escape(b["cap_top"], quote=True)}" width="800" height="870" loading="lazy"><figcaption>{b["cap_top"]}</figcaption></figure>
+<figure class="shot"><img src="{A}board-bottom.webp" alt="{html.escape(b["cap_bot"], quote=True)}" width="800" height="870" loading="lazy"><figcaption>{b["cap_bot"]}</figcaption></figure></div>
 <h2 class="plain">{b["hfacts"]}</h2><div class="tbl"><table><tbody>{facts}</tbody></table></div>
 <h2 class="plain">{b["hpads"]}</h2><p>{b["pads_intro"]}</p><div class="tbl"><table><thead><tr>{th}</tr></thead><tbody>{pads}</tbody></table></div>
 <p>{b["pads_note"]}</p>
 <h2 class="plain">{b["hnext"]}</h2><ul class="which">{nxt}</ul>
 <p class="fine">{b["foot"]}</p>
-<script type="module" src="{A}model-viewer.min.js"></script>
-<script>(function(){{var m=document.getElementById('bv');if(!m)return;document.querySelectorAll('.vbtns button').forEach(function(x){{x.addEventListener('click',function(){{m.removeAttribute('auto-rotate');m.cameraOrbit=x.dataset.o;}});}});}})();</script>"""
+<script type="module" src="{A}board.js"></script>
+"""
     return page(lang, "board", b["title"], b["desc"], main, alt_href=f"../{other}/{PAGES[(other, 'board')]}")
 
 
@@ -554,6 +567,7 @@ def main():
         os.makedirs(os.path.join(DOCS, sub), exist_ok=True)
     for f in ("site.css", "site.js", "favicon.svg"):
         shutil.copy(os.path.join(HERE, "web", f), os.path.join(ASSETS, f))
+    shutil.rmtree(os.path.join(ASSETS, "board"), ignore_errors=True)
     shutil.copytree(os.path.join(HERE, "web", "board"), os.path.join(ASSETS, "board"), dirs_exist_ok=True)
     # drop images from a previous build so renamed/unused ones do not pile up
     used = set()

@@ -239,13 +239,24 @@ svg .onacc{fill:var(--acc-fg)}
 .gh-row{margin:1.1rem 0 0}
 
 /* ---------- the board page ---------- */
-.viewer{border:1px solid var(--line);border-radius:var(--radius-xl);background:var(--card);overflow:hidden;margin:0 0 1rem}
-.viewer model-viewer{display:block;width:100%;height:min(62vw,460px);--poster-color:transparent;background:radial-gradient(70% 90% at 50% 40%,color-mix(in srgb,var(--acc) 12%,var(--well)),var(--well))}
-.vbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.6rem;padding:.6rem .9rem;border-top:1px solid var(--line)}
-.vhint{color:var(--mut);font-size:.88rem}
-.vbtns{display:flex;gap:.4rem}
-.vbtns button{font:inherit;font-size:.88rem;font-weight:600;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:var(--radius-md);padding:.3rem .8rem;cursor:pointer}
-.vbtns button:hover{background:var(--well)}
+.exp{position:relative;height:430vh;margin:1.4rem 0 2rem}
+.exp-sticky{position:sticky;top:calc(var(--bar-h,56px) + 14px);height:min(80vh,680px);border:1px solid var(--line);border-radius:var(--radius-xl);overflow:hidden;
+  background:radial-gradient(80% 90% at 50% 38%,color-mix(in srgb,var(--acc) 14%,var(--well)),var(--well) 70%)}
+.exp canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:grab;opacity:0;transition:opacity .5s}
+.exp.ready canvas{opacity:1}.exp canvas:active{cursor:grabbing}
+.exp-poster{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:8%;transition:opacity .5s}
+.exp.ready .exp-poster{opacity:0;pointer-events:none}
+.exp.nogl{height:auto}.exp.nogl .exp-sticky{position:relative;top:0;height:auto;aspect-ratio:4/3}.exp.nogl canvas,.exp.nogl .exp-steps,.exp.nogl .exp-hint,.exp.nogl .exp-bar{display:none}
+.exp-hint{position:absolute;left:0;right:0;top:1rem;margin:0;text-align:center;color:var(--mut);font-size:.88rem;transition:opacity .3s;pointer-events:none}
+.exp.started .exp-hint{opacity:0}
+.exp-steps{list-style:none;margin:0;padding:0;position:absolute;left:1.1rem;right:1.1rem;bottom:1.2rem;height:6.2rem;pointer-events:none}
+.exp-step{position:absolute;inset:auto 0 0 0;max-width:30rem;padding:.8rem 1rem;border:1px solid var(--line);border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(6px);opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s}
+.exp-step.on{opacity:1;transform:none}
+.exp-step b{display:block;font-size:1.02rem}.exp-step span{display:block;color:var(--mut);font-size:.9rem;line-height:1.45;margin-top:.15rem}
+.exp-bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--line)}.exp-bar i{display:block;height:100%;background:var(--acc);transform-origin:0 50%;transform:scaleX(0)}
+@media (max-width:640px){.exp{height:380vh}.exp-sticky{height:min(74vh,600px)}.exp-steps{height:7.4rem}}
+@media (prefers-reduced-motion:reduce){.exp-step{transition:none}}
 .pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:1rem;margin:0 0 1.2rem}
 .pair figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:.8rem}
 .pair img{display:block;width:100%;height:auto;border-radius:var(--radius-md)}
