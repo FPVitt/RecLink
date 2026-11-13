@@ -35,3 +35,35 @@ Tick Custom message 1, 2, 3 and 4.|||Spunta Custom message 1, 2, 3 e 4.
 Drag the four messages in the preview to a free spot, one under the other. Do not forget to <b>Save</b>.|||Trascina i quattro messaggi nell'anteprima in un punto libero, uno sotto l'altro. Non dimenticare di premere <b>Save</b>.
 Receiver tab: the bar of your switch moves when you flip it.|||Scheda Receiver: la barra del tuo interruttore si muove quando lo azioni.
 AUX 2 moves to 2000 when the switch is flipped.|||AUX 2 va a 2000 quando azioni l'interruttore.
+Put the firmware on your board|||Metti il firmware sulla tua scheda
+Open the <b>web installer</b> at https://fpvitt.github.io/RecLink/flash/, pick your board and a firmware version, and follow the steps. Do this on the bench, with the flight battery disconnected.|||Apri l'<b>installer web</b> su https://fpvitt.github.io/RecLink/flash/, scegli la scheda e una versione del firmware e segui i passi. Fallo sul banco, con la batteria di volo scollegata.
+Board|||Scheda
+How you install it|||Come si installa
+Notes|||Note
+RecLink board|||Scheda RecLink
+Update over Wi-Fi (OTA): download the file in the installer, join the board's network, open System → Firmware update and upload it.|||Aggiornamento via Wi-Fi (OTA): scarica il file dall'installer, collegati alla rete della scheda, apri Sistema → Aggiornamento firmware e caricalo.
+Needs firmware already on the board. Leave "erase settings" off to keep your settings and camera pairing.|||Richiede che la scheda abbia già il firmware. Lascia disattivato "cancella impostazioni" per mantenere impostazioni e abbinamenti.
+ESP32-C3 SuperMini|||ESP32-C3 SuperMini
+USB: use Chrome or Edge on a computer, press the flash button in the installer and pick the serial port. Or OTA, once it already runs RecLink.|||USB: usa Chrome o Edge da computer, premi il pulsante di flash nell'installer e scegli la porta seriale. Oppure OTA, quando esegue già RecLink.
+USB flashing erases everything on the board. If the port is not detected, hold BOOT while plugging it in.|||Il flash via USB cancella tutto sulla scheda. Se la porta non viene rilevata, tieni premuto BOOT mentre la colleghi.
+ESP32-S3 dev board|||Scheda di sviluppo ESP32-S3
+USB or OTA, the same way as the SuperMini.|||USB oppure OTA, come per la SuperMini.
+Development target: check the pin map below for your board.|||Target di sviluppo: controlla qui sotto la mappa dei pin per la tua scheda.
+After flashing, unplug and replug the board. It opens the Wi-Fi network <b>RECLINK-XXXX</b> (password <code>reclinkfpv</code>); open <b>http://10.0.0.1</b> in a browser.|||Dopo il flash, scollega e ricollega la scheda. Crea la rete Wi-Fi <b>RECLINK-XXXX</b> (password <code>reclinkfpv</code>); apri <b>http://10.0.0.1</b> nel browser.
+Wiring by board|||Cablaggio per scheda
+FC TX goes to|||TX della FC va a
+FC RX comes from|||RX della FC arriva da
+Power|||Alimentazione
+Status LED|||LED di stato
+RX (GPIO20)|||RX (GPIO20)
+TX (GPIO21), with a 470 Ω resistor on the board|||TX (GPIO21), con resistenza da 470 Ω sulla scheda
+5 V and GND pads|||Pad 5 V e GND
+GPIO10, on the board|||GPIO10, sulla scheda
+GPIO7|||GPIO7
+GPIO6|||GPIO6
+5V pin and GND|||Pin 5V e GND
+GPIO8, onboard|||GPIO8, sulla scheda
+GPIO4|||GPIO4
+GPIO5|||GPIO5
+GPIO8 if the board has one|||GPIO8 se la scheda lo ha
+The serial wires cross: FC TX goes to the board's RX, and the board's TX goes to the FC RX. Dev boards have no series resistor; if you see garbage on the link, add 470 Ω in the TX line. The firmware for each board uses these pins, so a SuperMini image will not drive the RecLink board's LED, and the other way round.|||I fili seriali si incrociano: il TX della FC va all'RX della scheda e il TX della scheda va all'RX della FC. Le schede di sviluppo non hanno resistenza in serie; se vedi dati corrotti, aggiungi 470 Ω sulla linea TX. Il firmware di ogni scheda usa questi pin, quindi un'immagine per SuperMini non pilota il LED della scheda RecLink, e viceversa.

@@ -195,6 +195,23 @@
 <h1 class="ch">Wiring to the flight controller</h1>
 <p class="lead">Four wires: two for serial data, two for power. The serial link is 3.3 V logic on both sides, so connect it directly with no level shifter.</p>
 
+<h2>Put the firmware on your board</h2>
+<p>Open the <b>web installer</b> at https://fpvitt.github.io/RecLink/flash/, pick your board and a firmware version, and follow the steps. Do this on the bench, with the flight battery disconnected.</p>
+<div class="tbl"><table>
+<tr><th>Board</th><th>How you install it</th><th>Notes</th></tr>
+<tr><td>RecLink board</td><td class="wrap">Update over Wi-Fi (OTA): download the file in the installer, join the board's network, open System → Firmware update and upload it.</td><td class="wrap">Needs firmware already on the board. Leave "erase settings" off to keep your settings and camera pairing.</td></tr>
+<tr><td>ESP32-C3 SuperMini</td><td class="wrap">USB: use Chrome or Edge on a computer, press the flash button in the installer and pick the serial port. Or OTA, once it already runs RecLink.</td><td class="wrap">USB flashing erases everything on the board. If the port is not detected, hold BOOT while plugging it in.</td></tr>
+<tr><td>ESP32-S3 dev board</td><td class="wrap">USB or OTA, the same way as the SuperMini.</td><td class="wrap">Development target: check the pin map below for your board.</td></tr>
+</table></div>
+<p>After flashing, unplug and replug the board. It opens the Wi-Fi network <b>RECLINK-XXXX</b> (password <code>reclinkfpv</code>); open <b>http://10.0.0.1</b> in a browser.</p>
+<h2>Wiring by board</h2>
+<div class="tbl"><table>
+<tr><th>Board</th><th>FC TX goes to</th><th>FC RX comes from</th><th>Power</th><th>Status LED</th></tr>
+<tr><td>RecLink board</td><td>RX (GPIO20)</td><td class="wrap">TX (GPIO21), with a 470 Ω resistor on the board</td><td class="wrap">5 V and GND pads</td><td class="wrap">GPIO10, on the board</td></tr>
+<tr><td>ESP32-C3 SuperMini</td><td>GPIO7</td><td>GPIO6</td><td class="wrap">5V pin and GND</td><td class="wrap">GPIO8, onboard</td></tr>
+<tr><td>ESP32-S3 dev board</td><td>GPIO4</td><td>GPIO5</td><td class="wrap">5V pin and GND</td><td class="wrap">GPIO8 if the board has one</td></tr>
+</table></div>
+<p class="sm mut">The serial wires cross: FC TX goes to the board's RX, and the board's TX goes to the FC RX. Dev boards have no series resistor; if you see garbage on the link, add 470 Ω in the TX line. The firmware for each board uses these pins, so a SuperMini image will not drive the RecLink board's LED, and the other way round.</p>
 <div class="diagram"><svg viewBox="0 0 700 300" role="img" aria-label="Wiring diagram">
   <text x="350" y="24" text-anchor="middle" class="m t10">3.3 V logic on both sides: direct connection</text>
   <rect x="20" y="40" width="200" height="190" rx="10" class="boxc"/>
