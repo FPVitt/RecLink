@@ -38,12 +38,13 @@ function start() {
   const top = new THREE.Group(), bottomParts = new THREE.Group();
   scene.add(top, bottomParts);
   const board = new THREE.Group(); scene.add(board);
+  const fr4 = new THREE.MeshStandardMaterial({ color: 0x8c7840, roughness: 0.7, metalness: 0, transparent: true });
 
   Promise.all([J('tex.json'), J('outline.json'), J('parts.json'), ...names.map((n) => tex(`tex-${n}.webp`))]).then(([tj, oj, pj, ...tx]) => {
     // dielectric slabs between the copper layers
     const shape = new THREE.Shape(oj.outline.map(([x, y]) => new THREE.Vector2(x, y)));
     const th = 0.3;
-    const fr4 = new THREE.MeshStandardMaterial({ color: 0x8c7840, roughness: 0.7, metalness: 0 });
+    
     for (let i = 0; i < 3; i++) {
       const g = new THREE.ExtrudeGeometry(shape, { depth: th, bevelEnabled: false });
       g.rotateX(-Math.PI / 2);                    // shape y -> -z, extrusion -> +y
@@ -77,9 +78,9 @@ function start() {
     [0.00, 35, 54, 0, 0, 25, 0],
     [0.10, 48, 50, 0, 0, 25, 0],
     [0.28, 62, 48, 1, 0, 27, 0.4],
-    [0.50, 112, 62, 1, 1, 38, 0],
-    [0.70, 168, 76, 1, 1, 36, 0],
-    [0.86, 212, 114, 0.25, 0.55, 31, 0],
+    [0.50, 112, 68, 1, 1, 50, 1.6],
+    [0.70, 168, 72, 1, 1, 48, 1.6],
+    [0.86, 212, 114, 0.25, 0.55, 36, 0],
     [1.00, 240, 134, 0, 0, 23, 0],
   ];
   const ease = (t) => t * t * (3 - 2 * t);
@@ -103,12 +104,15 @@ function start() {
     cur.az += (k[1] - cur.az) * f; cur.pol += (k[2] - cur.pol) * f;
     cur.e1 += (k[3] - cur.e1) * f; cur.e2 += (k[4] - cur.e2) * f;
     cur.d += (k[5] - cur.d) * f; cur.sy += (k[6] - cur.sy) * f;
-    const spread = 1 + cur.e2 * 5.2;
+    const spread = 1 + cur.e2 * 13;
     layers.forEach((l) => { l.p.position.y = l.y0 * spread + (l.y0 > 0 ? 0.004 : -0.004); });
     slabs.forEach((s, i) => { s.position.y = ((LY[i] + LY[i + 1]) / 2) * spread; });
+    // the dielectric turns glassy as the stack opens, so the inner copper reads clearly
+    const so = 1 - 0.88 * cur.e2;
+    fr4.opacity = so; fr4.depthWrite = so > 0.5;
     // part meshes already carry their own height above the board surface (y = 0.5 at the top face)
-    top.position.y = LY[0] * (spread - 1) + cur.e1 * 2.4;
-    bottomParts.position.y = LY[3] * (spread - 1) - cur.e1 * 2.4;
+    top.position.y = LY[0] * (spread - 1) + cur.e1 * 3.2;
+    bottomParts.position.y = LY[3] * (spread - 1) - cur.e1 * 3.2;
     const az = (cur.az + off.az) * Math.PI / 180;
     const pol = Math.min(176, Math.max(4, cur.pol + off.pol)) * Math.PI / 180;
     const d = cur.d * (camera.aspect < 1 ? 2.2 : 1.32);
