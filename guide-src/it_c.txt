@@ -1,0 +1,276 @@
+u669|||1h · 45m · 32G
+u670|||Spazio libero sulla SD sempre in GB
+u671|||Segnale del collegamento con la camera in dBm
+u672|||Avviso attivo (capitolo 10)
+u674|||Nome del quad dall'FC
+u676|||Numero di satelliti GPS
+u677|||Fix GPS
+u679|||Stato della batteria di volo dall'FC
+u681|||Velocità al suolo (impostazione unità)
+u683|||Qualsiasi altro codice <code>%</code> viene stampato così com'è. Il testo normale passa senza modifiche. In modalità digitale tutto diventa maiuscolo.
+u684|||Avvio
+u685|||Portale di configurazione aperto
+u686|||Camera in registrazione
+u687|||Nessun flight controller
+u688|||Camera persa
+u689|||Ricerca della camera
+u690|||Camera pronta, a riposo
+u691|||Recupero del watchdog (una volta)
+u692|||Identify (3 s)
+u693|||Cosa fa un LED monocolore in una finestra di sei secondi.
+u694|||I tempi sono indicativi. Sulla scheda di produzione il LED è monocolore, quindi i pattern si distinguono solo dal ritmo. Le schede con LED indirizzabile usano anche il colore (blu per il portale, verde per la registrazione). Il LED mostra il pattern di priorità più alta tra quelli applicabili: portale, poi un recente recupero del watchdog, poi registrazione, poi flight controller assente, poi lo stato del collegamento con la camera. Identify ha la precedenza su tutto finché dura.
+u695|||Valori predefiniti di fabbrica
+u696|||Start / stop recording
+u697|||Interruttore di registrazione
+u698|||Tipo Switch, nessun canale assegnato, acceso sopra 1700 µs
+u699|||Ritardo avvio · ritardo arresto · verifica · tentativi
+u701|||Controllo zone
+u702|||Disattivato. Tre zone a 1300 / 1700 / 2100 µs. Tempo di attesa 400 ms. Nessuna modifica durante la registrazione.
+u703|||Canale highlight
+u704|||Nessuno
+u705|||Digitale · 4 Hz · metrico · righe <code>%st %et</code>, <code>%bi%bt %wr</code>, <code>%rs%fp %ln</code>, <code>SD %sd</code>
+u706|||Avvisi OSD
+u707|||Batteria 15 % · SD 3 min · lampeggio attivo · avviso di camera persa attivo
+u708|||Sincronizzazione orologio
+u709|||Attiva · richiede GPS · 6 satelliti · tolleranza 10 s · UTC · GoPro controllo ogni 5 min · DJI risincronizzazione ogni 60 min · 2 tentativi
+u710|||Disattivato · 1 Hz
+u711|||SSID RECLINK-XXXX · password reclinkfpv · canale automatico · aperto da disarmato · chiusura automatica 15 min · potenza Max
+u712|||Potenza Bluetooth
+u713|||Max (+9 dBm)
+u714|||Collegamento con il flight controller
+u715|||115200 baud · pin non scambiati
+u716|||Luminosità LED · Modalità avanzata
+u717|||128 · off
+u718|||In breve
+u719|||Rete Wi-Fi
+u721|||Indirizzo del portale
+u723|||Password Wi-Fi
+u724|||<code>reclinkfpv</code> (cambiala)
+u725|||Max client Wi-Fi
+u726|||Max camera abbinate
+u727|||4, una sola collegata alla volta
+u728|||Lunghezza max riga OSD
+u729|||16 caratteri, 4 righe
+u730|||Identify (LED 3 s)
+u731|||Tieni premuto 3 s
+u732|||Apre o chiude il portale
+u733|||Tieni premuto 10 s
+u734|||Ripristino di fabbrica (non da armato)
+u735|||Seriale
+u736|||UART, 8N1, 115200, 3,3 V
+u737|||Pin
+u738|||RX GPIO20 · TX GPIO21 · pulsante GPIO9 · LED GPIO10
+u739|||2025.12.0 o successivo (API 1.47+)
+u740|||Cosa RecLink può e non può toccare
+u741|||Legge
+u742|||Flight controller: versione API, nome del quad, stato arm, canali RC, GPS, stato batteria, orologio.
+u743|||Camera: registrazione, batteria, SD, modalità, risoluzione, frame rate e gli altri valori mostrati nella scheda Status.
+u744|||Scrive
+u745|||Quattro righe di testo OSD al flight controller.
+u746|||Comandi di registrazione, impostazioni, highlight e orologio alla camera.
+u747|||Non invia mai
+u748|||Nessun comando RC, GPS, orologio, display-port o riavvio al flight controller.
+u749|||Nessun comando che armi o disarmi.
+u750|||Nessun comando di formattazione, firmware, ripristino o cancellazione di file alla camera in automatico. Esistono solo come azioni del portale con etichetta esplicita, da disarmato.
+u751|||Glossario
+u753|||Un canale radio libero oltre ai quattro degli stick. AUX 1 è il canale 5.
+u754|||Microsecondi. I valori dei canali vanno da circa 1000 (basso) a 2000 (alto).
+u756|||Bluetooth Low Energy, il collegamento con la camera.
+u757|||Associazione
+u758|||L'abbinamento memorizzato tra RecLink e una camera.
+u760|||MultiWii Serial Protocol, il linguaggio che Betaflight parla sul cavo.
+u761|||On-screen display: il testo disegnato sopra il tuo video.
+u763|||Aggiornamento firmware via radio (over-the-air), fatto dal configuratore.
+u764|||Portale
+u765|||La rete Wi-Fi di RecLink e la sua pagina web di configurazione.
+u766|||Zona
+u767|||Una fetta della corsa di un interruttore radio che seleziona un insieme di impostazioni della camera.
+u768|||RecLink Guida utente, firmware 0.1.0 (pre-release). Gli screenshot mostrano il vero configuratore con valori di esempio. I nomi dei menu in Betaflight Configurator e sulle camere possono differire leggermente tra le versioni.
+u769|||Il configuratore su smartphone.
+u770|||Logo RecLink. Il punto centrale diventa rosso e pulsa mentre la camera registra.
+u771|||Sette schede. Clock compare solo in modalità avanzata.
+u772|||Scheda Status: stato dei collegamenti in tempo reale.
+u773|||Versione del firmware e tempo di attività.
+u774|||Richiesta della password al primo avvio.
+u775|||Dopo una modifica, la barra in basso mostra &quot;unsaved changes&quot; e il bordo superiore diventa verde.
+u776|||Abbinamento guidato di una GoPro.
+u777|||Passaggi per mettere la GoPro in modalità di abbinamento remoto.
+u778|||Scorciatoia opzionale GoPro Labs: inquadra il codice con la camera. Richiede il firmware GoPro Labs.
+u779|||Le camera trovate compaiono qui come pulsanti. Tocca la tua.
+u780|||Avvia la ricerca dopo che la camera mostra di essere in fase di abbinamento.
+u781|||Scheda Binding con due camera abbinate.
+u782|||Camere abbinate con marca, indirizzo e indicatore di stato.
+u783|||Abbina un'altra camera. I pulsanti si disattivano a quattro.
+u784|||Registra per 3 secondi per verificare che il collegamento funzioni.
+u785|||Dimentica una camera.
+u786|||Una scheda nuova non ha camera. Abbinane una per iniziare.
+u787|||La scheda Now.
+u788|||Velivolo, collegamento con la camera, registrazione e avvisi.
+u789|||Eventuali flag di errore compaiono sotto come indicatori.
+u790|||La stessa scheda durante la registrazione. Il punto del logo è rosso e pulsa.
+u791|||La scheda Details con una GoPro collegata.
+u792|||Letture di flight controller, GPS e camera. I valori vuoti indicano che la camera non li ha confermati.
+u793|||Chiedi alla camera valori aggiornati.
+u794|||Senza collegamento con il flight controller la pagina dice FC offline e le letture si svuotano.
+u795|||Scheda Diagnostics (modalità avanzata).
+u796|||Scheda Recording con una modalità a interruttore radio selezionata.
+u797|||La modalità di registrazione.
+u798|||Switch (livello) o Button (ogni pressione alterna).
+u799|||Quale canale AUX porta il comando.
+u800|||Rileva il canale muovendo il comando.
+u801|||Barra della posizione in tempo reale. La sottile linea ambra è il comando in questo momento.
+u802|||L'interruttore conta come acceso sopra questo valore.
+u803|||Configurazione delle zone, metà superiore della scheda.
+u804|||Interruttore generale del controllo zone.
+u805|||Il canale AUX che porta la manopola. Usa Set AUX come prima.
+u806|||La barra divide l'intervallo 900–2100 µs in zone colorate. Trascina le maniglie per spostare i bordi.
+u807|||Una riga per zona con il suo bordo superiore in µs. La zona in cui si trova lo stick è evidenziata in verde.
+u808|||Aggiungi o rimuovi una zona, da 2 a 6.
+u809|||Costruzione delle impostazioni di zona: schede delle zone e gruppo Video.
+u810|||Una scheda per zona. Selezionare una scheda mostra le impostazioni di quella zona e le applica alla camera.
+u811|||Se attivo, le modifiche vengono scritte sulla camera man mano che le fai, così gli elenchi di opzioni coincidono.
+u812|||Ogni riga: casella, etichetta, elenco di opzioni.
+u813|||Il gruppo Protune e i pulsanti sotto.
+u814|||Capture from camera riempie la zona con i valori attuali della camera. Clear zone la svuota.
+u815|||Anteprima in tempo reale.
+u816|||Un'anteprima disegnata come la formatta il firmware. Passa ai dati reali quando una camera è collegata.
+u817|||Simula una camera per progettare le righe quando non c'è nulla collegato.
+u818|||L'editor delle righe.
+u819|||Tocca un token per aggiungerlo alla riga selezionata.
+u820|||Ogni riga è una fila di chip. La riga selezionata ha il bordo verde.
+u821|||Raw passa al testo semplice per la riga.
+u822|||I chip si spostano con le frecce o si tolgono con la croce.
+u823|||Camera non collegata: la riga 1 mostra CAM LOST e le altre restano vuote.
+u824|||Scheda Clock (modalità avanzata).
+u825|||Interruttore generale. Attivo di default.
+u826|||Numero minimo di satelliti per un fix affidabile.
+u827|||Sincronizza subito.
+u828|||Tag highlight (modalità avanzata).
+u829|||Scheda Network, modalità base.
+u830|||Nome della rete Wi-Fi. Vuoto dà RECLINK-XXXX.
+u831|||Password Wi-Fi. Vuoto mantiene quella attuale. 8–31 caratteri.
+u832|||Quando si apre il portale.
+u833|||Elenca il valore in tempo reale di ogni canale AUX.
+u834|||Potenza radio e collegamento con il flight controller (modalità avanzata).
+u835|||Baud rate MSP. Deve coincidere con la UART dell'FC.
+u836|||Scambia TX e RX se i fili erano incrociati.
+u837|||Potenza Bluetooth. Si applica dopo un riavvio.
+u838|||Scheda System.
+u839|||Advanced mode.
+u840|||Fa lampeggiare il LED per 3 secondi per trovare la scheda.
+u841|||Cancella tutto.
+u842|||Scegli il file del firmware.
+u843|||Guida rapida
+u844|||RecLink collega il tuo flight controller alla tua action cam. La camera registra quando armi e il suo stato compare sull'OSD. Questa pagina ti porta dalla scatola alla tua prima registrazione.
+u845|||Firmware pre-release
+u846|||Il firmware 0.1.0 è stato provato solo a banco e <b>non è stato provato in volo</b>. Esegui ogni passo qui sotto con le <b>eliche rimosse</b> e verifica che tutto funzioni prima di volare.
+u847|||Ti serve
+u848|||La scheda RecLink
+u849|||Un flight controller con <b>Betaflight 2025.12 o successivo</b> e una UART libera
+u850|||Una GoPro (HERO 11 o successiva) o una DJI Osmo (Action 4, 5, 6 o 360), carica e con una scheda SD
+u851|||Un telefono o un portatile
+u852|||Tempo necessario
+u853|||Circa 15 minuti, una sola volta. Poi RecLink si avvia da solo a ogni accensione del quad.
+u854|||Passo 1
+u855|||una UART libera
+u856|||scheda ESP32-C3
+u857|||TX va a RX
+u858|||RX va a TX
+u859|||alimentazione
+u860|||La camera ha la sua alimentazione
+u861|||Collega i quattro fili come nel disegno. <b>TX va a RX e RX va a TX.</b>
+u862|||Se la scheda si riavvia da sola, aggiungi un condensatore da <b>220 µF</b> sui suoi pad dei 5 V.
+u863|||Montala vicino alla camera, lontano dalla fibra di carbonio.
+u864|||Fili incrociati per errore? Correggi dopo nel configuratore (Network → Swap TX/RX pins). Niente saldature.
+u865|||Passo 2
+u866|||Configura Betaflight
+u868|||Vai nella scheda <b>OSD</b>. Spunta <b>Custom message 1, 2, 3 e 4</b> e trascinali in un punto libero dello schermo. Salva.
+u869|||Sulla radio, scegli un interruttore libero per la registrazione, se ne vuoi uno. È facoltativo.
+u872|||Passo 3
+u873|||Apri il configuratore
+u874|||Accendi il quad (eliche rimosse). Aspetta qualche secondo. Il LED di RecLink fa due lampeggi al secondo quando il suo Wi-Fi è attivo.
+u875|||Dal telefono, collegati alla rete Wi-Fi <code>RECLINK-XXXX</code>. Password: <code>reclinkfpv</code>.
+u876|||Apri <code>http://10.0.0.1</code> nel browser. Se il telefono dice che non c'è internet, resta collegato.
+u877|||Quando richiesto, <b>cambia la password Wi-Fi</b>.
+u878|||Nessuna rete Wi-Fi?
+u879|||Il Wi-Fi funziona solo mentre il velivolo è <b>disarmato</b>. Controlla questo, oppure tieni premuto il pulsante della scheda per 3 secondi per aprirlo.
+u880|||Ricorda di salvare
+u881|||Dopo ogni modifica, premi <b>Save settings</b> in fondo alla pagina.
+u882|||Passo 4
+u883|||Abbina la camera
+u884|||Nel configuratore apri <b>Binding</b> e premi <b>Pair GoPro</b>.
+u885|||Sulla camera: scorri verso il basso, <b>Preferences → Connections → Connect Device → The Remote</b>.
+u886|||Quando la camera è in fase di abbinamento, premi <b>Scan now</b> e tocca la tua camera nell'elenco.
+u887|||Premi <b>Pair DJI</b>, poi metti la camera in modalità di abbinamento e <b>accetta la richiesta</b> sul suo schermo.
+u888|||Abbina una volta sola. Poi RecLink si ricollega da solo e sceglie la più forte se ne hai diverse (fino a quattro).
+u889|||Passo 5
+u890|||Fai registrare la camera
+u891|||<b>Niente da cambiare.</b> Di default la camera inizia a registrare quando armi e si ferma quando disarmi.
+u892|||Per usare invece un interruttore radio:
+u893|||Apri <b>Cam control</b>. Sotto <b>Start / stop recording</b> scegli <b>From a radio switch</b>.
+u894|||Premi <b>Set AUX</b>, poi aziona il tuo interruttore.
+u895|||Premi <b>Save settings</b>.
+u896|||Altre scelte: registrare con l'arm e l'interruttore insieme, oppure solo quando sono attivi entrambi.
+u897|||Passo 6
+u898|||Guardalo sull'OSD
+u899|||RecLink scrive quattro righe di testo negli elementi OSD che hai posizionato al passo 2.
+u901|||Sta registrando, e da quanto tempo
+u902|||Batteria della camera
+u904|||Risoluzione, frame rate e lente
+u906|||Tempo di registrazione rimasto sulla scheda
+u908|||La camera non è collegata
+u909|||Puoi cambiare le righe nella scheda OSD. Scegli OSD type <b>Digital</b> per i visori in stile DJI, <b>Analog</b> per un OSD analogico.
+u910|||Passo 7
+u911|||Verifica a banco
+u912|||Eliche rimosse. Percorri questa lista prima del tuo primo volo.
+u913|||Fai questo
+u914|||Accendi il quad.
+u915|||Compare il Wi-Fi. L'OSD mostra le informazioni della camera, non <b>CAM LOST</b>.
+u916|||Scheda Binding → <b>3 s test recording</b>.
+u917|||La camera registra per 3 secondi.
+u918|||<b>Arma</b> il quad.
+u919|||Il Wi-Fi si spegne. La camera inizia a registrare.
+u920|||<b>Disarma</b>.
+u921|||La camera si ferma.
+u922|||Controlla batteria e scheda SD.
+u923|||Sufficienti per il volo.
+u924|||Il LED
+u925|||LED
+u926|||Significato
+u927|||2 brevi lampeggi ogni secondo
+u928|||Il Wi-Fi è attivo, puoi configurare
+u929|||1 breve lampeggio ogni 3 secondi
+u930|||Tutto ok, camera collegata
+u931|||Fisso
+u932|||La camera sta registrando
+u933|||Dissolvenza lenta in entrata e uscita
+u934|||Sta cercando la camera
+u935|||Lampeggio veloce
+u936|||2 brevi lampeggi ogni 2 secondi
+u937|||Nessun collegamento con il flight controller
+u938|||Il pulsante
+u939|||Pressione breve
+u940|||Il LED lampeggia per 3 secondi, così puoi trovare la scheda
+u941|||Tieni premuto 3 secondi
+u942|||Accende o spegne il Wi-Fi
+u943|||Tieni premuto 10 secondi
+u944|||Ripristino di fabbrica. Cancella impostazioni e abbinamenti delle camere. Non da armato
+u945|||Se qualcosa non va
+u946|||Prova così
+u947|||Nessun Wi-Fi RecLink
+u948|||Disarma il quad. Tieni premuto il pulsante per 3 secondi.
+u949|||La pagina non si apre
+u950|||Scrivi <code>http://10.0.0.1</code>. Resta sul Wi-Fi anche senza internet.
+u951|||Niente sull'OSD
+u952|||Controlla che Betaflight sia 2025.12 o successivo, che MSP sia attivo su quella UART e che Custom message 1–4 siano posizionati. Controlla i fili: TX a RX, RX a TX.
+u954|||Accendi la camera e aspetta. Se non è mai stata abbinata, fai il passo 4.
+u955|||Camera non trovata durante l'abbinamento
+u956|||Metti prima la camera in modalità di abbinamento, poi premi <b>Scan now</b>. Scollegala dagli altri dispositivi.
+u957|||Le mie modifiche sono sparite
+u958|||Premi <b>Save settings</b> dopo ogni modifica.
+u959|||Vuoi saperne di più?
+u960|||Zone (impostazioni della camera da un interruttore), tag highlight, sincronizzazione orologio e tutte le opzioni avanzate sono nella <b>Guida utente RecLink</b> completa.
+u961|||Il configuratore sul tuo telefono.
+u962|||Abbinamento di una GoPro.
+u963|||Cam control → Recording.
+u964|||Scheda OSD: cosa mostra il tuo visore.

@@ -1,0 +1,258 @@
+<!-- ================= 5 FIRST POWER-UP ================= -->
+<section class="chapter np">
+<p class="chno">Chapter 5</p>
+<h1 class="ch">First power-up and the web configurator</h1>
+<p class="lead">Power the quad, join RecLink's Wi-Fi from your phone, and open the configurator. Everything from here on is done in that page.</p>
+
+<div class="cols">
+<div style="width:64mm;flex:none">
+[[shot name="first_screen" cap="The configurator on a phone." legend="1|RecLink logo. The centre dot turns red and pulses while the camera records.;2|Seven tabs. Clock only appears in advanced mode.;3|Status card: live link state.;4|Firmware version and uptime."]]
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div><b>Remove the propellers</b>, then power the flight controller from a battery or USB. The RecLink LED lights solid while it boots.</div></li>
+<li><div><b>Wait for the portal.</b> When the board sees the flight controller and the aircraft is <b>disarmed</b>, it starts its own Wi-Fi network. The LED shows two short blinks every second while the portal is open.</div></li>
+<li><div><b>Join the network</b> named <code>RECLINK-XXXX</code> (the last two bytes of the board's address) on your phone or laptop. The factory password is <code>reclinkfpv</code>.</div></li>
+<li><div><b>Open <code>http://10.0.0.1</code></b> in a browser. Your phone may warn that the network has no internet. Stay connected. RecLink does not force a login sheet, so you open the address yourself.</div></li>
+<li><div><b>Change the Wi-Fi password</b> when asked (below). Up to three devices can be connected at once.</div></li>
+</ol>
+</div>
+</div>
+
+<div class="cols">
+<div class="grow">
+<h2>Change the factory password</h2>
+<p>While the password is still the factory default, the configurator shows this prompt each time you open it. Choose <b>Yes, change it</b>, type a new password of 8 to 31 characters and press <b>Save &amp; reboot</b>. The board restarts and the Wi-Fi comes back with your new password. Tick <b>Don't ask me anymore</b> if you want to keep the default; the choice is stored on the board.</p>
+<div class="callout warn"><span class="tag">Write it down</span><p>If you forget the password you can still reach the portal by holding the button for 10 seconds to factory reset. That erases all settings <b>and</b> camera pairings.</p></div>
+</div>
+<div style="width:62mm;flex:none">
+[[shot name="pw_modal" cap="First-run password prompt."]]
+</div>
+</div>
+
+<h2>When the portal opens and closes</h2>
+<div class="diagram"><svg viewBox="0 0 700 190" role="img" aria-label="Portal lifecycle">
+  <defs>
+    <marker id="a5" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"/></marker>
+    <marker id="a5a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--acc)"/></marker>
+    <marker id="a5d" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--dng)"/></marker>
+  </defs>
+  <rect x="10" y="40" width="170" height="64" rx="10" class="boxc"/><text x="95" y="66" text-anchor="middle" class="b t11">Disarmed</text><text x="95" y="82" text-anchor="middle" class="m t9">FC linked, arm state known</text>
+  <rect x="265" y="40" width="170" height="64" rx="10" class="boxa"/><text x="350" y="66" text-anchor="middle" class="b t11 onacc">Portal open</text><text x="350" y="82" text-anchor="middle" class="t9 onacc">Wi-Fi on · RECLINK-XXXX</text>
+  <rect x="520" y="40" width="170" height="64" rx="10" class="boxc" style="stroke:var(--dng)"/><text x="605" y="66" text-anchor="middle" class="b t11">Armed</text><text x="605" y="82" text-anchor="middle" class="m t9">Wi-Fi off · Bluetooth only</text>
+  <path class="ln" d="M180 72 H265" marker-end="url(#a5)"/><text x="222" y="62" text-anchor="middle" class="m t8">automatic</text>
+  <path d="M435 72 H520" stroke="var(--dng)" stroke-width="2" fill="none" marker-end="url(#a5d)"/><text x="478" y="62" text-anchor="middle" class="t8" style="fill:var(--dng)">arm: ≤ 100 ms</text>
+  <path class="ln" d="M605 104 V150 H95 V104" marker-end="url(#a5)"/><text x="350" y="166" text-anchor="middle" class="m t9">disarm: the portal can open again</text>
+  <path class="ln" d="M350 40 V16 H95 V40" marker-end="url(#a5)"/><text x="222" y="11" text-anchor="middle" class="m t8">auto-close, or a 3 s button hold</text>
+</svg>
+<p class="cap">The portal never runs while the aircraft is armed.</p></div>
+<ul>
+<li><b>Opens automatically</b> when the aircraft is disarmed and the flight controller link is up. You can change this to "only after holding the button" in <b>Network → Open the portal</b>.</li>
+<li><b>Closes</b> after 15 minutes (adjustable from 1 to 120) once there has also been 60 seconds without activity, or when you hold the button for 3 seconds.</li>
+<li><b>Never opens in flight.</b> If the board reboots mid-flight, it waits until it knows the arm state before it will turn Wi-Fi on.</li>
+</ul>
+</section>
+
+<section>
+<h2>Using the configurator</h2>
+<div class="cols">
+<div class="grow">
+<div class="tbl"><table>
+<tr><th>Tab</th><th>What it does</th></tr>
+<tr><td>Status</td><td class="wrap">Live view: aircraft, camera, recording, warnings, camera settings</td></tr>
+<tr><td>Cam control</td><td class="wrap">Recording mode, radio switch, zones and camera settings, highlight</td></tr>
+<tr><td>OSD</td><td class="wrap">The four OSD lines, preview, warning thresholds</td></tr>
+<tr><td>Clock</td><td class="wrap">Camera clock sync (advanced mode only)</td></tr>
+<tr><td>Binding</td><td class="wrap">Pair, list and forget cameras</td></tr>
+<tr><td>Network</td><td class="wrap">Wi-Fi, flight controller link, radio power, AUX scan</td></tr>
+<tr><td>System</td><td class="wrap">Advanced mode, LED, GPS push, reboot, update, reset</td></tr>
+</table></div>
+</div>
+<div style="width:70mm;flex:none">
+[[shot name="savebar_dirty" cap="After an edit, the bar at the bottom reads &quot;unsaved changes&quot; and its top edge turns green."]]
+</div>
+</div>
+<ul>
+<li><b>Nothing applies until you press Save settings.</b> The bar sticks to the bottom of the screen. When you have unsaved edits it says "unsaved changes". If you try to leave the page with unsaved edits, the browser asks first.</li>
+<li><b>Saves are permanent.</b> They are written to flash before the page confirms. Settings and camera pairings survive a reboot, a power loss and a firmware update.</li>
+<li><b>Advanced mode</b> (System tab) reveals timing fields, diagnostics and the Clock tab. Leave it off while you set up; turn it on when you need to fine-tune. It is remembered on the board.</li>
+<li><b>Two settings need a reboot</b>: the flight controller baud rate / pin swap, and Bluetooth power. After saving one of them a <b>Reboot now</b> button appears in the bar.</li>
+<li><b>The portal is a bench tool.</b> The page polls the board every 1.5 seconds. Keep one browser tab open, and close the portal before flying.</li>
+</ul>
+</section>
+
+<!-- ================= 6 PAIRING ================= -->
+<section class="chapter np">
+<p class="chno">Chapter 6</p>
+<h1 class="ch">Pairing your camera</h1>
+<p class="lead">Pair once and RecLink reconnects by itself every time you power up. Pairing is done on the <b>Binding</b> tab.</p>
+
+<h2>GoPro</h2>
+<div class="cols">
+<div style="width:66mm;flex:none">
+[[shot name="pair_modal" cap="Guided GoPro pairing." legend="1|Steps to put the GoPro into remote-pairing mode.;2|Optional GoPro Labs shortcut: point the camera at the code. Needs GoPro Labs firmware.;3|Cameras found appear here as buttons. Tap yours.;4|Start the search after the camera shows it is pairing."]]
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Open the <b>Binding</b> tab and press <b>Pair GoPro</b>.</div></li>
+<li><div>On the camera, swipe down, then go to <b>Preferences → Connections → Connect Device → The Remote</b>.</div></li>
+<li><div>When the camera shows that it is pairing, press <b>Scan now</b> in the portal. RecLink listens for up to 45 seconds. It does not connect to anything until you pick.</div></li>
+<li><div>Tap your camera in the list. If more than one GoPro is in pairing mode, check the name and signal strength first.</div></li>
+<li><div>A green check confirms the pairing. The camera appears under <b>Paired cameras</b> and its link goes to Connected.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">If no camera shows up</span><p>The portal says "No GoPro found. Make sure it is in remote-pairing mode, then press Scan now again". Check that the camera is awake and showing its pairing screen. If it is connected to a phone app, disconnect it there first.</p></div>
+</div>
+</div>
+
+<h2>DJI Osmo</h2>
+<ol class="steps">
+<li><div>On the <b>Binding</b> tab press <b>Pair DJI</b>. The portal shows "pairing… put the DJI into pairing mode now".</div></li>
+<li><div>Put the Osmo into its pairing mode. On a first pairing the camera shows a confirmation prompt on its screen. <b>Accept it.</b></div></li>
+<li><div>RecLink connects to the first matching DJI it hears. After this, reconnecting is automatic and needs no confirmation.</div></li>
+</ol>
+</section>
+
+<section>
+<h2>Managing paired cameras</h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+[[shot name="binding" cap="Binding tab with two paired cameras." legend="1|Paired cameras with brand, address and state badge.;2|Pair another camera. The buttons disable at four.;3|Record for 3 seconds to prove the link works.;4|Forget one camera."]]
+</div>
+<div class="grow">
+<ul>
+<li><b>Up to four cameras</b>, any mix of GoPro and DJI. Pairing a new one keeps the others.</li>
+<li><b>One at a time.</b> At power-up RecLink scans for every paired camera and connects to the strongest signal after about 2.5 seconds, or at once to one stronger than −50 dBm.</li>
+<li><b>Badges:</b> <span class="ok">● Connected · −52 dBm</span>, <span class="wn">Connecting…</span>, or <span class="mut">Standby</span> for a paired camera that is not in use.</li>
+<li><b>3 s test recording</b> starts the connected camera for three seconds. Use it to prove the whole chain works. It only runs while disarmed.</li>
+<li><b>Forget</b> removes one camera. <b>Forget all cameras</b> appears when two or more are paired and asks twice.</li>
+<li><b>Telemetry poll</b> (advanced mode) sets how often a GoPro is asked for status: Fast 0.5 s, Normal 1 s or Slow 1.5 s. Normal is right for most setups.</li>
+</ul>
+<div class="callout"><span class="tag">When a bond is lost</span><p>If the camera forgets RecLink (you reset its connections, or re-paired it to a phone), the next reconnects fail. After three failures RecLink forgets that camera's bond and raises a <b>REPAIR_NEEDED</b> flag on the Status tab. Pair the camera again.</p></div>
+</div>
+</div>
+[[shot name="binding_empty" w="62mm" cap="A fresh board has no cameras. Pair one to begin."]]
+</section>
+
+<!-- ================= 7 STATUS ================= -->
+<section class="chapter np">
+<p class="chno">Chapter 7</p>
+<h1 class="ch">Reading the Status tab</h1>
+<p class="lead">Status is read-only and tells you, at a glance, whether the chain flight controller → RecLink → camera is healthy.</p>
+
+<div class="cols">
+<div style="width:62mm;flex:none">
+[[shot name="status_now" cap="The Now card." legend="1|Aircraft, camera link, recording and warnings.;2|Fault flags appear below as chips, if any."]]
+[[shot name="status_rec" w="62mm" cap="The same card while recording. The logo dot is red and pulses."]]
+</div>
+<div class="grow">
+<h3>Now</h3>
+<div class="tbl"><table>
+<tr><td>Aircraft</td><td class="wrap"><b>armed</b> or <b>disarmed</b>, or <b>FC offline</b> if the flight controller link is down.</td></tr>
+<tr><td>Camera link</td><td class="wrap">Brand, state and name, e.g. <span class="ok">GOPRO · READY · GoPro HERO11 Black</span>. States: IDLE, SCAN, CONNECTING, BONDING, SYNCING, READY, LOST.</td></tr>
+<tr><td>Recording</td><td class="wrap"><b>stopped</b>, or <b>REC</b> with elapsed time.</td></tr>
+<tr><td>Warnings</td><td class="wrap">The active warning, or <span class="ok">none</span>. Same list as the OSD (see chapter 10).</td></tr>
+</table></div>
+<h3>Fault flags</h3>
+<div class="tbl"><table>
+<tr><td>FC_OFFLINE</td><td class="wrap">No MSP link. Check wiring, UART, baud.</td></tr>
+<tr><td>OSD_UNSUPPORTED</td><td class="wrap">Betaflight is older than API 1.47.</td></tr>
+<tr><td>REPAIR_NEEDED</td><td class="wrap">Camera bond is missing. Pair again.</td></tr>
+<tr><td>CFG_RESET</td><td class="wrap">Stored settings were unreadable. Defaults loaded. Re-pair.</td></tr>
+<tr><td>CLOCK_SYNC_FAIL</td><td class="wrap">Clock sync gave up with the time still off.</td></tr>
+<tr><td>WDT_RECOVERED</td><td class="wrap">The board restarted after a stall. Tap the chip to acknowledge.</td></tr>
+</table></div>
+</div>
+</div>
+</section>
+
+<section>
+<div class="cols">
+<div style="width:66mm;flex:none">
+[[shot name="status_details" cap="The Details card with a GoPro connected." legend="1|Flight controller, GPS and camera readouts. Blank values mean the camera has not confirmed them.;2|Ask the camera for fresh values."]]
+</div>
+<div class="grow">
+<h3>Details</h3>
+<ul>
+<li><b>Flight controller:</b> Betaflight variant and MSP API version. <b>OSD grid</b> is the canvas size the FC reports.</li>
+<li><b>GPS:</b> fix, satellites and whether the fix counts as good. Shown when the FC has a GPS.</li>
+<li><b>Camera signal, time left, camera battery, SD card.</b> SD shows free space in GB, or "NO SD" / "FULL".</li>
+<li><b>Mode, resolution, profile</b> as the camera reports them now.</li>
+<li><b>GoPro Video and Protune values:</b> ISO max/min, shutter angle (for example <code>180° (1/120)</code>), Protune, white balance, colour, sharpness, EV comp, 10-bit.</li>
+<li><b>Zone settings</b> is the result of the last zone apply: <span class="ok">Zone 1: applied</span>, "partly applied (not accepted: …)", "not applied" or "waiting for camera".</li>
+</ul>
+<div class="callout"><span class="tag">A blank is honest</span><p>RecLink only shows what the camera confirmed. After a disconnect, every camera value goes blank until the camera answers again. That is deliberate: a stale or guessed number is worse than none.</p></div>
+<p>With <b>Advanced mode</b> on, a <b>Diagnostics</b> card adds the live AUX channel values in µs, error counters and three collapsible debug panels (MSP link, Bluetooth connection, record trigger). They are useful for support, and for finding the stick position of a switch.</p>
+</div>
+</div>
+<div class="cols">
+<div style="width:62mm;flex:none">
+[[shot name="status_fcdown" w="62mm" cap="With no flight controller link the page says FC offline and the readouts go blank."]]
+</div>
+<div style="width:62mm;flex:none">
+[[shot name="status_diag" w="62mm" cap="Diagnostics card (advanced mode)."]]
+</div>
+</div>
+</section>
+
+<!-- ================= 8 RECORDING ================= -->
+<section class="chapter np">
+<p class="chno">Chapter 8</p>
+<h1 class="ch">Recording control</h1>
+<p class="lead">Decide what starts and stops the camera. Everything here is on the <b>Cam control</b> tab, in the Recording card.</p>
+
+<h2>Choose a recording mode</h2>
+[[svg:modes]]
+<div class="tbl"><table>
+<tr><th>Mode</th><th>Records when</th><th>Good for</th></tr>
+<tr><td>Never (manual only)</td><td class="wrap">Never. You start the camera by hand.</td><td class="wrap">Bench work, or if you use the camera's own controls</td></tr>
+<tr><td>When the aircraft is armed</td><td class="wrap">From arm to disarm.</td><td class="wrap">The simple default: every flight is recorded</td></tr>
+<tr><td>From a radio switch</td><td class="wrap">While the switch is on, or toggled by a button.</td><td class="wrap">Choosing exactly when to film</td></tr>
+<tr><td>Armed OR switch on</td><td class="wrap">Armed, or the switch is on. While armed, turning the switch off cuts the clip, and turning it on again starts a new one.</td><td class="wrap">Always film flights, but cut dead time</td></tr>
+<tr><td>Armed AND switch on</td><td class="wrap">Only when both are true. Releasing either one stops the clip at once.</td><td class="wrap">Film only when armed <i>and</i> you want it</td></tr>
+</table></div>
+</section>
+
+<section>
+<h2>Set up the radio switch</h2>
+<div class="cols">
+<div style="width:66mm;flex:none">
+[[shot name="cc_record" cap="Recording card with a radio switch mode selected." legend="1|The recording mode.;2|Switch (level) or Button (each press toggles).;3|Which AUX channel carries the control.;4|Detect the channel by moving the control.;5|Live position bar. The thin amber line is the control right now.;6|The switch counts as on above this value."]]
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Pick <b>From a radio switch</b>, <b>Armed OR switch on</b> or <b>Armed AND switch on</b>. The Radio switch box becomes active. With <i>Never</i> or <i>When the aircraft is armed</i> it is greyed out and marked "not applicable".</div></li>
+<li><div><b>Find the channel.</b> Press <b>Set AUX</b>, then flip the switch on your transmitter. The label changes to "push button or switch" while it listens. RecLink watches the live channel data, picks whichever channel moves by 200 µs or more, and fills in the AUX field. It gives up after 15 seconds. This needs the flight controller link to be up.</div></li>
+<li><div><b>Choose Trigger type.</b> <b>Switch</b> mirrors the switch: on means recording, off means stop. <b>Button</b> is for a spring-loaded control: each press toggles recording and releasing does nothing.</div></li>
+<li><div><b>Check the threshold.</b> The bar shows the control's live position as an amber line. The default of <b>1700 µs</b> suits most 3-position switches (the top position counts as on). Adjust it by dragging the handle or typing a value from 900 to 2100.</div></li>
+<li><div><b>Press Save settings</b> and try the switch. The Status tab shows "REC" and the logo dot turns red.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">Prefer to look at the numbers?</span><p>Network → <b>Scan AUX now</b> lists the live value of every AUX channel. Move your switch and press it again to see which channel changed.</p></div>
+</div>
+</div>
+
+<h2>What happens when you trigger it</h2>
+<div class="diagram"><svg viewBox="0 0 700 120" role="img" aria-label="Record sequence">
+  <defs><marker id="a8" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"/></marker></defs>
+  <g class="t10">
+  <rect x="6" y="30" width="118" height="52" rx="8" class="boxc"/><text x="65" y="53" text-anchor="middle" class="b">Trigger</text><text x="65" y="69" text-anchor="middle" class="m t9">arm or switch</text>
+  <rect x="166" y="30" width="118" height="52" rx="8" class="boxc"/><text x="225" y="53" text-anchor="middle" class="b">Wait</text><text x="225" y="69" text-anchor="middle" class="m t9">start delay 300 ms</text>
+  <rect x="326" y="30" width="118" height="52" rx="8" class="boxa"/><text x="385" y="53" text-anchor="middle" class="b onacc">Start</text><text x="385" y="69" text-anchor="middle" class="t9 onacc">command to camera</text>
+  <rect x="486" y="30" width="118" height="52" rx="8" class="boxc"/><text x="545" y="53" text-anchor="middle" class="b">Verify</text><text x="545" y="69" text-anchor="middle" class="m t9">camera must say REC</text>
+  </g>
+  <path class="ln" d="M124 56 H166" marker-end="url(#a8)"/><path class="ln" d="M284 56 H326" marker-end="url(#a8)"/><path class="ln" d="M444 56 H486" marker-end="url(#a8)"/>
+  <path class="ln" d="M545 82 V104 H385 V82" marker-end="url(#a8)"/><text x="465" y="116" text-anchor="middle" class="t9 m">not confirmed in 800 ms: retry, up to 3 times</text>
+  <rect x="622" y="30" width="72" height="52" rx="8" class="boxd"/><text x="658" y="52" text-anchor="middle" class="t9 b">REC FAIL</text><text x="658" y="66" text-anchor="middle" class="t8 m">if all fail</text>
+  <path class="lnd" d="M604 56 H622" marker-end="url(#a8)"/>
+</svg>
+<p class="cap">Stopping works the same way after a stop delay (default 1.5 s), so the last moments are not clipped.</p></div>
+<p>The camera is the judge: RecLink starts it, then waits for the camera to report it is recording. If it does not within the verify window, RecLink retries. If every try fails the OSD warning <b>REC FAIL</b> appears. The bridge tracks its own last command, so a camera that fails to report cannot cancel a stop RecLink owes it.</p>
+
+<h3>Timing (advanced mode)</h3>
+<div class="tbl"><table>
+<tr><th>Setting</th><th>Default</th><th>Range</th><th>What it does</th></tr>
+<tr><td>Start delay after trigger</td><td>300 ms</td><td>0–10000</td><td class="wrap">Waits before sending start. Lets arming settle.</td></tr>
+<tr><td>Keep recording after trigger clears</td><td>1500 ms</td><td>0–20000</td><td class="wrap">Delays the stop so the landing is captured.</td></tr>
+<tr><td>Wait for camera to confirm</td><td>800 ms</td><td>100–5000</td><td class="wrap">Per attempt.</td></tr>
+<tr><td>Retries if not confirmed</td><td>3</td><td>0–10</td><td class="wrap">Then REC FAIL.</td></tr>
+</table></div>
+</section>

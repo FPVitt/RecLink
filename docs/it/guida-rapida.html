@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="it" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guida rapida · RecLink</title>
+<meta name="description" content="Guida rapida RecLink: cabla la scheda, configura Betaflight, abbina la GoPro o la DJI, registra con l&#x27;arm o con un interruttore della radio.">
+<meta name="theme-color" content="#0f1216">
+<meta property="og:title" content="Guida rapida · RecLink">
+<meta property="og:description" content="Guida rapida RecLink: cabla la scheda, configura Betaflight, abbina la GoPro o la DJI, registra con l&#x27;arm o con un interruttore della radio.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="alternate" hreflang="it" href="guida-rapida.html"><link rel="alternate" hreflang="en" href="../en/quick-start.html">
+<script>try{var t=localStorage.getItem('rl-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body data-doc="qs">
+<a class="skip" href="#main">Vai al contenuto</a>
+<header class="topbar"><div class="bar">
+<a class="brand" href="index.html" aria-label="RecLink"><svg class="mark" viewBox="0 0 168 80" aria-hidden="true"><path fill="currentColor" d="M6 6h30v12H18v44h18v12H6zM132 6h30v68h-30V62h18V18h-18z"/><circle fill="currentColor" cx="84" cy="40" r="21"/></svg><span>RecLink</span></a>
+<nav class="tabs" aria-label="Guides"><a href="guida-rapida.html" aria-current="page">Guida rapida</a><a href="guida-utente.html">Guida utente</a></nav>
+<div class="tools"><details class="menu pdf"><summary title="Scarica questa guida in PDF">PDF</summary><div class="menu-body"><a href="../pdf/RecLink-Guida-Rapida.pdf" download>Verticale<small> · 1.8 MB</small></a><a href="../pdf/RecLink-Guida-Rapida-Orizzontale.pdf" download>Orizzontale<small> · 1.8 MB</small></a></div></details><div class="seg" role="group" aria-label="Lingua"><a href="../en/quick-start.html" hreflang="en" lang="en" data-lang="en">EN</a><a href="#" hreflang="it" lang="it" data-lang="it" aria-current="true">IT</a></div>
+<button class="icon theme-btn" type="button" title="Passa al tema chiaro / scuro" aria-label="Passa al tema chiaro / scuro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button><button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="Indice"><span>Indice</span></button></div>
+</div><div id="progress" aria-hidden="true"></div></header>
+<div class="layout has-toc">
+<aside class="sidebar" id="toc" aria-label="In questa pagina"><div class="side-in"><p class="toc-title">In questa pagina</p><ol><li data-id="step1"><a href="#step1"><b>1</b><span>Cablaggio</span></a></li><li data-id="step2"><a href="#step2"><b>2</b><span>Configura Betaflight</span></a></li><li data-id="step3"><a href="#step3"><b>3</b><span>Apri il configuratore</span></a></li><li data-id="step4"><a href="#step4"><b>4</b><span>Abbina la camera</span></a></li><li data-id="step5"><a href="#step5"><b>5</b><span>Fai registrare la camera</span></a></li><li data-id="step6"><a href="#step6"><b>6</b><span>Guardalo sull&#x27;OSD</span></a></li><li data-id="step7"><a href="#step7"><b>7</b><span>Verifica a banco</span></a></li><li data-id="ref-1"><a href="#ref-1"><span>Il LED</span></a></li><li data-id="ref-2"><a href="#ref-2"><span>Il pulsante</span></a></li><li data-id="ref-3"><a href="#ref-3"><span>Se qualcosa non va</span></a></li></ol></div></aside>
+<main id="main" class="content">
+<div class="hero"><p class="eyebrow">Guida rapida</p><h1>RecLink</h1><p class="sub">RecLink collega il tuo flight controller alla tua action cam. La camera registra quando armi e il suo stato compare sull&#x27;OSD. Questa pagina ti porta dalla scatola alla tua prima registrazione.</p><div class="meta"><span>Betaflight 2025.12+</span><span>GoPro HERO 11–13</span><span>DJI Osmo Action 4/5/6, Osmo 360</span></div></div><div class="intro"><section class="qshead">
+<div class="callout danger"><span class="tag">Firmware pre-release</span>
+<p>Il firmware 0.1.0 è stato provato solo a banco e <b>non è stato provato in volo</b>. Esegui ogni passo qui sotto con le <b>eliche rimosse</b> e verifica che tutto funzioni prima di volare.</p></div>
+<div class="cols">
+<div class="grow">
+<h3>Ti serve</h3>
+<ul>
+<li>La scheda RecLink</li>
+<li>Un flight controller con <b>Betaflight 2025.12 o successivo</b> e una UART libera</li>
+<li>Una GoPro (HERO 11 o successiva) o una DJI Osmo (Action 4, 5, 6 o 360), carica e con una scheda SD</li>
+<li>Un telefono o un portatile</li>
+</ul>
+</div>
+<div class="grow">
+<h3>Tempo necessario</h3>
+<p>Circa 15 minuti, una sola volta. Poi RecLink si avvia da solo a ogni accensione del quad.</p>
+</div>
+</div>
+</section></div><section class="chapter" id="step1">
+<p class="chno">Passo 1</p>
+<h1 class="ch">Cablaggio<a aria-label="link" class="anchor" href="#step1">#</a></h1>
+<div class="cols">
+<div class="grow">
+<div class="diagram" style="margin:0"><svg aria-label="Wiring" role="img" viewbox="0 0 700 262">
+<rect class="boxc" height="170" rx="10" width="190" x="20" y="30"></rect>
+<text class="b t12" text-anchor="middle" x="115" y="54">Flight controller</text><text class="m t9" text-anchor="middle" x="115" y="68">una UART libera</text>
+<rect class="boxc" height="170" rx="10" style="stroke:var(--acc)" width="190" x="490" y="30"></rect>
+<text class="b t12" text-anchor="middle" x="585" y="54">RecLink</text><text class="m t9" text-anchor="middle" x="585" y="68">scheda ESP32-C3</text>
+<g class="t11">
+<circle cx="210" cy="98" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="198" y="102">TX</text>
+<circle cx="210" cy="128" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="198" y="132">RX</text>
+<circle cx="210" cy="158" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="198" y="162">5 V</text>
+<circle cx="210" cy="188" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="198" y="192">GND</text>
+<circle cx="490" cy="98" fill="var(--fg)" r="5"></circle><text x="504" y="102">RX</text>
+<circle cx="490" cy="128" fill="var(--fg)" r="5"></circle><text x="504" y="132">TX</text>
+<circle cx="490" cy="158" fill="var(--fg)" r="5"></circle><text x="504" y="162">5 V</text>
+<circle cx="490" cy="188" fill="var(--fg)" r="5"></circle><text x="504" y="192">GND</text>
+</g>
+<path d="M215 98 H485" fill="none" stroke="var(--zone-2)" stroke-width="3"></path>
+<path d="M215 128 H485" fill="none" stroke="var(--warn)" stroke-width="3"></path>
+<path d="M215 158 H485" fill="none" stroke="var(--dng)" stroke-width="3"></path>
+<path d="M215 188 H485" fill="none" stroke="var(--mut)" stroke-width="3"></path>
+<g class="t10 m" text-anchor="middle"><text x="350" y="91">TX va a RX</text><text x="350" y="121">RX va a TX</text><text x="350" y="151">alimentazione</text><text x="350" y="181">massa</text></g>
+<rect class="boxd" height="34" rx="8" width="270" x="215" y="218"></rect><text class="t10" text-anchor="middle" x="350" y="239">La camera ha la sua alimentazione</text>
+</svg></div>
+</div>
+<div style="width:70mm;flex:none">
+<ul>
+<li>Collega i quattro fili come nel disegno. <b>TX va a RX e RX va a TX.</b></li>
+<li>Se la scheda si riavvia da sola, aggiungi un condensatore da <b>220 µF</b> sui suoi pad dei 5 V.</li>
+<li>Montala vicino alla camera, lontano dalla fibra di carbonio.</li>
+<li>Fili incrociati per errore? Correggi dopo nel configuratore (Network → Swap TX/RX pins). Niente saldature.</li>
+</ul>
+</div>
+</div>
+</section><section class="chapter" id="step2">
+<p class="chno">Passo 2</p>
+<h1 class="ch">Configura Betaflight<a aria-label="link" class="anchor" href="#step2">#</a></h1>
+<div class="callout warn"><span class="tag">Usa l'ultima versione di Betaflight Configurator</span><p>Servono il <b>firmware Betaflight 2025.12.0 o successivo</b> sul flight controller e l'<b>ultima versione di Betaflight Configurator</b> sul computer. Le schermate di questa guida sono state fatte con Configurator <b>2026.6.2</b>. Usa la web app su <code>app.betaflight.com</code> (con Chrome o Edge) oppure installa la versione desktop più recente. Un Configurator più vecchio potrebbe non mostrare gli elementi Custom message.</p></div>
+<div class="cols keep">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Betaflight Configurator → Ports." href="../assets/img/bf_ports-ab65359d.webp"><img alt="Betaflight Configurator → Ports." decoding="async" height="524" loading="lazy" src="../assets/img/bf_ports-ab65359d.webp" width="628"/></a></div><figcaption>Betaflight Configurator → Ports.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Attiva MSP sulla UART che hai collegato.</span></li><li><i class="lgd"></i><span>Lascia la velocità a 115200.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Controlla che il tuo Betaflight sia <b>2025.12.0 o successivo</b>: le versioni precedenti non possono mostrare il testo di RecLink. Poi apri <b>Betaflight Configurator</b> e vai nella scheda <b>Ports</b>. Sulla UART collegata, attiva <b>MSP</b>. Lascia la velocità a <b>115200</b>. Salva.</div></li>
+</ol>
+<p class="sm mut">Poi premi <b>Save and Reboot</b> in basso a destra.</p>
+</div>
+</div>
+<div class="cols keep">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Scheda OSD → Elements: Custom message da 1 a 4 spuntati." href="../assets/img/bf_osd-fb9a041f.webp"><img alt="Scheda OSD → Elements: Custom message da 1 a 4 spuntati." decoding="async" height="412" loading="lazy" src="../assets/img/bf_osd-fb9a041f.webp" width="680"/></a></div><figcaption>Scheda OSD → Elements: Custom message da 1 a 4 spuntati.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Spunta Custom message 1, 2, 3 e 4.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps" style="counter-reset:s 1">
+<li><div>Vai nella scheda <b>OSD</b>. Spunta <b>Custom message 1, 2, 3 e 4</b> e trascinali in un punto libero dello schermo. Salva.</div></li>
+</ol>
+<p class="sm mut">Trascina i quattro messaggi nell'anteprima in un punto libero, uno sotto l'altro. Non dimenticare di premere <b>Save</b>.</p>
+<figure class="shot" style="width:78mm"><div class="imgwrap"><a class="zoom" data-caption="Scheda OSD: i quattro Custom message nell'anteprima." href="../assets/img/bf_osd_preview-ef5fc345.webp"><img alt="Scheda OSD: i quattro Custom message nell'anteprima." decoding="async" height="488" loading="lazy" src="../assets/img/bf_osd_preview-ef5fc345.webp" width="940"/></a></div><figcaption>Scheda OSD: i quattro Custom message nell'anteprima.</figcaption></figure>
+</div>
+</div>
+<div class="cols keep">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Scheda Receiver: la barra del tuo interruttore si muove quando lo azioni." href="../assets/img/bf_receiver-de25a38a.webp"><img alt="Scheda Receiver: la barra del tuo interruttore si muove quando lo azioni." decoding="async" height="332" loading="lazy" src="../assets/img/bf_receiver-de25a38a.webp" width="796"/></a></div><figcaption>Scheda Receiver: la barra del tuo interruttore si muove quando lo azioni.</figcaption><ol class="legend"><li><i class="lgd"></i><span>AUX 2 va a 2000 quando azioni l'interruttore.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps" style="counter-reset:s 2">
+<li><div>Sulla radio, scegli un interruttore libero se vuoi avviare e fermare la registrazione a mano. Nella scheda <b>Receiver</b> di Betaflight, azionalo e controlla che si muova una barra <b>AUX</b>. È facoltativo.</div></li>
+</ol>
+</div>
+</div>
+</section><section class="chapter" id="step3">
+<p class="chno">Passo 3</p>
+<h1 class="ch">Apri il configuratore<a aria-label="link" class="anchor" href="#step3">#</a></h1>
+<div class="cols keep">
+<div style="width:56mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Il configuratore sul tuo telefono." href="../assets/img/first_screen-c96f3c56.webp"><img alt="Il configuratore sul tuo telefono." decoding="async" height="1720" loading="lazy" src="../assets/img/first_screen-c96f3c56.webp" width="800"/></a></div><figcaption>Il configuratore sul tuo telefono.</figcaption></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Accendi il quad (eliche rimosse). Aspetta qualche secondo. Il LED di RecLink fa due lampeggi al secondo quando il suo Wi-Fi è attivo.</div></li>
+<li><div>Dal telefono, collegati alla rete Wi-Fi <code>RECLINK-XXXX</code>. Password: <code>reclinkfpv</code>.</div></li>
+<li><div>Apri <code>http://10.0.0.1</code> nel browser. Se il telefono dice che non c'è internet, resta collegato.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">Nessuna rete Wi-Fi?</span><p>Il Wi-Fi funziona solo mentre il velivolo è <b>disarmato</b>. Controlla questo, oppure tieni premuto il pulsante della scheda per 3 secondi per aprirlo.</p></div>
+<div class="callout"><span class="tag">Ricorda di salvare</span><p>Dopo ogni modifica, premi <b>Save settings</b> in fondo alla pagina.</p></div>
+</div>
+</div>
+</section><section class="chapter" id="step4">
+<p class="chno">Passo 4</p>
+<h1 class="ch">Abbina la camera<a aria-label="link" class="anchor" href="#step4">#</a></h1>
+<div class="cols keep">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Abbinamento di una GoPro." href="../assets/img/pair_modal-23cb81f1.webp"><img alt="Abbinamento di una GoPro." decoding="async" height="1076" loading="lazy" src="../assets/img/pair_modal-23cb81f1.webp" width="720"/></a></div><figcaption>Abbinamento di una GoPro.</figcaption></figure>
+</div>
+<div class="grow">
+<h3>GoPro</h3>
+<ol class="steps">
+<li><div>Nel configuratore apri <b>Binding</b> e premi <b>Pair GoPro</b>.</div></li>
+<li><div>Sulla camera: scorri verso il basso, <b>Preferences → Connections → Connect Device → The Remote</b>.</div></li>
+<li><div>Quando la camera è in fase di abbinamento, premi <b>Scan now</b> e tocca la tua camera nell'elenco.</div></li>
+</ol>
+<h3>DJI Osmo</h3>
+<ol class="steps">
+<li><div>Premi <b>Pair DJI</b>, poi metti la camera in modalità di abbinamento e <b>accetta la richiesta</b> sul suo schermo.</div></li>
+</ol>
+<p>Abbina una volta sola. Poi RecLink si ricollega da solo e sceglie la più forte se ne hai diverse (fino a quattro).</p>
+</div>
+</div>
+</section><section class="chapter" id="step5">
+<p class="chno">Passo 5</p>
+<h1 class="ch">Fai registrare la camera<a aria-label="link" class="anchor" href="#step5">#</a></h1>
+<p>Scegli <b>quando</b> registra la camera. Ci sono due modi comuni. Scegline uno.</p>
+<div class="callout"><p><b>Registra quando fai arm.</b> Non c'è niente da cambiare. È l'impostazione predefinita: la camera parte quando fai arm e si ferma quando fai disarm.</p></div>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Cam control → Recording, modalità interruttore." href="../assets/img/cc_record-63171ca8.webp"><img alt="Cam control → Recording, modalità interruttore." decoding="async" height="1058" loading="lazy" src="../assets/img/cc_record-63171ca8.webp" width="736"/></a></div><figcaption>Cam control → Recording, modalità interruttore.</figcaption><ol class="legend"><li><i class="lgd"></i><span>La modalità di registrazione.</span></li><li><i class="lgd"></i><span>Switch o Button.</span></li><li><i class="lgd"></i><span>Il canale AUX.</span></li><li><i class="lgd"></i><span>Rileva il canale.</span></li><li><i class="lgd"></i><span>Posizione attuale del comando.</span></li><li><i class="lgd"></i><span>Acceso sopra questo valore.</span></li></ol></figure>
+</div>
+<div class="grow">
+<p><b>Registra da un interruttore della radio.</b> Scegli tu quando filmare con un interruttore del trasmettitore.</p>
+<ol class="steps">
+<li><div>Apri <b>Cam control</b>. Sotto <b>Start / stop recording</b> scegli <b>From a radio switch</b>.</div></li>
+<li><div>Premi <b>Set AUX</b>, poi aziona l'interruttore entro 15 secondi. RecLink sceglie il canale che si è mosso e compila il campo <b>AUX channel</b>. Il flight controller deve essere collegato.</div></li>
+<li><div>Lascia <b>Trigger type</b> su <b>Switch</b>: interruttore acceso significa registra, spento significa ferma. Per un pulsante a molla scegli <b>Button</b>: ogni pressione avvia o ferma.</div></li>
+<li><div>Aziona l'interruttore e guarda la barra. La linea ambra deve superare il valore <b>On above</b> (predefinito <b>1700 µs</b>) con l'interruttore acceso e restare sotto con l'interruttore spento.</div></li>
+<li><div>Premi <b>Save settings</b>. Aziona l'interruttore: la camera parte e la scheda Status mostra <b>REC</b>.</div></li>
+</ol>
+<p class="sm mut">Quale posizione dell'interruttore conta come acceso dipende dalla soglia. Un interruttore a 3 posizioni di solito funziona con la posizione alta come acceso.</p>
+</div>
+</div>
+<h3>Combina arm e interruttore</h3>
+<div class="tbl"><table>
+<tr><td><b>Armed OR switch on</b></td><td class="wrap">Registra con arm o con interruttore acceso. Con arm attivo, spegnere l'interruttore taglia il clip.</td></tr>
+<tr><td><b>Armed AND switch on</b></td><td class="wrap">Registra solo se entrambi sono veri. Rilasciarne uno ferma il clip.</td></tr>
+</table></div>
+</section><section class="chapter" id="step6">
+<p class="chno">Passo 6</p>
+<h1 class="ch">Guardalo sull'OSD<a aria-label="link" class="anchor" href="#step6">#</a></h1>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Scheda OSD: cosa mostra il tuo visore." href="../assets/img/osd_preview-0c94713c.webp"><img alt="Scheda OSD: cosa mostra il tuo visore." decoding="async" height="642" loading="lazy" src="../assets/img/osd_preview-0c94713c.webp" width="736"/></a></div><figcaption>Scheda OSD: cosa mostra il tuo visore.</figcaption></figure>
+</div>
+<div class="grow">
+<p>RecLink scrive quattro righe di testo negli elementi OSD che hai posizionato al <a class="xref" href="#step2">passo 2</a>.</p>
+<div class="tbl"><table>
+<tr><td><code>REC 12:34</code></td><td class="wrap">Sta registrando, e da quanto tempo</td></tr>
+<tr><td><code>###-78%</code></td><td class="wrap">Batteria della camera</td></tr>
+<tr><td><code>4K60 WIDE</code></td><td class="wrap">Risoluzione, frame rate e lente</td></tr>
+<tr><td><code>SD 1H</code></td><td class="wrap">Tempo di registrazione rimasto sulla scheda</td></tr>
+<tr><td><code>CAM LOST</code></td><td class="wrap">La camera non è collegata</td></tr>
+</table></div>
+<p class="sm mut">Puoi cambiare le righe nella scheda OSD. Scegli OSD type <b>Digital</b> per i visori in stile DJI, <b>Analog</b> per un OSD analogico.</p>
+</div>
+</div>
+</section><section class="chapter" id="step7">
+<p class="chno">Passo 7</p>
+<h1 class="ch">Verifica a banco<a aria-label="link" class="anchor" href="#step7">#</a></h1>
+<p class="lead">Eliche rimosse. Percorri questa lista prima del tuo primo volo.</p>
+<div class="tbl"><table>
+<tr><th style="width:9mm"></th><th>Fai questo</th><th>Dovresti vedere</th></tr>
+<tr><td>☐</td><td class="wrap">Accendi il quad.</td><td class="wrap">Compare il Wi-Fi. L'OSD mostra le informazioni della camera, non <b>CAM LOST</b>.</td></tr>
+<tr><td>☐</td><td class="wrap">Scheda Binding → <b>3 s test recording</b>.</td><td class="wrap">La camera registra per 3 secondi.</td></tr>
+<tr><td>☐</td><td class="wrap"><b>Arma</b> il quad.</td><td class="wrap">Il Wi-Fi si spegne. La camera inizia a registrare.</td></tr>
+<tr><td>☐</td><td class="wrap"><b>Disarma</b>.</td><td class="wrap">La camera si ferma.</td></tr>
+<tr><td>☐</td><td class="wrap">Usi un interruttore? Azionalo su acceso, poi su spento.</td><td class="wrap">La camera parte, poi si ferma. L'OSD mostra <b>REC</b> mentre registra.</td></tr>
+<tr><td>☐</td><td class="wrap">Controlla batteria e scheda SD.</td><td class="wrap">Sufficienti per il volo.</td></tr>
+</table></div>
+</section><section class="chapter" id="ref">
+<h2 id="ref-1">Il LED<a aria-label="link" class="anchor" href="#ref-1">#</a></h2>
+<div class="tbl"><table>
+<tr><th>LED</th><th>Significato</th></tr>
+<tr><td>2 brevi lampeggi ogni secondo</td><td class="wrap">Il Wi-Fi è attivo, puoi configurare</td></tr>
+<tr><td>1 breve lampeggio ogni 3 secondi</td><td class="wrap">Tutto ok, camera collegata</td></tr>
+<tr><td>Fisso</td><td class="wrap">La camera sta registrando</td></tr>
+<tr><td>Dissolvenza lenta in entrata e uscita</td><td class="wrap">Sta cercando la camera</td></tr>
+<tr><td>Lampeggio veloce</td><td class="wrap">Collegamento con la camera perso</td></tr>
+<tr><td>2 brevi lampeggi ogni 2 secondi</td><td class="wrap">Nessun collegamento con il flight controller</td></tr>
+</table></div>
+<h2 id="ref-2">Il pulsante<a aria-label="link" class="anchor" href="#ref-2">#</a></h2>
+<div class="tbl"><table>
+<tr><td>Pressione breve</td><td class="wrap">Il LED lampeggia per 3 secondi, così puoi trovare la scheda</td></tr>
+<tr><td>Tieni premuto 3 secondi</td><td class="wrap">Accende o spegne il Wi-Fi</td></tr>
+<tr><td>Tieni premuto 10 secondi</td><td class="wrap">Ripristino di fabbrica. Cancella impostazioni e abbinamenti delle camere. Non da armato</td></tr>
+</table></div>
+<h2 id="ref-3">Se qualcosa non va<a aria-label="link" class="anchor" href="#ref-3">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Problema</th><th>Prova così</th></tr>
+<tr><td class="wrap">Nessun Wi-Fi RecLink</td><td class="wrap">Disarma il quad. Tieni premuto il pulsante per 3 secondi.</td></tr>
+<tr><td class="wrap">La pagina non si apre</td><td class="wrap">Scrivi <code>http://10.0.0.1</code>. Resta sul Wi-Fi anche senza internet.</td></tr>
+<tr><td class="wrap">Niente sull'OSD</td><td class="wrap">Controlla che Betaflight sia 2025.12 o successivo, che MSP sia attivo su quella UART e che Custom message 1–4 siano posizionati. Controlla i fili: TX a RX, RX a TX.</td></tr>
+<tr><td class="wrap">CAM LOST</td><td class="wrap">Accendi la camera e aspetta. Se non è mai stata abbinata, fai il <a class="xref" href="#step4">passo 4</a>.</td></tr>
+<tr><td class="wrap">Camera non trovata durante l'abbinamento</td><td class="wrap">Metti prima la camera in modalità di abbinamento, poi premi <b>Scan now</b>. Scollegala dagli altri dispositivi.</td></tr>
+<tr><td class="wrap">Le mie modifiche sono sparite</td><td class="wrap">Premi <b>Save settings</b> dopo ogni modifica.</td></tr>
+</table></div>
+<div class="callout tip"><span class="tag">Vuoi saperne di più?</span><p>Zone (impostazioni della camera da un interruttore), tag highlight, sincronizzazione orologio e tutte le opzioni avanzate sono nella <b>Guida utente RecLink</b> completa.</p></div>
+</section>
+</main>
+</div>
+<footer class="site-foot"><div><span>Firmware 0.1.0 (pre-release) · Betaflight 2025.12+</span><a href="https://github.com/ShadowM06/RecLink">Codice su GitHub</a><a href="#top" class="to-top">Torna su</a></div></footer>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

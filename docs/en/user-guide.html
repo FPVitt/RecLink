@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>User guide · RecLink</title>
+<meta name="description" content="RecLink user guide: wiring, Betaflight setup, the web configurator, recording control, zones, OSD, clock sync, troubleshooting.">
+<meta name="theme-color" content="#0f1216">
+<meta property="og:title" content="User guide · RecLink">
+<meta property="og:description" content="RecLink user guide: wiring, Betaflight setup, the web configurator, recording control, zones, OSD, clock sync, troubleshooting.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="alternate" hreflang="en" href="user-guide.html"><link rel="alternate" hreflang="it" href="../it/guida-utente.html">
+<script>try{var t=localStorage.getItem('rl-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body data-doc="guide">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar"><div class="bar">
+<a class="brand" href="index.html" aria-label="RecLink"><svg class="mark" viewBox="0 0 168 80" aria-hidden="true"><path fill="currentColor" d="M6 6h30v12H18v44h18v12H6zM132 6h30v68h-30V62h18V18h-18z"/><circle fill="currentColor" cx="84" cy="40" r="21"/></svg><span>RecLink</span></a>
+<nav class="tabs" aria-label="Guides"><a href="quick-start.html">Quick start</a><a href="user-guide.html" aria-current="page">User guide</a></nav>
+<div class="tools"><details class="menu pdf"><summary title="Download this guide as a PDF">PDF</summary><div class="menu-body"><a href="../pdf/RecLink-User-Guide.pdf" download>Portrait<small> · 3.7 MB</small></a><a href="../pdf/RecLink-User-Guide-Landscape.pdf" download>Landscape<small> · 4.0 MB</small></a></div></details><div class="seg" role="group" aria-label="Language"><a href="#" hreflang="en" lang="en" data-lang="en" aria-current="true">EN</a><a href="../it/guida-utente.html" hreflang="it" lang="it" data-lang="it">IT</a></div>
+<button class="icon theme-btn" type="button" title="Switch light / dark theme" aria-label="Switch light / dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button><button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="Contents"><span>Contents</span></button></div>
+</div><div id="progress" aria-hidden="true"></div></header>
+<div class="layout has-toc">
+<aside class="sidebar" id="toc" aria-label="On this page"><div class="side-in"><p class="toc-title">On this page</p><ol><li data-id="ch1"><a href="#ch1"><b>1</b><span>What RecLink is</span></a><ol class="sub"><li><a href="#ch1-1">What it does</a></li><li><a href="#ch1-2">What it never does</a></li><li><a href="#ch1-3">Supported hardware</a></li></ol></li><li data-id="ch2"><a href="#ch2"><b>2</b><span>What you need</span></a><ol class="sub"><li><a href="#ch2-1">Know your two controls</a></li></ol></li><li data-id="ch3"><a href="#ch3"><b>3</b><span>Wiring to the flight controller</span></a></li><li data-id="ch4"><a href="#ch4"><b>4</b><span>Betaflight setup</span></a><ol class="sub"><li><a href="#ch4-1">1. Enable MSP on the UART</a></li><li><a href="#ch4-2">2. Show the four custom message elements</a></li><li><a href="#ch4-3">3. Check your AUX channels</a></li></ol></li><li data-id="ch5"><a href="#ch5"><b>5</b><span>First power-up and the web configurator</span></a><ol class="sub"><li><a href="#ch5-1">Change the factory password</a></li><li><a href="#ch5-2">When the portal opens and closes</a></li><li><a href="#ch5-3">Using the configurator</a></li></ol></li><li data-id="ch6"><a href="#ch6"><b>6</b><span>Pairing your camera</span></a><ol class="sub"><li><a href="#ch6-1">GoPro</a></li><li><a href="#ch6-2">DJI Osmo</a></li><li><a href="#ch6-3">Managing paired cameras</a></li></ol></li><li data-id="ch7"><a href="#ch7"><b>7</b><span>Reading the Status tab</span></a></li><li data-id="ch8"><a href="#ch8"><b>8</b><span>Recording control</span></a><ol class="sub"><li><a href="#ch8-1">Choose a recording mode</a></li><li><a href="#ch8-2">Set up the radio switch</a></li><li><a href="#ch8-3">What happens when you trigger it</a></li></ol></li><li data-id="ch9"><a href="#ch9"><b>9</b><span>Zones: camera settings from a switch</span></a><ol class="sub"><li><a href="#ch9-1">Build the zones</a></li><li><a href="#ch9-2">Camera settings for each zone (GoPro)</a></li><li><a href="#ch9-3">When a zone is applied</a></li></ol></li><li data-id="ch10"><a href="#ch10"><b>10</b><span>OSD: camera info in your goggles</span></a><ol class="sub"><li><a href="#ch10-1">Edit the lines</a></li><li><a href="#ch10-2">OSD type, rate and units</a></li><li><a href="#ch10-3">Warnings</a></li></ol></li><li data-id="ch11"><a href="#ch11"><b>11</b><span>Clock sync, GPS push and highlight tags</span></a><ol class="sub"><li><a href="#ch11-1">Camera clock sync</a></li><li><a href="#ch11-2">DJI GPS position push</a></li><li><a href="#ch11-3">Highlight tag</a></li></ol></li><li data-id="ch12"><a href="#ch12"><b>12</b><span>Network, System and firmware updates</span></a><ol class="sub"><li><a href="#ch12-1">Network tab</a></li><li><a href="#ch12-2">System tab</a></li></ol></li><li data-id="ch13"><a href="#ch13"><b>13</b><span>Flying with RecLink</span></a><ol class="sub"><li><a href="#ch13-1">Bench check, props off</a></li><li><a href="#ch13-2">What you see in the air</a></li></ol></li><li data-id="ch14"><a href="#ch14"><b>14</b><span>Troubleshooting</span></a><ol class="sub"><li><a href="#ch14-1">Find the link that is down</a></li><li><a href="#ch14-2">Wi-Fi and the configurator</a></li><li><a href="#ch14-3">Flight controller and OSD</a></li><li><a href="#ch14-4">Camera</a></li><li><a href="#ch14-5">Recording and zones</a></li></ol></li><li data-id="appA"><a href="#appA"><b>A</b><span>Reference</span></a><ol class="sub"><li><a href="#appA-1">OSD tokens</a></li><li><a href="#appA-2">Status LED</a></li><li><a href="#appA-3">Factory defaults</a></li><li><a href="#appA-4">At a glance</a></li><li><a href="#appA-5">What RecLink can and cannot touch</a></li><li><a href="#appA-6">Glossary</a></li></ol></li></ol></div></aside>
+<main id="main" class="content">
+<div class="hero"><p class="eyebrow">User guide</p><h1>RecLink</h1><p class="sub">Set up and use the camera bridge for your Betaflight quad: wiring, pairing, recording control, OSD and the web configurator.</p><div class="meta"><span>Firmware 0.1.0 (pre-release)</span><span>Betaflight 2025.12+</span><span>GoPro HERO 11–13 · DJI Osmo Action 4/5/6, Osmo 360</span></div></div><div class="intro"><section>
+<div class="callout danger"><span class="tag">Read first: pre-release status</span>
+<p>This firmware (0.1.0) has been bench-tested on a custom ESP32-C3 board wired to a Betaflight flight controller and a GoPro HERO11 Black. It has <b>not been flight tested</b>, and some camera protocol values are still being verified against live captures. Treat every flight as a test flight. Do all setup and testing on the bench <b>with propellers removed</b>, and check every behaviour in this guide before you fly with it.</p>
+</div>
+<div class="callout"><span class="tag">Passenger, not pilot</span>
+<p>RecLink only <b>reads</b> from your flight controller and <b>writes OSD text</b>. It cannot arm, disarm, move motors, change PIDs or touch the radio link. That boundary is enforced in the firmware itself, not left to convention. If RecLink fails, the worst thing that can happen in flight is that the OSD text stops updating.</p>
+</div>
+<h2>How to read this guide</h2>
+<p><a class="xref" href="#ch1">Chapters 1</a>–6 take you from a bare board to a paired camera and are meant to be followed in order. <a class="xref" href="#ch7">Chapters 7</a>–12 explain each part of the web configurator. <a class="xref" href="#ch13">Chapters 13</a> and 14 cover day-to-day use and what to do when something is wrong. Screenshots show the real configurator on a phone.</p>
+<div class="diagram"><svg aria-label="Setup path in seven steps" role="img" viewbox="0 0 700 86">
+<defs><marker id="a0" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"></path></marker></defs>
+<g class="t10">
+<g><circle class="boxa" cx="46" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="46" y="26">1</text><text text-anchor="middle" x="46" y="52">Wire it</text><text class="m t9" text-anchor="middle" x="46" y="65">ch. 3</text></g>
+<g><circle class="boxa" cx="146" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="146" y="26">2</text><text text-anchor="middle" x="146" y="52">Betaflight</text><text class="m t9" text-anchor="middle" x="146" y="65">ch. 4</text></g>
+<g><circle class="boxa" cx="246" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="246" y="26">3</text><text text-anchor="middle" x="246" y="52">Join Wi-Fi</text><text class="m t9" text-anchor="middle" x="246" y="65">ch. 5</text></g>
+<g><circle class="boxa" cx="346" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="346" y="26">4</text><text text-anchor="middle" x="346" y="52">Pair camera</text><text class="m t9" text-anchor="middle" x="346" y="65">ch. 6</text></g>
+<g><circle class="boxa" cx="446" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="446" y="26">5</text><text text-anchor="middle" x="446" y="52">Record + zones</text><text class="m t9" text-anchor="middle" x="446" y="65">ch. 8–9</text></g>
+<g><circle class="boxa" cx="546" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="546" y="26">6</text><text text-anchor="middle" x="546" y="52">OSD lines</text><text class="m t9" text-anchor="middle" x="546" y="65">ch. 10</text></g>
+<g><circle class="boxa" cx="646" cy="22" r="11"></circle><text class="onacc b t11" text-anchor="middle" x="646" y="26">7</text><text text-anchor="middle" x="646" y="52">Bench check</text><text class="m t9" text-anchor="middle" x="646" y="65">ch. 13</text></g>
+</g>
+<g class="ln"><path d="M60 22 H132" marker-end="url(#a0)"></path><path d="M160 22 H232" marker-end="url(#a0)"></path><path d="M260 22 H332" marker-end="url(#a0)"></path><path d="M360 22 H432" marker-end="url(#a0)"></path><path d="M460 22 H532" marker-end="url(#a0)"></path><path d="M560 22 H632" marker-end="url(#a0)"></path></g>
+</svg></div>
+</section></div><section class="chapter" id="ch1">
+<p class="chno">Chapter 1</p>
+<h1 class="ch">What RecLink is<a aria-label="link" class="anchor" href="#ch1">#</a></h1>
+<p class="lead">A small ESP32 board that sits between your flight controller and your action camera, so the camera is controlled by the aircraft and reports back on your OSD.</p>
+<div class="diagram"><svg aria-label="System overview" role="img" viewbox="0 0 700 262">
+<defs>
+<marker id="a1" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"></path></marker>
+<marker id="a1s" markerheight="7" markerwidth="7" orient="auto" refx="1" refy="4" viewbox="0 0 8 8"><path d="M8,0 L0,4 L8,8 z" fill="var(--mut)"></path></marker>
+<marker id="a1a" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--acc)"></path></marker>
+</defs>
+<rect class="box" height="56" rx="8" width="110" x="10" y="105"></rect><text class="b t11" text-anchor="middle" x="65" y="130">Radio</text><text class="m t9" text-anchor="middle" x="65" y="146">arm + AUX switches</text>
+<rect class="boxc" height="56" rx="8" width="140" x="190" y="105"></rect><text class="b t11" text-anchor="middle" x="260" y="130">Flight controller</text><text class="m t9" text-anchor="middle" x="260" y="146">Betaflight 2025.12+</text>
+<rect class="boxa" height="76" rx="10" width="130" x="410" y="95"></rect><text class="b t14 onacc" text-anchor="middle" x="475" y="127">RecLink</text><text class="t9 onacc" text-anchor="middle" x="475" y="146">ESP32-C3 bridge</text>
+<rect class="box" height="56" rx="8" width="105" x="585" y="28"></rect><text class="b t11" text-anchor="middle" x="637" y="53">Action camera</text><text class="m t9" text-anchor="middle" x="637" y="69">GoPro · DJI Osmo</text>
+<rect class="boxd" height="56" rx="8" width="105" x="585" y="180"></rect><text class="b t11" text-anchor="middle" x="637" y="205">Phone</text><text class="m t9" text-anchor="middle" x="637" y="221">web configurator</text>
+<rect class="box" height="52" rx="8" width="140" x="190" y="196"></rect><text class="b t11" text-anchor="middle" x="260" y="218">Goggles</text><text class="m t9" text-anchor="middle" x="260" y="233">video + OSD text</text>
+<path class="ln" d="M120 133 H190" marker-end="url(#a1)"></path><text class="m t9" text-anchor="middle" x="155" y="124">RC link</text>
+<path class="ln" d="M330 121 H410" marker-end="url(#a1)"></path><text class="m t8" text-anchor="middle" x="370" y="113">RC · arm · GPS</text>
+<path class="lna" d="M410 147 H330" marker-end="url(#a1a)"></path><text class="m t8" text-anchor="middle" x="370" y="162">OSD text</text>
+<text class="t9 b" style="fill:var(--acc)" text-anchor="middle" x="370" y="184">MSP over UART (wired)</text>
+<path class="ln" d="M540 108 L585 72" marker-end="url(#a1)" marker-start="url(#a1s)"></path><text class="m t9" text-anchor="middle" x="519" y="80">Bluetooth LE</text>
+<path class="lnd" d="M540 160 L585 198" marker-end="url(#a1)" marker-start="url(#a1s)"></path><text class="m t9" text-anchor="middle" x="528" y="200">Wi-Fi</text><text class="m t8" text-anchor="middle" x="528" y="212">disarmed only</text>
+<path class="ln" d="M260 161 V196" marker-end="url(#a1)"></path><text class="m t9" x="270" y="182">video + OSD</text>
+</svg>
+<p class="cap">RecLink listens to the flight controller over a three-wire serial link and talks to the camera over Bluetooth. The Wi-Fi network exists only while the aircraft is disarmed, for configuration.</p></div>
+<h2 id="ch1-1">What it does<a aria-label="link" class="anchor" href="#ch1-1">#</a></h2>
+<div class="cols">
+<ul class="grow">
+<li><b>Camera info on the OSD.</b> Recording state, elapsed and remaining time, camera battery, SD space, resolution, frame rate and link status, as 22 tokens across four 16-character lines you design yourself.</li>
+<li><b>Recording that follows the aircraft.</b> Start and stop on arm, on a radio switch, or on a combination. Every command is checked against what the camera reports.</li>
+<li><b>Camera settings from a switch.</b> A 2–6 position switch or knob selects zones. On a GoPro each zone pushes its own resolution, frame rate, lens, HyperSmooth and Protune values. On a DJI each zone selects a camera mode.</li>
+</ul>
+<ul class="grow">
+<li><b>Highlight tags</b> from a momentary switch (GoPro HiLight, DJI Quick-Switch).</li>
+<li><b>Up to four paired cameras</b>, any mix of GoPro and DJI. At power-up it connects to the strongest one in range.</li>
+<li><b>Clock sync</b> from the flight controller's GPS time, so footage carries the right timestamp.</li>
+<li><b>One web page</b> for all configuration, plus firmware updates. No app, no cloud.</li>
+</ul>
+</div>
+<h2 id="ch1-2">What it never does<a aria-label="link" class="anchor" href="#ch1-2">#</a></h2>
+<div class="callout"><span class="tag">Hard limits</span>
+<ul style="margin:0">
+<li>Never sends RC, GPS, clock, display or reboot commands to the flight controller, and never changes its configuration.</li>
+<li>Never arms or disarms the aircraft.</li>
+<li>Never runs Wi-Fi while armed. The access point is shut down within 100 ms of arming.</li>
+<li>Never powers the camera, and never formats a card or deletes files from automation.</li>
+<li>Never shows a value the camera has not confirmed. An unknown value renders blank, not <code>0</code> and not a guess.</li>
+</ul></div>
+<h2 id="ch1-3">Supported hardware<a aria-label="link" class="anchor" href="#ch1-3">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Item</th><th>Supported</th><th>Link</th></tr>
+<tr><td>Flight controller</td><td class="wrap">Betaflight 2025.12.0 or newer (MSP API 1.47+). Older versions cannot show custom OSD messages.</td><td>MSP over a spare UART</td></tr>
+<tr><td>GoPro</td><td class="wrap">HERO 11, 12, 13, and newer models that use the same Open GoPro Bluetooth API</td><td>Bluetooth LE</td></tr>
+<tr><td>DJI</td><td class="wrap">Osmo Action 4, 5 and 6, Osmo 360</td><td>Bluetooth LE</td></tr>
+<tr><td>OSD</td><td class="wrap">Analog and digital. Digital mode limits output to the glyphs DJI-style goggles can draw.</td><td>via the FC</td></tr>
+</table></div>
+</section><section class="chapter" id="ch2">
+<p class="chno">Chapter 2</p>
+<h1 class="ch">What you need<a aria-label="link" class="anchor" href="#ch2">#</a></h1>
+<p class="lead">A RecLink board, a free UART on your flight controller, and a camera that is on its own power.</p>
+<div class="cols">
+<div class="grow">
+<h3>Checklist</h3>
+<ul>
+<li>RecLink board (ESP32-C3) with its harness.</li>
+<li>Flight controller running <b>Betaflight 2025.12.0 or newer</b>, with an OSD chip or HD OSD working.</li>
+<li>A <b>free UART</b> on the FC with its TX, RX, 5 V and GND pads accessible.</li>
+<li>A supported camera, charged, with an SD card.</li>
+<li>A radio with at least one free AUX channel (two or three if you want record, zones and highlight).</li>
+<li>A phone or laptop with Wi-Fi to run the configurator.</li>
+<li>A bulk capacitor of at least <b>220 µF</b> across the board's 5 V input, if your board does not already have one.</li>
+<li>For firmware updates: a computer and the <code>.bin</code> file.</li>
+</ul>
+</div>
+<div style="width:62mm;flex:none">
+<div class="diagram" style="margin:0"><svg aria-label="RecLink board controls" role="img" viewbox="0 0 200 230">
+<rect class="boxc" height="210" rx="12" width="176" x="12" y="10"></rect>
+<text class="b t12" text-anchor="middle" x="100" y="34">RecLink board</text>
+<text class="m t9" text-anchor="middle" x="100" y="48">ESP32-C3</text>
+<circle class="boxa" cx="42" cy="86" r="7"></circle><text class="t10" x="58" y="90">Status LED</text><text class="m t8" x="58" y="102">GPIO10</text>
+<rect class="box" height="14" rx="3" width="14" x="35" y="124"></rect><text class="t10" x="58" y="131">Button</text><text class="m t8" x="58" y="143">GPIO9</text>
+<text class="b t10" x="26" y="176">Serial to the FC</text>
+<text class="t9" x="26" y="191">RX  GPIO20   TX  GPIO21</text>
+<text class="t9" x="26" y="205">5 V in   ·   GND</text>
+</svg><p class="cap">Controls and pins on the production board.</p></div>
+</div>
+</div>
+<h2 id="ch2-1">Know your two controls<a aria-label="link" class="anchor" href="#ch2-1">#</a></h2>
+<p>The board has one <b>button</b> and one <b>status LED</b>. They are all you need when the portal is closed, and every gesture works only while the board is running. Nothing is read at power-up.</p>
+<div class="diagram"><svg aria-label="Button press durations" role="img" viewbox="0 0 700 150">
+<g>
+<rect fill="var(--zone-2)" height="26" rx="4" width="62" x="40" y="40"></rect>
+<rect fill="var(--line)" height="26" rx="0" width="124" x="102" y="40"></rect>
+<rect fill="var(--acc)" height="26" rx="0" width="434" x="226" y="40"></rect>
+<rect height="26" width="0" x="660" y="40"></rect>
+<rect height="26" width="0.1" x="660" y="40"></rect>
+</g>
+<rect fill="var(--dng)" height="26" width="62" x="598" y="40"></rect>
+<g class="t9"><text x="40" y="90">0 s</text><text text-anchor="middle" x="102" y="90">1 s</text><text text-anchor="middle" x="226" y="90">3 s</text><text text-anchor="middle" x="598" y="90">9 s</text><text text-anchor="end" x="660" y="90">10 s</text></g>
+<text class="b t10" text-anchor="middle" x="71" y="30">Short press</text>
+<text class="m t10" text-anchor="middle" x="164" y="30">Nothing</text>
+<text class="b t10" text-anchor="middle" x="412" y="30">Long press</text>
+<text class="b t10" style="fill:var(--dng)" text-anchor="middle" x="629" y="30">Hold</text>
+<text class="t10" x="40" y="112">Identify: the LED blinks for 3 s</text>
+<text class="t10" x="226" y="112">Open or close the config portal</text>
+<text class="t10" style="fill:var(--dng)" text-anchor="end" x="560" y="112">Factory reset at 10 s (refused while armed)</text>
+</svg>
+<p class="cap">Button gestures. Presses between 1 and 3 seconds do nothing.</p></div>
+</section><section class="chapter" id="ch3">
+<p class="chno">Chapter 3</p>
+<h1 class="ch">Wiring to the flight controller<a aria-label="link" class="anchor" href="#ch3">#</a></h1>
+<p class="lead">Four wires: two for serial data, two for power. The serial link is 3.3 V logic on both sides, so connect it directly with no level shifter.</p>
+<div class="diagram"><svg aria-label="Wiring diagram" role="img" viewbox="0 0 700 300">
+<text class="m t10" text-anchor="middle" x="350" y="24">3.3 V logic on both sides: direct connection</text>
+<rect class="boxc" height="190" rx="10" width="200" x="20" y="40"></rect>
+<text class="b t12" text-anchor="middle" x="120" y="64">Flight controller</text><text class="m t9" text-anchor="middle" x="120" y="79">a spare UART, e.g. UART3</text>
+<rect class="boxc" height="190" rx="10" style="stroke:var(--acc)" width="210" x="470" y="40"></rect>
+<text class="b t12" text-anchor="middle" x="575" y="64">RecLink board</text><text class="m t9" text-anchor="middle" x="575" y="79">ESP32-C3</text>
+<g class="t10">
+<circle cx="220" cy="108" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="208" y="112">TX</text>
+<circle cx="220" cy="140" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="208" y="144">RX</text>
+<circle cx="220" cy="172" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="208" y="176">5 V</text>
+<circle cx="220" cy="204" fill="var(--fg)" r="5"></circle><text text-anchor="end" x="208" y="208">GND</text>
+<circle cx="470" cy="108" fill="var(--fg)" r="5"></circle><text x="484" y="112">RX  (GPIO20)</text>
+<circle cx="470" cy="140" fill="var(--fg)" r="5"></circle><text x="484" y="144">TX  (GPIO21)</text>
+<circle cx="470" cy="172" fill="var(--fg)" r="5"></circle><text x="484" y="176">5 V in</text>
+<circle cx="470" cy="204" fill="var(--fg)" r="5"></circle><text x="484" y="208">GND</text>
+</g>
+<path d="M225 108 H465" fill="none" stroke="var(--zone-2)" stroke-width="3"></path>
+<path d="M225 140 H465" fill="none" stroke="var(--warn)" stroke-width="3"></path>
+<path d="M225 172 H465" fill="none" stroke="var(--dng)" stroke-width="3"></path>
+<path d="M225 204 H465" fill="none" stroke="var(--mut)" stroke-width="3"></path>
+<g class="t9 m" text-anchor="middle"><text x="345" y="101">FC TX  →  RecLink RX</text><text x="345" y="133">RecLink TX  →  FC RX</text><text x="345" y="165">5 V</text><text x="345" y="197">ground</text></g>
+<rect class="boxd" height="38" rx="8" width="200" x="250" y="252"></rect>
+<text class="t10 b" text-anchor="middle" x="350" y="268">Camera: its own battery or BEC</text><text class="m t9" text-anchor="middle" x="350" y="281">never powered from RecLink</text>
+<text class="t9 m" text-anchor="middle" x="575" y="252">≥ 220 µF capacitor across 5 V</text>
+<text class="t9 m" text-anchor="middle" x="575" y="266">(if the board does not have one)</text>
+</svg>
+<p class="cap">Serial wires cross: the FC's TX goes to RecLink's RX, and RecLink's TX goes to the FC's RX.</p></div>
+<ol class="steps">
+<li><div><b>Pick a free UART on the flight controller</b> and note its number. You will enable MSP on that UART in <a class="xref" href="#ch4">chapter 4</a>.</div></li>
+<li><div><b>Connect the four wires</b> as drawn. The board's TX line has a 470 Ω series resistor on the board. Do not add another.</div></li>
+<li><div><b>Add the capacitor if needed.</b> Bluetooth and Wi-Fi transmit bursts draw about 350 mA peaks. On a long thin harness this can pull the supply down and reset the board. A 220 µF or larger low-ESR capacitor across the 5 V pads prevents that.</div></li>
+<li><div><b>Mount it close to the camera.</b> Keep the board's antenna clear of carbon fibre and battery leads. Bluetooth range to the camera is the part that suffers from bad placement.</div></li>
+<li><div><b>Leave the camera's power alone.</b> The camera runs from its own battery or BEC. RecLink never powers or biases it.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">Crossed the wires? No need to resolder</span>
+<p>If TX and RX end up swapped on a four-pin harness, you can fix it in the configurator: <b>Network → Swap TX/RX pins</b> (advanced mode), then reboot. See <a class="xref" href="#ch12">chapter 12</a>.</p></div>
+<div class="callout warn"><span class="tag">Power</span>
+<p>The board takes 5 V from the flight controller through its onboard regulator. Check that the pad you use is 5 V and not battery voltage before you connect. The board has a brown-out detector: a dip in supply resets it and it recovers on its own within about 300 ms, but the OSD text freezes for that moment.</p></div>
+</section><section class="chapter" id="ch4">
+<p class="chno">Chapter 4</p>
+<h1 class="ch">Betaflight setup<a aria-label="link" class="anchor" href="#ch4">#</a></h1>
+<p class="lead">Two changes in Betaflight Configurator: turn on MSP on the UART you wired, and make four custom message elements visible on the OSD.</p>
+<div class="callout warn"><span class="tag">Use the latest Betaflight Configurator</span>
+<p>You need <b>Betaflight firmware 2025.12.0 or newer</b> on the flight controller, and the <b>latest Betaflight Configurator</b> on your computer. The screenshots in this guide were taken with Configurator <b>2026.6.2</b>. Use the web app at <code>app.betaflight.com</code> (in Chrome or Edge) or install the newest desktop version. An older Configurator may not offer the Custom message elements.</p></div>
+<div class="callout"><span class="tag">Version check</span>
+<p>Custom OSD messages exist only in <b>Betaflight 2025.12.0 and newer</b> (MSP API 1.47 or higher). They were not added to older versions. If your firmware is older, update it first. RecLink reports "FC too old for custom OSD" if it detects an older API.</p></div>
+<h2 id="ch4-1">1. Enable MSP on the UART<a aria-label="link" class="anchor" href="#ch4-1">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Betaflight Configurator → Ports." href="../assets/img/bf_ports-ab65359d.webp"><img alt="Betaflight Configurator → Ports." decoding="async" height="524" loading="lazy" src="../assets/img/bf_ports-ab65359d.webp" width="628"/></a></div><figcaption>Betaflight Configurator → Ports.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Switch MSP on for the UART you wired.</span></li><li><i class="lgd"></i><span>Leave the speed at 115200.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Connect the flight controller to Betaflight Configurator over USB and open the <b>Ports</b> tab.</div></li>
+<li><div>On the row for the UART you wired, switch on <b>MSP</b> in the Configuration/MSP column. Leave the baud rate at <b>115200</b>.</div></li>
+<li><div>Click <b>Save and Reboot</b>.</div></li>
+</ol>
+<p class="sm mut">Menu names can shift slightly between Configurator versions. The setting you need is "MSP on that UART at 115200 baud". If you must use another speed, set the same value in RecLink under <b>Network → Baud rate</b> (advanced mode) and reboot it.</p>
+</div>
+</div>
+<h2 id="ch4-2">2. Show the four custom message elements<a aria-label="link" class="anchor" href="#ch4-2">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="OSD tab → Elements: Custom message 1 to 4 ticked." href="../assets/img/bf_osd-fb9a041f.webp"><img alt="OSD tab → Elements: Custom message 1 to 4 ticked." decoding="async" height="412" loading="lazy" src="../assets/img/bf_osd-fb9a041f.webp" width="680"/></a></div><figcaption>OSD tab → Elements: Custom message 1 to 4 ticked.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Tick Custom message 1, 2, 3 and 4.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Open the <b>OSD</b> tab.</div></li>
+<li><div>In the element list, tick <b>Custom message 1, 2, 3 and 4</b> (until RecLink writes to them, Betaflight displays their placeholder names). Switch them on in the profile you fly.</div></li>
+<li><div>Drag each of the four into the layout. Each one is an independent element: put them where your goggles have room. A neat column in the left or right third works well.</div></li>
+<li><div>Save. Keep every line within <b>16 characters</b>; that is the most Betaflight allows per message.</div></li>
+</ol>
+</div>
+</div>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="OSD tab: the four Custom messages in the preview." href="../assets/img/bf_osd_preview-ef5fc345.webp"><img alt="OSD tab: the four Custom messages in the preview." decoding="async" height="488" loading="lazy" src="../assets/img/bf_osd_preview-ef5fc345.webp" width="940"/></a></div><figcaption>OSD tab: the four Custom messages in the preview.</figcaption></figure>
+</div>
+<div class="grow">
+<div class="diagram osdd" style="margin:0"><svg aria-label="OSD layout with four custom message elements" role="img" viewbox="0 0 430 220">
+<rect fill="var(--osd-bg)" height="208" rx="10" stroke="var(--line)" stroke-width="1.3" width="418" x="6" y="6"></rect>
+<g font-family="var(--font-mono)" font-size="17" font-weight="800" style="letter-spacing:.04em"><text x="24" y="44">REC 12:34</text><text x="24" y="76">###-78%</text><text x="24" y="108">4K60 WIDE</text><text x="24" y="140">SD 1H</text></g>
+<path d="M24 156 H212" stroke="var(--acc)" stroke-width="1.5"></path><path d="M24 151 V161 M212 151 V161" stroke="var(--acc)" stroke-width="1.5"></path>
+<text class="t10" style="fill:var(--acc)" text-anchor="middle" x="118" y="176">16 characters</text>
+<rect fill="none" height="36" rx="6" stroke="var(--mut)" stroke-dasharray="4 3" width="110" x="290" y="20"></rect><text class="m t9" text-anchor="middle" x="345" y="42">your other OSD</text>
+<rect fill="none" height="46" rx="6" stroke="var(--mut)" stroke-dasharray="4 3" width="110" x="290" y="150"></rect><text class="m t9" text-anchor="middle" x="345" y="176">battery, timers…</text>
+</svg></div>
+</div>
+</div>
+<div class="cols">
+<div class="grow">
+<div class="callout tip"><span class="tag">Placement tip</span><p>You only need to place the elements once. RecLink changes their text; Betaflight keeps the position. Keep them away from where you read battery voltage and warnings.</p></div>
+</div>
+<div class="grow">
+<div class="callout"><span class="tag">Analog or digital?</span><p>Pick your OSD type in the configurator's OSD tab. Digital (the default) is safe for DJI-style goggles; analog allows the full character set. See <a class="xref" href="#ch10">chapter 10</a>.</p></div>
+</div>
+</div>
+<h2 id="ch4-3">3. Check your AUX channels<a aria-label="link" class="anchor" href="#ch4-3">#</a></h2>
+<div class="cols keep">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Receiver tab: the bar of your switch moves when you flip it." href="../assets/img/bf_receiver-de25a38a.webp"><img alt="Receiver tab: the bar of your switch moves when you flip it." decoding="async" height="332" loading="lazy" src="../assets/img/bf_receiver-de25a38a.webp" width="796"/></a></div><figcaption>Receiver tab: the bar of your switch moves when you flip it.</figcaption><ol class="legend"><li><i class="lgd"></i><span>AUX 2 moves to 2000 when the switch is flipped.</span></li></ol></figure>
+</div>
+<div class="grow">
+<p>RecLink reads the transmitter's channels through the flight controller. If you want a switch to start recording or select zones, assign it to a <b>free AUX channel</b> in your radio and confirm in Betaflight's <b>Receiver</b> tab that the bar moves. RecLink counts channels the same way Betaflight does: <b>AUX 1 is channel 5</b>. You do not need a Betaflight mode for these switches. In <a class="xref" href="#ch8">chapter 8</a> you will find the right channel by flipping the switch and letting RecLink detect it.</p>
+</div>
+</div>
+</section><section class="chapter" id="ch5">
+<p class="chno">Chapter 5</p>
+<h1 class="ch">First power-up and the web configurator<a aria-label="link" class="anchor" href="#ch5">#</a></h1>
+<p class="lead">Power the quad, join RecLink's Wi-Fi from your phone, and open the configurator. Everything from here on is done in that page.</p>
+<div class="cols">
+<div style="width:64mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="The configurator on a phone." href="../assets/img/first_screen-c96f3c56.webp"><img alt="The configurator on a phone." decoding="async" height="1720" loading="lazy" src="../assets/img/first_screen-c96f3c56.webp" width="800"/></a></div><figcaption>The configurator on a phone.</figcaption><ol class="legend"><li><i class="lgd"></i><span>RecLink logo. The centre dot turns red and pulses while the camera records.</span></li><li><i class="lgd"></i><span>Seven tabs. Clock only appears in advanced mode.</span></li><li><i class="lgd"></i><span>Status card: live link state.</span></li><li><i class="lgd"></i><span>Firmware version and uptime.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div><b>Remove the propellers</b>, then power the flight controller from a battery or USB. The RecLink LED lights solid while it boots.</div></li>
+<li><div><b>Wait for the portal.</b> When the board sees the flight controller and the aircraft is <b>disarmed</b>, it starts its own Wi-Fi network. The LED shows two short blinks every second while the portal is open.</div></li>
+<li><div><b>Join the network</b> named <code>RECLINK-XXXX</code> (the last two bytes of the board's address) on your phone or laptop. The factory password is <code>reclinkfpv</code>.</div></li>
+<li><div><b>Open <code>http://10.0.0.1</code></b> in a browser. Your phone may warn that the network has no internet. Stay connected. RecLink does not force a login sheet, so you open the address yourself.</div></li>
+<li><div><b>Change the Wi-Fi password</b> when asked (below). Up to three devices can be connected at once.</div></li>
+</ol>
+</div>
+</div>
+<div class="cols">
+<div class="grow">
+<h2 id="ch5-1">Change the factory password<a aria-label="link" class="anchor" href="#ch5-1">#</a></h2>
+<p>While the password is still the factory default, the configurator shows this prompt each time you open it. Choose <b>Yes, change it</b>, type a new password of 8 to 31 characters and press <b>Save &amp; reboot</b>. The board restarts and the Wi-Fi comes back with your new password. Tick <b>Don't ask me anymore</b> if you want to keep the default; the choice is stored on the board.</p>
+<div class="callout warn"><span class="tag">Write it down</span><p>If you forget the password you can still reach the portal by holding the button for 10 seconds to factory reset. That erases all settings <b>and</b> camera pairings.</p></div>
+</div>
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="First-run password prompt." href="../assets/img/pw_modal-bfc4433a.webp"><img alt="First-run password prompt." decoding="async" height="404" loading="lazy" src="../assets/img/pw_modal-bfc4433a.webp" width="720"/></a></div><figcaption>First-run password prompt.</figcaption></figure>
+</div>
+</div>
+<h2 id="ch5-2">When the portal opens and closes<a aria-label="link" class="anchor" href="#ch5-2">#</a></h2>
+<div class="diagram"><svg aria-label="Portal lifecycle" role="img" viewbox="0 0 700 190">
+<defs>
+<marker id="a5" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"></path></marker>
+<marker id="a5a" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--acc)"></path></marker>
+<marker id="a5d" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--dng)"></path></marker>
+</defs>
+<rect class="boxc" height="64" rx="10" width="170" x="10" y="40"></rect><text class="b t11" text-anchor="middle" x="95" y="66">Disarmed</text><text class="m t9" text-anchor="middle" x="95" y="82">FC linked, arm state known</text>
+<rect class="boxa" height="64" rx="10" width="170" x="265" y="40"></rect><text class="b t11 onacc" text-anchor="middle" x="350" y="66">Portal open</text><text class="t9 onacc" text-anchor="middle" x="350" y="82">Wi-Fi on · RECLINK-XXXX</text>
+<rect class="boxc" height="64" rx="10" style="stroke:var(--dng)" width="170" x="520" y="40"></rect><text class="b t11" text-anchor="middle" x="605" y="66">Armed</text><text class="m t9" text-anchor="middle" x="605" y="82">Wi-Fi off · Bluetooth only</text>
+<path class="ln" d="M180 72 H265" marker-end="url(#a5)"></path><text class="m t8" text-anchor="middle" x="222" y="62">automatic</text>
+<path d="M435 72 H520" fill="none" marker-end="url(#a5d)" stroke="var(--dng)" stroke-width="2"></path><text class="t8" style="fill:var(--dng)" text-anchor="middle" x="478" y="62">arm: ≤ 100 ms</text>
+<path class="ln" d="M605 104 V150 H95 V104" marker-end="url(#a5)"></path><text class="m t9" text-anchor="middle" x="350" y="166">disarm: the portal can open again</text>
+<path class="ln" d="M350 40 V16 H95 V40" marker-end="url(#a5)"></path><text class="m t8" text-anchor="middle" x="222" y="11">auto-close, or a 3 s button hold</text>
+</svg>
+<p class="cap">The portal never runs while the aircraft is armed.</p></div>
+<ul>
+<li><b>Opens automatically</b> when the aircraft is disarmed and the flight controller link is up. You can change this to "only after holding the button" in <b>Network → Open the portal</b>.</li>
+<li><b>Closes</b> after 15 minutes (adjustable from 1 to 120) once there has also been 60 seconds without activity, or when you hold the button for 3 seconds.</li>
+<li><b>Never opens in flight.</b> If the board reboots mid-flight, it waits until it knows the arm state before it will turn Wi-Fi on.</li>
+</ul>
+<h2 id="ch5-3">Using the configurator<a aria-label="link" class="anchor" href="#ch5-3">#</a></h2>
+<div class="cols">
+<div class="grow">
+<div class="tbl"><table>
+<tr><th>Tab</th><th>What it does</th></tr>
+<tr><td>Status</td><td class="wrap">Live view: aircraft, camera, recording, warnings, camera settings</td></tr>
+<tr><td>Cam control</td><td class="wrap">Recording mode, radio switch, zones and camera settings, highlight</td></tr>
+<tr><td>OSD</td><td class="wrap">The four OSD lines, preview, warning thresholds</td></tr>
+<tr><td>Clock</td><td class="wrap">Camera clock sync (advanced mode only)</td></tr>
+<tr><td>Binding</td><td class="wrap">Pair, list and forget cameras</td></tr>
+<tr><td>Network</td><td class="wrap">Wi-Fi, flight controller link, radio power, AUX scan</td></tr>
+<tr><td>System</td><td class="wrap">Advanced mode, LED, GPS push, reboot, update, reset</td></tr>
+</table></div>
+</div>
+<div style="width:70mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption='After an edit, the bar at the bottom reads "unsaved changes" and its top edge turns green.' href="../assets/img/savebar_dirty-440425fa.webp"><img alt='After an edit, the bar at the bottom reads "unsaved changes" and its top edge turns green.' decoding="async" height="180" loading="lazy" src="../assets/img/savebar_dirty-440425fa.webp" width="800"/></a></div><figcaption>After an edit, the bar at the bottom reads "unsaved changes" and its top edge turns green.</figcaption></figure>
+</div>
+</div>
+<ul>
+<li><b>Nothing applies until you press Save settings.</b> The bar sticks to the bottom of the screen. When you have unsaved edits it says "unsaved changes". If you try to leave the page with unsaved edits, the browser asks first.</li>
+<li><b>Saves are permanent.</b> They are written to flash before the page confirms. Settings and camera pairings survive a reboot, a power loss and a firmware update.</li>
+<li><b>Advanced mode</b> (System tab) reveals timing fields, diagnostics and the Clock tab. Leave it off while you set up; turn it on when you need to fine-tune. It is remembered on the board.</li>
+<li><b>Two settings need a reboot</b>: the flight controller baud rate / pin swap, and Bluetooth power. After saving one of them a <b>Reboot now</b> button appears in the bar.</li>
+<li><b>The portal is a bench tool.</b> The page polls the board every 1.5 seconds. Keep one browser tab open, and close the portal before flying.</li>
+</ul>
+</section><section class="chapter" id="ch6">
+<p class="chno">Chapter 6</p>
+<h1 class="ch">Pairing your camera<a aria-label="link" class="anchor" href="#ch6">#</a></h1>
+<p class="lead">Pair once and RecLink reconnects by itself every time you power up. Pairing is done on the <b>Binding</b> tab.</p>
+<h2 id="ch6-1">GoPro<a aria-label="link" class="anchor" href="#ch6-1">#</a></h2>
+<div class="cols">
+<div style="width:66mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Guided GoPro pairing." href="../assets/img/pair_modal-23cb81f1.webp"><img alt="Guided GoPro pairing." decoding="async" height="1076" loading="lazy" src="../assets/img/pair_modal-23cb81f1.webp" width="720"/></a></div><figcaption>Guided GoPro pairing.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Steps to put the GoPro into remote-pairing mode.</span></li><li><i class="lgd"></i><span>Optional GoPro Labs shortcut: point the camera at the code. Needs GoPro Labs firmware.</span></li><li><i class="lgd"></i><span>Cameras found appear here as buttons. Tap yours.</span></li><li><i class="lgd"></i><span>Start the search after the camera shows it is pairing.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Open the <b>Binding</b> tab and press <b>Pair GoPro</b>.</div></li>
+<li><div>On the camera, swipe down, then go to <b>Preferences → Connections → Connect Device → The Remote</b>.</div></li>
+<li><div>When the camera shows that it is pairing, press <b>Scan now</b> in the portal. RecLink listens for up to 45 seconds. It does not connect to anything until you pick.</div></li>
+<li><div>Tap your camera in the list. If more than one GoPro is in pairing mode, check the name and signal strength first.</div></li>
+<li><div>A green check confirms the pairing. The camera appears under <b>Paired cameras</b> and its link goes to Connected.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">If no camera shows up</span><p>The portal says "No GoPro found. Make sure it is in remote-pairing mode, then press Scan now again". Check that the camera is awake and showing its pairing screen. If it is connected to a phone app, disconnect it there first.</p></div>
+</div>
+</div>
+<h2 id="ch6-2">DJI Osmo<a aria-label="link" class="anchor" href="#ch6-2">#</a></h2>
+<ol class="steps">
+<li><div>On the <b>Binding</b> tab press <b>Pair DJI</b>. The portal shows "pairing… put the DJI into pairing mode now".</div></li>
+<li><div>Put the Osmo into its pairing mode. On a first pairing the camera shows a confirmation prompt on its screen. <b>Accept it.</b></div></li>
+<li><div>RecLink connects to the first matching DJI it hears. After this, reconnecting is automatic and needs no confirmation.</div></li>
+</ol>
+<h2 id="ch6-3">Managing paired cameras<a aria-label="link" class="anchor" href="#ch6-3">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Binding tab with two paired cameras." href="../assets/img/binding-241acace.webp"><img alt="Binding tab with two paired cameras." decoding="async" height="922" loading="lazy" src="../assets/img/binding-241acace.webp" width="736"/></a></div><figcaption>Binding tab with two paired cameras.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Paired cameras with brand, address and state badge.</span></li><li><i class="lgd"></i><span>Pair another camera. The buttons disable at four.</span></li><li><i class="lgd"></i><span>Record for 3 seconds to prove the link works.</span></li><li><i class="lgd"></i><span>Forget one camera.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ul>
+<li><b>Up to four cameras</b>, any mix of GoPro and DJI. Pairing a new one keeps the others.</li>
+<li><b>One at a time.</b> At power-up RecLink scans for every paired camera and connects to the strongest signal after about 2.5 seconds, or at once to one stronger than −50 dBm.</li>
+<li><b>Badges:</b> <span class="ok">● Connected · −52 dBm</span>, <span class="wn">Connecting…</span>, or <span class="mut">Standby</span> for a paired camera that is not in use.</li>
+<li><b>3 s test recording</b> starts the connected camera for three seconds. Use it to prove the whole chain works. It only runs while disarmed.</li>
+<li><b>Forget</b> removes one camera. <b>Forget all cameras</b> appears when two or more are paired and asks twice.</li>
+<li><b>Telemetry poll</b> (advanced mode) sets how often a GoPro is asked for status: Fast 0.5 s, Normal 1 s or Slow 1.5 s. Normal is right for most setups.</li>
+</ul>
+<div class="callout"><span class="tag">When a bond is lost</span><p>If the camera forgets RecLink (you reset its connections, or re-paired it to a phone), the next reconnects fail. After three failures RecLink forgets that camera's bond and raises a <b>REPAIR_NEEDED</b> flag on the Status tab. Pair the camera again.</p></div>
+</div>
+</div>
+<figure class="shot" style="width:62mm"><div class="imgwrap"><a class="zoom" data-caption="A fresh board has no cameras. Pair one to begin." href="../assets/img/binding_empty-212d93b1.webp"><img alt="A fresh board has no cameras. Pair one to begin." decoding="async" height="616" loading="lazy" src="../assets/img/binding_empty-212d93b1.webp" width="736"/></a></div><figcaption>A fresh board has no cameras. Pair one to begin.</figcaption></figure>
+</section><section class="chapter" id="ch7">
+<p class="chno">Chapter 7</p>
+<h1 class="ch">Reading the Status tab<a aria-label="link" class="anchor" href="#ch7">#</a></h1>
+<p class="lead">Status is read-only and tells you, at a glance, whether the chain flight controller → RecLink → camera is healthy.</p>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="The Now card." href="../assets/img/status_now-ff3a44dd.webp"><img alt="The Now card." decoding="async" height="344" loading="lazy" src="../assets/img/status_now-ff3a44dd.webp" width="736"/></a></div><figcaption>The Now card.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Aircraft, camera link, recording and warnings.</span></li><li><i class="lgd"></i><span>Fault flags appear below as chips, if any.</span></li></ol></figure>
+<figure class="shot" style="width:62mm"><div class="imgwrap"><a class="zoom" data-caption="The same card while recording. The logo dot is red and pulses." href="../assets/img/status_rec-b2b2ba7a.webp"><img alt="The same card while recording. The logo dot is red and pulses." decoding="async" height="344" loading="lazy" src="../assets/img/status_rec-b2b2ba7a.webp" width="736"/></a></div><figcaption>The same card while recording. The logo dot is red and pulses.</figcaption></figure>
+</div>
+<div class="grow">
+<h3>Now</h3>
+<div class="tbl"><table>
+<tr><td>Aircraft</td><td class="wrap"><b>armed</b> or <b>disarmed</b>, or <b>FC offline</b> if the flight controller link is down.</td></tr>
+<tr><td>Camera link</td><td class="wrap">Brand, state and name, e.g. <span class="ok">GOPRO · READY · GoPro HERO11 Black</span>. States: IDLE, SCAN, CONNECTING, BONDING, SYNCING, READY, LOST.</td></tr>
+<tr><td>Recording</td><td class="wrap"><b>stopped</b>, or <b>REC</b> with elapsed time.</td></tr>
+<tr><td>Warnings</td><td class="wrap">The active warning, or <span class="ok">none</span>. Same list as the OSD (see <a class="xref" href="#ch10">chapter 10</a>).</td></tr>
+</table></div>
+<h3>Fault flags</h3>
+<div class="tbl"><table>
+<tr><td>FC_OFFLINE</td><td class="wrap">No MSP link. Check wiring, UART, baud.</td></tr>
+<tr><td>OSD_UNSUPPORTED</td><td class="wrap">Betaflight is older than API 1.47.</td></tr>
+<tr><td>REPAIR_NEEDED</td><td class="wrap">Camera bond is missing. Pair again.</td></tr>
+<tr><td>CFG_RESET</td><td class="wrap">Stored settings were unreadable. Defaults loaded. Re-pair.</td></tr>
+<tr><td>CLOCK_SYNC_FAIL</td><td class="wrap">Clock sync gave up with the time still off.</td></tr>
+<tr><td>WDT_RECOVERED</td><td class="wrap">The board restarted after a stall. Tap the chip to acknowledge.</td></tr>
+</table></div>
+</div>
+</div>
+<div class="cols">
+<div style="width:66mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="The Details card with a GoPro connected." href="../assets/img/status_details-283c2aac.webp"><img alt="The Details card with a GoPro connected." decoding="async" height="1246" loading="lazy" src="../assets/img/status_details-283c2aac.webp" width="736"/></a></div><figcaption>The Details card with a GoPro connected.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Flight controller, GPS and camera readouts. Blank values mean the camera has not confirmed them.</span></li><li><i class="lgd"></i><span>Ask the camera for fresh values.</span></li></ol></figure>
+</div>
+<div class="grow">
+<h3>Details</h3>
+<ul>
+<li><b>Flight controller:</b> Betaflight variant and MSP API version. <b>OSD grid</b> is the canvas size the FC reports.</li>
+<li><b>GPS:</b> fix, satellites and whether the fix counts as good. Shown when the FC has a GPS.</li>
+<li><b>Camera signal, time left, camera battery, SD card.</b> SD shows free space in GB, or "NO SD" / "FULL".</li>
+<li><b>Mode, resolution, profile</b> as the camera reports them now.</li>
+<li><b>GoPro Video and Protune values:</b> ISO max/min, shutter angle (for example <code>180° (1/120)</code>), Protune, white balance, colour, sharpness, EV comp, 10-bit.</li>
+<li><b>Zone settings</b> is the result of the last zone apply: <span class="ok">Zone 1: applied</span>, "partly applied (not accepted: …)", "not applied" or "waiting for camera".</li>
+</ul>
+<div class="callout"><span class="tag">A blank is honest</span><p>RecLink only shows what the camera confirmed. After a disconnect, every camera value goes blank until the camera answers again. That is deliberate: a stale or guessed number is worse than none.</p></div>
+<p>With <b>Advanced mode</b> on, a <b>Diagnostics</b> card adds the live AUX channel values in µs, error counters and three collapsible debug panels (MSP link, Bluetooth connection, record trigger). They are useful for support, and for finding the stick position of a switch.</p>
+</div>
+</div>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style="width:62mm"><div class="imgwrap"><a class="zoom" data-caption="With no flight controller link the page says FC offline and the readouts go blank." href="../assets/img/status_fcdown-16385ba3.webp"><img alt="With no flight controller link the page says FC offline and the readouts go blank." decoding="async" height="1734" loading="lazy" src="../assets/img/status_fcdown-16385ba3.webp" width="800"/></a></div><figcaption>With no flight controller link the page says FC offline and the readouts go blank.</figcaption></figure>
+</div>
+<div style="width:62mm;flex:none">
+<figure class="shot" style="width:62mm"><div class="imgwrap"><a class="zoom" data-caption="Diagnostics card (advanced mode)." href="../assets/img/status_diag-d2f11310.webp"><img alt="Diagnostics card (advanced mode)." decoding="async" height="780" loading="lazy" src="../assets/img/status_diag-d2f11310.webp" width="736"/></a></div><figcaption>Diagnostics card (advanced mode).</figcaption></figure>
+</div>
+</div>
+</section><section class="chapter" id="ch8">
+<p class="chno">Chapter 8</p>
+<h1 class="ch">Recording control<a aria-label="link" class="anchor" href="#ch8">#</a></h1>
+<p class="lead">Decide what starts and stops the camera. Everything here is on the <b>Cam control</b> tab, in the Recording card.</p>
+<h2 id="ch8-1">Choose a recording mode<a aria-label="link" class="anchor" href="#ch8-1">#</a></h2>
+<div class="diagram"><svg aria-label="Recording modes over time" role="img" viewbox="0 0 700 290"><text class="m t9 b" style="letter-spacing:.08em" x="10" y="14">INPUTS</text><text class="m t9 b" style="letter-spacing:.08em" x="10" y="108">RECORDING MODE → CAMERA RECORDS</text><path d="M238.3 22 V262" stroke="var(--line)" stroke-dasharray="3 4" stroke-width="1"></path><text class="m t9" text-anchor="middle" x="238.3" y="278">arm</text><path d="M326.7 22 V262" stroke="var(--line)" stroke-dasharray="3 4" stroke-width="1"></path><text class="m t9" text-anchor="middle" x="326.7" y="278">switch on</text><path d="M503.4 22 V262" stroke="var(--line)" stroke-dasharray="3 4" stroke-width="1"></path><text class="m t9" text-anchor="middle" x="503.4" y="278">disarm</text><path d="M591.7 22 V262" stroke="var(--line)" stroke-dasharray="3 4" stroke-width="1"></path><text class="m t9" text-anchor="middle" x="591.7" y="278">switch off</text><text class="t10" x="10" y="42">Armed</text><path d="M150 46 H680.0" stroke="var(--line)" stroke-width="1.2"></path><path d="M238.3 46 V32 H503.4 V46" fill="none" stroke="var(--fg)" stroke-width="2"></path><text class="t10" x="10" y="76">Radio switch</text><path d="M150 80 H680.0" stroke="var(--line)" stroke-width="1.2"></path><path d="M326.7 80 V66 H591.7 V80" fill="none" stroke="var(--fg)" stroke-width="2"></path><text class="t10" x="10" y="138">When armed</text><path d="M150 142 H680.0" stroke="var(--line)" stroke-width="1.2"></path><rect fill="var(--acc)" height="16" rx="3" width="265.0" x="238.3" y="126"></rect><text class="t10" x="10" y="172">From a switch</text><path d="M150 176 H680.0" stroke="var(--line)" stroke-width="1.2"></path><rect fill="var(--acc)" height="16" rx="3" width="265.0" x="326.7" y="160"></rect><text class="t10" x="10" y="206">Armed OR switch</text><path d="M150 210 H680.0" stroke="var(--line)" stroke-width="1.2"></path><rect fill="var(--acc)" height="16" rx="3" width="353.4" x="238.3" y="194"></rect><text class="t10" x="10" y="240">Armed AND switch</text><path d="M150 244 H680.0" stroke="var(--line)" stroke-width="1.2"></path><rect fill="var(--acc)" height="16" rx="3" width="176.7" x="326.7" y="228"></rect></svg><p class="cap">Example: the aircraft arms at 2, the switch goes on at 4, the aircraft disarms at 8 and the switch goes off at 10. Start and stop delays are left out.</p></div>
+<div class="tbl"><table>
+<tr><th>Mode</th><th>Records when</th><th>Good for</th></tr>
+<tr><td>Never (manual only)</td><td class="wrap">Never. You start the camera by hand.</td><td class="wrap">Bench work, or if you use the camera's own controls</td></tr>
+<tr><td>When the aircraft is armed</td><td class="wrap">From arm to disarm.</td><td class="wrap">The simple default: every flight is recorded</td></tr>
+<tr><td>From a radio switch</td><td class="wrap">While the switch is on, or toggled by a button.</td><td class="wrap">Choosing exactly when to film</td></tr>
+<tr><td>Armed OR switch on</td><td class="wrap">Armed, or the switch is on. While armed, turning the switch off cuts the clip, and turning it on again starts a new one.</td><td class="wrap">Always film flights, but cut dead time</td></tr>
+<tr><td>Armed AND switch on</td><td class="wrap">Only when both are true. Releasing either one stops the clip at once.</td><td class="wrap">Film only when armed <i>and</i> you want it</td></tr>
+</table></div>
+<h2 id="ch8-2">Set up the radio switch<a aria-label="link" class="anchor" href="#ch8-2">#</a></h2>
+<div class="cols">
+<div style="width:66mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Recording card with a radio switch mode selected." href="../assets/img/cc_record-63171ca8.webp"><img alt="Recording card with a radio switch mode selected." decoding="async" height="1058" loading="lazy" src="../assets/img/cc_record-63171ca8.webp" width="736"/></a></div><figcaption>Recording card with a radio switch mode selected.</figcaption><ol class="legend"><li><i class="lgd"></i><span>The recording mode.</span></li><li><i class="lgd"></i><span>Switch (level) or Button (each press toggles).</span></li><li><i class="lgd"></i><span>Which AUX channel carries the control.</span></li><li><i class="lgd"></i><span>Detect the channel by moving the control.</span></li><li><i class="lgd"></i><span>Live position bar. The thin amber line is the control right now.</span></li><li><i class="lgd"></i><span>The switch counts as on above this value.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Pick <b>From a radio switch</b>, <b>Armed OR switch on</b> or <b>Armed AND switch on</b>. The Radio switch box becomes active. With <i>Never</i> or <i>When the aircraft is armed</i> it is greyed out and marked "not applicable".</div></li>
+<li><div><b>Find the channel.</b> Press <b>Set AUX</b>, then flip the switch on your transmitter. The label changes to "push button or switch" while it listens. RecLink watches the live channel data, picks whichever channel moves by 200 µs or more, and fills in the AUX field. It gives up after 15 seconds. This needs the flight controller link to be up.</div></li>
+<li><div><b>Choose Trigger type.</b> <b>Switch</b> mirrors the switch: on means recording, off means stop. <b>Button</b> is for a spring-loaded control: each press toggles recording and releasing does nothing.</div></li>
+<li><div><b>Check the threshold.</b> The bar shows the control's live position as an amber line. The default of <b>1700 µs</b> suits most 3-position switches (the top position counts as on). Adjust it by dragging the handle or typing a value from 900 to 2100.</div></li>
+<li><div><b>Press Save settings</b> and try the switch. The Status tab shows "REC" and the logo dot turns red.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">Prefer to look at the numbers?</span><p>Network → <b>Scan AUX now</b> lists the live value of every AUX channel. Move your switch and press it again to see which channel changed.</p></div>
+</div>
+</div>
+<h2 id="ch8-3">What happens when you trigger it<a aria-label="link" class="anchor" href="#ch8-3">#</a></h2>
+<div class="diagram"><svg aria-label="Record sequence" role="img" viewbox="0 0 700 120">
+<defs><marker id="a8" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"></path></marker></defs>
+<g class="t10">
+<rect class="boxc" height="52" rx="8" width="118" x="6" y="30"></rect><text class="b" text-anchor="middle" x="65" y="53">Trigger</text><text class="m t9" text-anchor="middle" x="65" y="69">arm or switch</text>
+<rect class="boxc" height="52" rx="8" width="118" x="166" y="30"></rect><text class="b" text-anchor="middle" x="225" y="53">Wait</text><text class="m t9" text-anchor="middle" x="225" y="69">start delay 300 ms</text>
+<rect class="boxa" height="52" rx="8" width="118" x="326" y="30"></rect><text class="b onacc" text-anchor="middle" x="385" y="53">Start</text><text class="t9 onacc" text-anchor="middle" x="385" y="69">command to camera</text>
+<rect class="boxc" height="52" rx="8" width="118" x="486" y="30"></rect><text class="b" text-anchor="middle" x="545" y="53">Verify</text><text class="m t9" text-anchor="middle" x="545" y="69">camera must say REC</text>
+</g>
+<path class="ln" d="M124 56 H166" marker-end="url(#a8)"></path><path class="ln" d="M284 56 H326" marker-end="url(#a8)"></path><path class="ln" d="M444 56 H486" marker-end="url(#a8)"></path>
+<path class="ln" d="M545 82 V104 H385 V82" marker-end="url(#a8)"></path><text class="t9 m" text-anchor="middle" x="465" y="116">not confirmed in 800 ms: retry, up to 3 times</text>
+<rect class="boxd" height="52" rx="8" width="72" x="622" y="30"></rect><text class="t9 b" text-anchor="middle" x="658" y="52">REC FAIL</text><text class="t8 m" text-anchor="middle" x="658" y="66">if all fail</text>
+<path class="lnd" d="M604 56 H622" marker-end="url(#a8)"></path>
+</svg>
+<p class="cap">Stopping works the same way after a stop delay (default 1.5 s), so the last moments are not clipped.</p></div>
+<p>The camera is the judge: RecLink starts it, then waits for the camera to report it is recording. If it does not within the verify window, RecLink retries. If every try fails the OSD warning <b>REC FAIL</b> appears. The bridge tracks its own last command, so a camera that fails to report cannot cancel a stop RecLink owes it.</p>
+<h3>Timing (advanced mode)</h3>
+<div class="tbl"><table>
+<tr><th>Setting</th><th>Default</th><th>Range</th><th>What it does</th></tr>
+<tr><td>Start delay after trigger</td><td>300 ms</td><td>0–10000</td><td class="wrap">Waits before sending start. Lets arming settle.</td></tr>
+<tr><td>Keep recording after trigger clears</td><td>1500 ms</td><td>0–20000</td><td class="wrap">Delays the stop so the landing is captured.</td></tr>
+<tr><td>Wait for camera to confirm</td><td>800 ms</td><td>100–5000</td><td class="wrap">Per attempt.</td></tr>
+<tr><td>Retries if not confirmed</td><td>3</td><td>0–10</td><td class="wrap">Then REC FAIL.</td></tr>
+</table></div>
+</section><section class="chapter" id="ch9">
+<p class="chno">Chapter 9</p>
+<h1 class="ch">Zones: camera settings from a switch<a aria-label="link" class="anchor" href="#ch9">#</a></h1>
+<p class="lead">A 2–6 position switch or knob on your radio picks a <b>zone</b>. Each zone stores the camera settings you want, and RecLink sends them to the camera when the stick rests in that zone.</p>
+<div class="diagram"><svg aria-label="Zones on a radio switch" role="img" viewbox="0 0 700 250"><rect fill="var(--zone-1)" fill-opacity=".85" height="22" rx="0" width="206.7" x="40.0" y="38"></rect><rect fill="var(--zone-2)" fill-opacity=".85" height="22" rx="0" width="206.7" x="246.7" y="38"></rect><rect fill="var(--zone-3)" fill-opacity=".85" height="22" rx="0" width="206.7" x="453.3" y="38"></rect><rect fill="none" height="22" rx="6" stroke="var(--line)" stroke-width="1.3" width="620" x="40" y="38"></rect><rect fill="var(--fg)" height="34" rx="5" stroke="var(--bg)" stroke-width="1.5" width="16" x="238.7" y="32"></rect><text class="t10 b" text-anchor="middle" x="246.7" y="24">1300</text><rect fill="var(--fg)" height="34" rx="5" stroke="var(--bg)" stroke-width="1.5" width="16" x="445.3" y="32"></rect><text class="t10 b" text-anchor="middle" x="453.3" y="24">1700</text><path d="M91.7 70 V78" stroke="var(--line)" stroke-width="1.2"></path><text class="m t9" text-anchor="middle" x="91.7" y="90">1000 µs</text><path d="M350.0 70 V78" stroke="var(--line)" stroke-width="1.2"></path><text class="m t9" text-anchor="middle" x="350.0" y="90">1500 µs</text><path d="M608.3 70 V78" stroke="var(--line)" stroke-width="1.2"></path><text class="m t9" text-anchor="middle" x="608.3" y="90">2000 µs</text><path d="M350.0 28 V70" stroke="var(--warn)" stroke-width="2"></path><text class="t9" style="fill:var(--warn)" x="356.0" y="21">stick</text><rect fill="var(--bg)" height="108" rx="10" stroke="var(--zone-1)" stroke-width="2" width="196" x="40" y="112"></rect><text class="b t12" x="54" y="134">Zone 1</text><text class="t10 b" x="54" y="154">4K · 60 fps</text><text class="t10" x="54" y="171">Lens: Wide</text><text class="t10" x="54" y="188">HyperSmooth: High</text><text class="t10" x="54" y="205">Protune on</text><path d="M143.3 66 V112" fill="none" stroke="var(--zone-1)" stroke-dasharray="4 3" stroke-width="1.6"></path><rect fill="var(--bg)" height="108" rx="10" stroke="var(--zone-2)" stroke-width="2" width="196" x="252" y="112"></rect><text class="b t12" x="266" y="134">Zone 2</text><text class="t10 b" x="266" y="154">2.7K · 120 fps</text><text class="t10" x="266" y="171">Lens: Linear</text><text class="t10" x="266" y="188">HyperSmooth: Low</text><text class="t10" x="266" y="205">Protune on</text><path d="M350.0 66 V112" fill="none" stroke="var(--zone-2)" stroke-dasharray="4 3" stroke-width="1.6"></path><rect fill="var(--bg)" height="108" rx="10" stroke="var(--zone-3)" stroke-width="2" width="196" x="464" y="112"></rect><text class="b t12" x="478" y="134">Zone 3</text><text class="t10 b" x="478" y="154">1080 · 240 fps</text><text class="t10" x="478" y="171">Lens: Wide</text><text class="t10" x="478" y="188">HyperSmooth: Off</text><path d="M556.7 66 V112" fill="none" stroke="var(--zone-3)" stroke-dasharray="4 3" stroke-width="1.6"></path><text class="m t9" text-anchor="middle" x="350" y="242">Example settings for a GoPro. The zone applies once the stick has rested in it for the hold time (400 ms).</text></svg><p class="cap">A three-position switch split into three zones. The bar spans 900 to 2100 µs.</p></div>
+<div class="callout"><span class="tag">GoPro and DJI work differently</span>
+<p><b>GoPro:</b> a zone does not load a GoPro preset. It pushes the settings you ticked (resolution, frame rate, lens and so on) to the camera's current video preset. <b>DJI:</b> each zone applies a camera <b>Mode ID</b> number instead, typed into a field on the zone row.</p></div>
+<h2 id="ch9-1">Build the zones<a aria-label="link" class="anchor" href="#ch9-1">#</a></h2>
+<div class="cols">
+<div style="width:68mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Zone setup, top half of the card." href="../assets/img/cc_preset-352d1b85.webp"><img alt="Zone setup, top half of the card." decoding="async" height="1025" loading="lazy" src="../assets/img/cc_preset-352d1b85.webp" width="736"/></a></div><figcaption>Zone setup, top half of the card.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Master switch for zone control.</span></li><li><i class="lgd"></i><span>The AUX channel that carries the knob. Use Set AUX like before.</span></li><li><i class="lgd"></i><span>The bar splits the 900–2100 µs range into coloured zones. Drag the handles to move the edges.</span></li><li><i class="lgd"></i><span>One row per zone with its upper edge in µs. The zone the stick is in is tinted green.</span></li><li><i class="lgd"></i><span>Add or remove a zone, from 2 to 6.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ol class="steps">
+<li><div>Tick <b>Enable zone control</b>.</div></li>
+<li><div>Choose the <b>AUX channel</b> or press <b>Set AUX</b> and move the switch.</div></li>
+<li><div><b>Add or remove zones</b> until the count matches your switch (3 for a 3-position switch). New edges are spread out by default: 1300 and 1700 µs for three zones.</div></li>
+<li><div>Move the stick through each position and check the bar's amber cursor lands in the right zone. Adjust the edges by dragging the handles. Edges stay in order and at least 25 µs apart. The last zone always ends at 2100 µs.</div></li>
+<li><div>Build the settings for each zone as shown on the next page.</div></li>
+</ol>
+<div class="callout tip"><span class="tag">Hold time</span><p>A zone must be held for 400 ms before it is applied, so a quick sweep through the middle does not fire every zone on the way. Change it under <b>Advanced → Hold time before applying</b> (50–5000 ms).</p></div>
+</div>
+</div>
+<h2 id="ch9-2">Camera settings for each zone (GoPro)<a aria-label="link" class="anchor" href="#ch9-2">#</a></h2>
+<p>Below the zone rows, one tab per zone shows a row for every setting a zone can change. <b>Tick a row to push that setting; leave it unticked and the camera keeps its own value.</b> Unticked rows are not stored.</p>
+<div class="cols">
+<div style="width:74mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Zone settings builder: zone tabs and the Video group." href="../assets/img/cc_preset-bf529f48.webp"><img alt="Zone settings builder: zone tabs and the Video group." decoding="async" height="976" loading="lazy" src="../assets/img/cc_preset-bf529f48.webp" width="736"/></a></div><figcaption>Zone settings builder: zone tabs and the Video group.</figcaption><ol class="legend"><li><i class="lgd"></i><span>One tab per zone. Selecting a tab shows that zone's settings, and applies it to the camera.</span></li><li><i class="lgd"></i><span>With this on, edits are written to the camera as you make them so the option lists match.</span></li><li><i class="lgd"></i><span>Each row: tick box, label, option list.</span></li></ol></figure>
+</div>
+<div style="width:74mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="The Protune group and the buttons below." href="../assets/img/cc_preset-5120720a.webp"><img alt="The Protune group and the buttons below." decoding="async" height="1533" loading="lazy" src="../assets/img/cc_preset-5120720a.webp" width="736"/></a></div><figcaption>The Protune group and the buttons below.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Capture from camera fills the zone with the camera's current values. Clear zone empties it.</span></li></ol></figure>
+</div>
+</div>
+<h3>Behaviour to know</h3>
+<ul>
+<li><b>The lists follow the camera.</b> With the camera connected and in a video preset, each option list shows only what it accepts right now (for example, only the frame rates valid at the current resolution). A value the camera no longer offers stays visible, marked "(not available now)".</li>
+<li><b>Order matters and is handled for you.</b> RecLink writes resolution first, then the settings that depend on it, and Protune before its sub-settings. It waits for the camera to accept each write, checks the result, and retries a refused write once.</li>
+<li><b>Shutter is a shutter angle.</b> 180° means an exposure of 1/(2 × frame rate). The zone keeps the same angle if you change the frame rate.</li>
+<li><b>Keep the camera in step while editing</b> (on by default) means the camera really changes as you edit and as you select zone tabs. It works only while disarmed and not recording. Turn it off to edit without touching the camera.</li>
+<li><b>Models differ.</b> Aspect ratio, Bit depth and Color profile are hidden for a HERO11 because it does not have them. A HERO12 or 13 shows them.</li>
+</ul>
+<div class="tbl"><table>
+<tr><th>Group</th><th>Settings a zone can push</th></tr>
+<tr><td>Video</td><td class="wrap">Resolution, Aspect ratio, Frame rate, Lens, HyperSmooth, Bit depth, Color profile</td></tr>
+<tr><td>Protune</td><td class="wrap">Protune on/off, ISO max, ISO min, Shutter angle, White balance, Color, Sharpness, EV comp, 10-bit</td></tr>
+</table></div>
+<h2 id="ch9-3">When a zone is applied<a aria-label="link" class="anchor" href="#ch9-3">#</a></h2>
+<ul>
+<li>RecLink applies a zone only when the camera link is ready, the camera is not busy, and it is <b>not recording</b>. To allow changes mid-recording, tick <b>Allow zone changes while recording</b> in the advanced options.</li>
+<li>If a blocker is in the way it retries on the next tick, without losing the choice.</li>
+<li>After a reconnect, the last selected zone is applied once, in case you changed the camera by hand.</li>
+<li>The Status tab's <b>Zone settings</b> row tells you the result: applied, partly applied (and which settings the camera refused), or not applied. The camera, not RecLink, decides what it accepts. Some options are not valid with the current resolution.</li>
+<li>A zone with no ticked settings pushes nothing.</li>
+</ul>
+<div class="callout"><span class="tag">Example</span><p>Zone 1 for cruising: 4K, 60 fps, Wide, HyperSmooth High. Zone 2 for a slow-motion pass: 2.7K, 120 fps, Linear. Zone 3 for max frame rate: 1080, 240 fps. Flip the switch in flight and the camera follows once the stick has rested for 400 ms.</p></div>
+</section><section class="chapter" id="ch10">
+<p class="chno">Chapter 10</p>
+<h1 class="ch">OSD: camera info in your goggles<a aria-label="link" class="anchor" href="#ch10">#</a></h1>
+<p class="lead">RecLink writes four lines of text, up to 16 characters each, into the four custom message elements you placed in <a class="xref" href="#ch4">chapter 4</a>.</p>
+<div class="cols">
+<div class="grow">
+<div class="diagram" style="margin:0"><svg aria-label="OSD lines and the templates that make them" role="img" viewbox="0 0 440 210">
+<rect fill="var(--osd-bg)" height="198" rx="10" stroke="var(--line)" stroke-width="1.3" width="200" x="6" y="6"></rect>
+<g font-family="var(--font-mono)" font-size="17" font-weight="800" style="letter-spacing:.04em"><text x="22" y="48">REC 12:34</text><text x="22" y="86">###-78%</text><text x="22" y="124">4K60 WIDE</text><text x="22" y="162">SD 1H</text></g>
+<g class="t10"><text class="m t9 b" style="letter-spacing:.08em" x="226" y="30">TEMPLATE</text><text class="b" font-family="var(--font-mono)" x="226" y="44">%st %et</text><text class="b" font-family="var(--font-mono)" x="226" y="82">%bi%bt %wr</text><text class="b" font-family="var(--font-mono)" x="226" y="120">%rs%fp %ln</text><text class="b" font-family="var(--font-mono)" x="226" y="158">SD %sd</text></g>
+<g class="m t9"><text x="226" y="56">state and elapsed time</text><text x="226" y="94">battery icon, %, warning</text><text x="226" y="132">resolution, fps, lens</text><text x="226" y="170">literal text + SD left</text></g>
+</svg></div>
+</div>
+<div style="width:64mm;flex:none">
+<p>Each line is a <b>template</b>: normal text plus <code>%</code> tokens that RecLink replaces with live values. The defaults are shown here. Anything the camera has not confirmed is replaced by nothing at all.</p>
+<p class="sm mut">Empty lines are sent as a single space so Betaflight does not show the placeholder name.</p>
+</div>
+</div>
+<h2 id="ch10-1">Edit the lines<a aria-label="link" class="anchor" href="#ch10-1">#</a></h2>
+<div class="cols">
+<div style="width:66mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Live preview." href="../assets/img/osd_preview-0c94713c.webp"><img alt="Live preview." decoding="async" height="642" loading="lazy" src="../assets/img/osd_preview-0c94713c.webp" width="736"/></a></div><figcaption>Live preview.</figcaption><ol class="legend"><li><i class="lgd"></i><span>A preview drawn the way the firmware formats it. It switches to live data once a camera is connected.</span></li><li><i class="lgd"></i><span>Simulate a camera to design lines while nothing is connected.</span></li></ol></figure>
+</div>
+<div style="width:66mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="The line editor." href="../assets/img/osd_editor-b338b6d2.webp"><img alt="The line editor." decoding="async" height="1876" loading="lazy" src="../assets/img/osd_editor-b338b6d2.webp" width="736"/></a></div><figcaption>The line editor.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Tap a token to add it to the selected line.</span></li><li><i class="lgd"></i><span>Each line is a row of chips. The selected line has a green border.</span></li><li><i class="lgd"></i><span>Raw switches to plain text for the line.</span></li><li><i class="lgd"></i><span>Chips can be moved with the arrows or removed with the cross.</span></li></ol></figure>
+</div>
+</div>
+<ol class="steps">
+<li><div><b>Tap a line</b> to select it (green border), then <b>tap tokens</b> in the palette to add them. Tap <b>＋ text</b> to add literal text such as <code>SD</code> or <code>BAT</code>.</div></li>
+<li><div>Watch the preview. If a line would be longer than 16 characters the page warns "Line N is X chars, clipped to …". Shorten it.</div></li>
+<li><div>Prefer <b>raw</b> if you like typing templates directly, for example <code>%st %et</code>. Press <b>Save settings</b>.</div></li>
+</ol>
+<h3>When the camera is lost</h3>
+<div class="cols">
+<div style="width:66mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Camera not connected: slot 1 shows CAM LOST and the rest go blank." href="../assets/img/osd_lost-17206750.webp"><img alt="Camera not connected: slot 1 shows CAM LOST and the rest go blank." decoding="async" height="442" loading="lazy" src="../assets/img/osd_lost-17206750.webp" width="676"/></a></div><figcaption>Camera not connected: slot 1 shows CAM LOST and the rest go blank.</figcaption></figure>
+</div>
+<div class="grow"><p>If the camera link is not ready, line 1 reads <b>CAM LOST</b>, or a blinking <b>CAM ?</b> while RecLink is still searching or connecting. Lines 2–4 go blank. This layout always shows, whatever your warning settings say, so the OSD is never silently stale.</p></div>
+</div>
+<h2 id="ch10-2">OSD type, rate and units<a aria-label="link" class="anchor" href="#ch10-2">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Setting</th><th>Default</th><th>What it does</th></tr>
+<tr><td>OSD type</td><td>Digital</td><td class="wrap"><b>Digital</b> keeps only glyphs DJI-style goggles draw: letters (uppercased), digits and basic punctuation. Battery bars become <code>#</code> and <code>-</code>. <b>Analog</b> leaves the text alone and allows the full character set, including a battery icon.</td></tr>
+<tr><td>Update rate</td><td>4 Hz</td><td class="wrap">1–10 Hz. A change takes full effect after a reboot.</td></tr>
+<tr><td>Speed units</td><td>Metric</td><td class="wrap">Affects the <code>%sp</code> token only: km/h or mph.</td></tr>
+</table></div>
+<h2 id="ch10-3">Warnings<a aria-label="link" class="anchor" href="#ch10-3">#</a></h2>
+<p>The token <code>%wr</code> shows the single most important active warning. A line with <code>%wr</code> in it makes the warning visible without a separate element.</p>
+<div class="tbl"><table>
+<tr><th>Priority</th><th>Shows</th><th>When</th></tr>
+<tr><td>1</td><td><b class="bad">CAM LOST</b></td><td class="wrap">Camera link is not ready</td></tr>
+<tr><td>2</td><td><b>NO SD</b></td><td class="wrap">No card in the camera</td></tr>
+<tr><td>3</td><td><b>SD FULL</b></td><td class="wrap">Card is full</td></tr>
+<tr><td>4</td><td><b>REC FAIL</b></td><td class="wrap">Record command not confirmed after all retries</td></tr>
+<tr><td>5</td><td><b>LOW BATT</b></td><td class="wrap">Camera battery at or below the threshold (default 15 %)</td></tr>
+<tr><td>6</td><td><b>SD LOW</b></td><td class="wrap">Remaining recording time at or below the threshold (default 3 min)</td></tr>
+<tr><td>7</td><td><b>HOT</b></td><td class="wrap">GoPro reports overheating</td></tr>
+<tr><td>8</td><td><b>CLK FAIL</b></td><td class="wrap">Clock sync gave up</td></tr>
+</table></div>
+<ul>
+<li><b>Blink warnings</b> (default on) flashes the warning twice a second to catch your eye.</li>
+<li><b>Show a warning when the camera link is lost</b> controls the warning shown by <code>%wr</code>. Line 1 still shows CAM LOST regardless.</li>
+<li>Set the battery and SD thresholds to taste on the OSD tab. Use 0 to disable one.</li>
+</ul>
+<p class="sm mut">The full list of tokens is in appendix A.</p>
+</section><section class="chapter" id="ch11">
+<p class="chno">Chapter 11</p>
+<h1 class="ch">Clock sync, GPS push and highlight tags<a aria-label="link" class="anchor" href="#ch11">#</a></h1>
+<p class="lead">Three smaller features that make your footage easier to sort and use.</p>
+<h2 id="ch11-1">Camera clock sync<a aria-label="link" class="anchor" href="#ch11-1">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Clock tab (advanced mode)." href="../assets/img/clock-3846a5db.webp"><img alt="Clock tab (advanced mode)." decoding="async" height="1552" loading="lazy" src="../assets/img/clock-3846a5db.webp" width="736"/></a></div><figcaption>Clock tab (advanced mode).</figcaption><ol class="legend"><li><i class="lgd"></i><span>Master switch. On by default.</span></li><li><i class="lgd"></i><span>Minimum satellites for a trusted fix.</span></li><li><i class="lgd"></i><span>Sync immediately.</span></li></ol></figure>
+</div>
+<div class="grow">
+<p>RecLink sets the camera's clock from the flight controller's GPS time, so every clip is stamped correctly, even after a battery swap that reset the camera to a default date. It writes to the <b>camera</b> only and never to the flight controller's clock.</p>
+<h3>It syncs when all of these are true</h3>
+<ul>
+<li>Clock sync is on, and (by default) the FC has a GPS with a steady 3D fix and at least 6 satellites for 10 seconds.</li>
+<li>The FC reports a plausible time.</li>
+<li>The camera is connected, not recording and not busy.</li>
+</ul>
+<h3>When it runs</h3>
+<ul>
+<li>When the camera connects, when the GPS fix becomes good, when you press <b>Sync now</b>, and then periodically (a GoPro every 5 minutes by default, a DJI every 60).</li>
+<li>For a GoPro it first reads the camera clock and only writes if it is more than 10 seconds off, then checks the result. A DJI cannot be read, so its time is simply sent.</li>
+</ul>
+<p>Set <b>UTC offset</b> in minutes (and <b>Daylight saving</b>) if you want footage in local time. Leave it at 0 for UTC.</p>
+<p>If the clock cannot be fixed after the retries, the OSD shows <b>CLK FAIL</b> and the Clock tab reports FAILED. Only the timestamp is affected.</p>
+</div>
+</div>
+<h2 id="ch11-2">DJI GPS position push<a aria-label="link" class="anchor" href="#ch11-2">#</a></h2>
+<p>For a DJI camera only. On <b>System → Send aircraft GPS position to the camera</b>, RecLink streams the aircraft's GPS position to the Osmo at 1 or 2 Hz for the camera's own overlay or metadata. It needs a good GPS fix and valid time. A GoPro ignores this setting.</p>
+<h2 id="ch11-3">Highlight tag<a aria-label="link" class="anchor" href="#ch11-3">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Highlight tag (advanced mode)." href="../assets/img/cc_hilight-a5f13b46.webp"><img alt="Highlight tag (advanced mode)." decoding="async" height="580" loading="lazy" src="../assets/img/cc_hilight-a5f13b46.webp" width="736"/></a></div><figcaption>Highlight tag (advanced mode).</figcaption></figure>
+</div>
+<div class="grow">
+<p>A spare switch can drop a marker into the footage at a moment you want to find later. Choose its <b>AUX channel</b> (use <b>Set AUX</b>). When the channel rises above <b>1700 µs</b>, RecLink sends a <b>HiLight</b> tag to a GoPro. A DJI has no highlight tag, so RecLink presses its <b>Quick-Switch</b> button instead.</p>
+<p>It works only while the camera link is ready. A momentary push-button is ideal.</p>
+</div>
+</div>
+</section><section class="chapter" id="ch12">
+<p class="chno">Chapter 12</p>
+<h1 class="ch">Network, System and firmware updates<a aria-label="link" class="anchor" href="#ch12">#</a></h1>
+<p class="lead">The housekeeping tabs: Wi-Fi, the link to the flight controller, radio power, and the board's maintenance actions.</p>
+<h2 id="ch12-1">Network tab<a aria-label="link" class="anchor" href="#ch12-1">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Network tab, basic mode." href="../assets/img/network-b79681b7.webp"><img alt="Network tab, basic mode." decoding="async" height="1008" loading="lazy" src="../assets/img/network-b79681b7.webp" width="736"/></a></div><figcaption>Network tab, basic mode.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Wi-Fi network name. Blank gives RECLINK-XXXX.</span></li><li><i class="lgd"></i><span>Wi-Fi password. Blank keeps the current one. 8–31 characters.</span></li><li><i class="lgd"></i><span>When the portal opens.</span></li><li><i class="lgd"></i><span>Lists every AUX channel's live value.</span></li></ol></figure>
+</div>
+<div class="grow">
+<div class="callout warn"><span class="tag">Before you save a new SSID or password</span><p>Changing either one changes how you reach the page. Note the new values first. They apply the next time the portal starts.</p></div>
+<div class="tbl"><table>
+<tr><th>Setting</th><th>Default</th><th>Notes</th></tr>
+<tr><td>SSID</td><td class="wrap">blank</td><td class="wrap">Up to 19 characters.</td></tr>
+<tr><td>Password</td><td class="wrap">reclinkfpv</td><td class="wrap">Change it. Open network if shorter than 8.</td></tr>
+<tr><td>Open the portal</td><td class="wrap">Always, while disarmed</td><td class="wrap">Or "Only after holding the button" (3 s).</td></tr>
+<tr><td>Portal auto-close</td><td class="wrap">15 min</td><td class="wrap">1–120. Also needs 60 s with no client.</td></tr>
+<tr><td>Wi-Fi channel (adv.)</td><td class="wrap">0 (auto)</td><td class="wrap">1–13.</td></tr>
+</table></div>
+<p><b>Scan AUX now</b> prints the current value of AUX 1–14 in µs. Move a switch and scan again to see which channel changed. It reads the same data as Set AUX, so it needs the flight controller link.</p>
+</div>
+</div>
+<h3>Advanced network settings</h3>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="Radio power and flight controller link (advanced mode)." href="../assets/img/network_adv-9303f1a5.webp"><img alt="Radio power and flight controller link (advanced mode)." decoding="async" height="689" loading="lazy" src="../assets/img/network_adv-9303f1a5.webp" width="736"/></a></div><figcaption>Radio power and flight controller link (advanced mode).</figcaption><ol class="legend"><li><i class="lgd"></i><span>MSP baud rate. Must match the FC's UART.</span></li><li><i class="lgd"></i><span>Swap TX and RX if the wires were crossed.</span></li><li><i class="lgd"></i><span>Bluetooth power. Applies after a reboot.</span></li></ol></figure>
+</div>
+<div class="grow">
+<ul>
+<li><b>Radio power.</b> Wi-Fi: Low 2 dBm, Medium 10 dBm, Max 20 dBm (default). Bluetooth: Low −12 dBm, Medium 0 dBm, Max +9 dBm (default). Raise power if the connection is unreliable, lower it to use less. Wi-Fi power applies the next time the portal opens. Bluetooth power applies after a reboot.</li>
+<li><b>Baud rate</b> (9600 to 460800, default 115200). Change this only if you changed the flight controller's UART speed, or to work around a marginal link. Both ends must match.</li>
+<li><b>Swap TX/RX pins</b> fixes crossed wires without soldering.</li>
+<li>Both need a reboot. After saving, a <b>Reboot now</b> button appears in the bar. Nothing else here needs one.</li>
+</ul>
+</div>
+</div>
+<h2 id="ch12-2">System tab<a aria-label="link" class="anchor" href="#ch12-2">#</a></h2>
+<div class="cols">
+<div style="width:62mm;flex:none">
+<figure class="shot" style=""><div class="imgwrap"><a class="zoom" data-caption="System tab." href="../assets/img/system-c992d490.webp"><img alt="System tab." decoding="async" height="1400" loading="lazy" src="../assets/img/system-c992d490.webp" width="736"/></a></div><figcaption>System tab.</figcaption><ol class="legend"><li><i class="lgd"></i><span>Advanced mode.</span></li><li><i class="lgd"></i><span>Blink the LED for 3 seconds to find the board.</span></li><li><i class="lgd"></i><span>Erase everything.</span></li><li><i class="lgd"></i><span>Choose the firmware file.</span></li></ol></figure>
+</div>
+<div class="grow">
+<div class="tbl"><table>
+<tr><td>Advanced mode</td><td class="wrap">Shows timing options, diagnostics, the Clock tab and the log.</td></tr>
+<tr><td>DJI GPS push</td><td class="wrap">See <a class="xref" href="#ch11">chapter 11</a>.</td></tr>
+<tr><td>LED brightness</td><td class="wrap">16–255. Only affects a colour LED; a plain LED cannot dim.</td></tr>
+<tr><td>Identify</td><td class="wrap">Blinks the LED for 3 s. Same as a short button press.</td></tr>
+<tr><td>Reboot bridge</td><td class="wrap">Restarts RecLink. Settings and pairings are kept. The portal drops for about 10 s.</td></tr>
+</table></div>
+<h3>Update the firmware (OTA)</h3>
+<ol class="steps">
+<li><div>Get the firmware <b>.bin</b> file. Not the <code>.zip</code>.</div></li>
+<li><div>Under <b>Danger → Firmware update</b>, choose the file. Tick <b>Erase all settings</b> only if you want a clean start.</div></li>
+<li><div>Press <b>Upload &amp; flash</b> and confirm. A progress bar shows the upload. Do not power off.</div></li>
+<li><div>The board reboots by itself and the page reloads. Settings and pairings are kept unless you chose to erase.</div></li>
+</ol>
+<p class="sm mut">A bad image is rejected and the current firmware stays. The new firmware must start cleanly once before it is accepted, so a faulty update does not stick.</p>
+</div>
+</div>
+<div class="callout danger"><span class="tag">Factory reset</span>
+<p>Erases <b>all settings and all camera pairings</b>, then reboots. Use the button on the System tab (it asks twice), or hold the board's button for 10 seconds. It is refused while the aircraft is armed. A normal reboot never clears anything.</p></div>
+</section><section class="chapter" id="ch13">
+<p class="chno">Chapter 13</p>
+<h1 class="ch">Flying with RecLink<a aria-label="link" class="anchor" href="#ch13">#</a></h1>
+<p class="lead">Once set up, RecLink does its job without you touching it. This chapter is the routine: check before, know what you are seeing during, and what happens if something drops.</p>
+<div class="callout danger"><span class="tag">Remember</span><p>RecLink 0.1.0 has not been flight tested. Bench-test every function with props off, as below, and keep your first flights short and over open ground.</p></div>
+<h2 id="ch13-1">Bench check, props off<a aria-label="link" class="anchor" href="#ch13-1">#</a></h2>
+<div class="tbl long"><table>
+<tr><th style="width:9mm"></th><th>Step</th><th>You should see</th></tr>
+<tr><td>☐</td><td class="wrap">Power the quad. Wait a few seconds.</td><td class="wrap">LED: two short blinks per second (portal open), then idle blink once the camera is ready.</td></tr>
+<tr><td>☐</td><td class="wrap">Open the portal. Look at the Status tab.</td><td class="wrap">Aircraft: disarmed. Camera link: READY, in green. Battery and SD readouts are filled in.</td></tr>
+<tr><td>☐</td><td class="wrap">Look at the goggles.</td><td class="wrap">The four lines show the camera's state, not <b>CAM LOST</b>.</td></tr>
+<tr><td>☐</td><td class="wrap">Binding tab: 3 s test recording.</td><td class="wrap">The camera records for 3 seconds. OSD shows REC.</td></tr>
+<tr><td>☐</td><td class="wrap">Flip the zone switch through every position.</td><td class="wrap">Status shows "Zone N: applied" and the OSD resolution and fps change.</td></tr>
+<tr><td>☐</td><td class="wrap">Flip the record switch (if used).</td><td class="wrap">The camera starts and stops. OSD shows REC and the elapsed time.</td></tr>
+<tr><td>☐</td><td class="wrap">Close the portal, then <b>arm</b> with props off.</td><td class="wrap">The Wi-Fi network vanishes. The camera starts recording after the start delay. LED is solid.</td></tr>
+<tr><td>☐</td><td class="wrap"><b>Disarm.</b></td><td class="wrap">The camera stops after the stop delay. The Wi-Fi can come back.</td></tr>
+<tr><td>☐</td><td class="wrap">Check camera battery and SD space.</td><td class="wrap">Enough for the flight. The OSD will warn at 15 % and 3 minutes by default.</td></tr>
+</table></div>
+<h2 id="ch13-2">What you see in the air<a aria-label="link" class="anchor" href="#ch13-2">#</a></h2>
+<div class="cols">
+<div class="grow">
+<ul>
+<li><b>Wi-Fi is off.</b> Only Bluetooth runs, so the camera link is as stable as it can be.</li>
+<li><b>The OSD text updates</b> at its set rate. Recording state and elapsed time are always one glance away.</li>
+<li><b>The LED</b> is solid while recording.</li>
+<li>Pressing the button in flight does nothing harmful.</li>
+</ul>
+</div>
+<div class="grow">
+<h3>If something drops</h3>
+<ul>
+<li><b>Camera link lost</b> (out of range, camera off, radio dropout): OSD shows <b>CAM LOST</b>, the LED blinks fast, and RecLink keeps trying with growing pauses (1, 2, 4, 8, 16, then every 30 seconds). When it reconnects it checks what the camera is doing and sends at most one corrective command.</li>
+<li><b>Flight controller link lost:</b> RecLink stops writing text. The aircraft is unaffected.</li>
+<li><b>RecLink restarts</b> (brown-out or stall): the OSD text freezes for about 0.3 seconds, then recovers. The camera reconnects by itself.</li>
+</ul>
+</div>
+</div>
+<div class="diagram"><svg aria-label="Camera link states" role="img" viewbox="0 0 700 170">
+<defs>
+<marker id="a13" markerheight="7" markerwidth="7" orient="auto" refx="7" refy="4" viewbox="0 0 8 8"><path d="M0,0 L8,4 L0,8 z" fill="var(--mut)"></path></marker>
+</defs>
+<g class="t10 b" text-anchor="middle">
+<rect class="boxc" height="40" rx="8" width="96" x="8" y="20"></rect><text x="56" y="44">SCAN</text>
+<rect class="boxc" height="40" rx="8" width="110" x="146" y="20"></rect><text x="201" y="44">CONNECTING</text>
+<rect class="boxc" height="40" rx="8" width="96" x="298" y="20"></rect><text x="346" y="44">SYNCING</text>
+<rect class="boxa" height="40" rx="8" width="96" x="436" y="20"></rect><text class="onacc" x="484" y="44">READY</text>
+<rect class="boxc" height="40" rx="8" style="stroke:var(--dng)" width="96" x="574" y="20"></rect><text x="622" y="44">LOST</text>
+</g>
+<g class="ln"><path d="M104 40 H146" marker-end="url(#a13)"></path><path d="M256 40 H298" marker-end="url(#a13)"></path><path d="M394 40 H436" marker-end="url(#a13)"></path><path d="M532 40 H574" marker-end="url(#a13)"></path><path d="M622 60 V104 H56 V60" marker-end="url(#a13)"></path></g>
+<text class="m t9" text-anchor="middle" x="340" y="98">wait 1, 2, 4, 8, 16, then 30 s, and scan again</text>
+<g class="t9" text-anchor="middle"><text class="m" x="201" y="130">OSD: CAM ? (blinking)</text><text class="m" x="201" y="144">LED: slow breathe</text>
+<text class="m" x="484" y="130">OSD: live values</text><text class="m" x="484" y="144">LED: idle blink / solid when recording</text>
+<text class="m" x="622" y="130">OSD: CAM LOST</text><text class="m" x="622" y="144">LED: fast blink</text></g>
+</svg>
+<p class="cap">The camera link lifecycle. SCAN, CONNECTING and SYNCING show as one searching state.</p></div>
+</section><section class="chapter" id="ch14">
+<p class="chno">Chapter 14</p>
+<h1 class="ch">Troubleshooting<a aria-label="link" class="anchor" href="#ch14">#</a></h1>
+<p class="lead">Start with the LED and the Status tab. They tell you which of the two links, flight controller or camera, is the problem.</p>
+<h2 id="ch14-1">Find the link that is down<a aria-label="link" class="anchor" href="#ch14-1">#</a></h2>
+<div class="tbl"><table>
+<tr><th>You see</th><th>It means</th><th>Go to</th></tr>
+<tr><td>LED: 2 short blinks every 2 s</td><td class="wrap">No flight controller link</td><td class="wrap">Flight controller</td></tr>
+<tr><td>LED: fast blink</td><td class="wrap">Camera link lost</td><td class="wrap">Camera</td></tr>
+<tr><td>LED: slow breathe</td><td class="wrap">Searching for the camera</td><td class="wrap">Camera</td></tr>
+<tr><td>LED: 1 short blink every 3 s</td><td class="wrap">Everything is fine, idle</td><td class="wrap">—</td></tr>
+</table></div>
+<h2 id="ch14-2">Wi-Fi and the configurator<a aria-label="link" class="anchor" href="#ch14-2">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">I cannot see the RECLINK network</td><td class="wrap">The portal only runs while <b>disarmed</b> and with the flight controller link up. Check the aircraft is disarmed and the LED shows two quick blinks per second. Hold the board's button for 3 seconds to open it by hand. It also closes after 15 minutes idle, so hold again if it went away.</td></tr>
+<tr><td class="wrap">I joined, but the page will not load</td><td class="wrap">Type <code>http://10.0.0.1</code> in the address bar. Stay connected even if the phone warns about no internet. Turn off mobile data if the phone keeps switching away. Up to three devices can connect at once.</td></tr>
+<tr><td class="wrap">The password is rejected</td><td class="wrap">The factory password is <code>reclinkfpv</code>. If you changed it and lost it, hold the button for 10 seconds to factory reset. That also erases camera pairings.</td></tr>
+<tr><td class="wrap">My changes disappeared</td><td class="wrap">Press <b>Save settings</b>. Changes apply and persist only after saving. The bar says "unsaved changes" until you do.</td></tr>
+</table></div>
+<h2 id="ch14-3">Flight controller and OSD<a aria-label="link" class="anchor" href="#ch14-3">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">Status shows FC offline</td><td class="wrap">Check wiring: FC TX to RecLink RX and FC RX to RecLink TX. Check MSP is enabled on that UART at 115200. Try <b>Swap TX/RX pins</b> (advanced), save and reboot. If you changed the baud, match it on both sides.</td></tr>
+<tr><td class="wrap">OSD shows nothing from RecLink</td><td class="wrap">Confirm Betaflight is <b>2025.12 or newer</b>, and that Custom message 1–4 are enabled and placed in the OSD tab. An <b>OSD_UNSUPPORTED</b> chip means the API is too old.</td></tr>
+<tr><td class="wrap">Placeholder names instead of text</td><td class="wrap">The line is empty or RecLink is not connected yet. Check the FC link first.</td></tr>
+<tr><td class="wrap">OSD symbols look wrong</td><td class="wrap">Match <b>OSD type</b> to your goggles. Digital filters to plain letters and digits. Use analog only for an analog OSD chip.</td></tr>
+<tr><td class="wrap">A line is cut off</td><td class="wrap">Lines are limited to 16 characters. Shorten the template. The preview warns you.</td></tr>
+<tr><td class="wrap">The board resets in flight</td><td class="wrap">Check the 5 V supply. Add a 220 µF or larger capacitor across the board's power pads. Watch for <b>WDT_RECOVERED</b> or a rising reboot counter in Diagnostics.</td></tr>
+</table></div>
+<h2 id="ch14-4">Camera<a aria-label="link" class="anchor" href="#ch14-4">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">The camera is not found when pairing</td><td class="wrap">GoPro: put it in <b>Connections → Connect Device → The Remote</b> first, then press Scan now. Disconnect it from any phone app. Move RecLink closer. Make sure fewer than four cameras are already paired.</td></tr>
+<tr><td class="wrap">"Bond list full"</td><td class="wrap">Four cameras are the limit. Forget one on the Binding tab.</td></tr>
+<tr><td class="wrap">REPAIR_NEEDED chip, or the camera never reconnects</td><td class="wrap">The camera forgot RecLink, usually after its connections were reset. Forget it on the Binding tab, then pair it again.</td></tr>
+<tr><td class="wrap">It connects, then drops again and again</td><td class="wrap">Move the board away from carbon and battery leads. In Network (advanced) raise Bluetooth power to Max and reboot. After three silent hangs in two minutes RecLink reboots itself to clear the link.</td></tr>
+<tr><td class="wrap">CAM LOST on the OSD</td><td class="wrap">The camera is off, asleep, out of range or has dropped the link. Turn it on and wait; RecLink retries on its own.</td></tr>
+<tr><td class="wrap">Values on Status are blank</td><td class="wrap">The camera has not confirmed them yet. Press <b>Refresh camera state</b>. Blank means unknown, on purpose.</td></tr>
+</table></div>
+<h2 id="ch14-5">Recording and zones<a aria-label="link" class="anchor" href="#ch14-5">#</a></h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">It does not record on arm</td><td class="wrap">Check <b>Start / stop recording</b> is set to a mode that includes arm, and the Status tab shows the aircraft as armed. Check the camera has a card and is connected (READY).</td></tr>
+<tr><td class="wrap">REC FAIL on the OSD</td><td class="wrap">The camera did not confirm recording. Check the SD card and that the camera is not busy. In advanced mode, raise <b>Wait for camera to confirm</b> or <b>Retries</b>. Open the Record trigger debug panel to see the last command.</td></tr>
+<tr><td class="wrap">The switch does nothing</td><td class="wrap">Use <b>Set AUX</b> again. Check the amber cursor on the bar moves when you flip it, and that the threshold sits between the off and on positions. For a push-button choose Trigger type: Button.</td></tr>
+<tr><td class="wrap">Zones do not change the camera</td><td class="wrap">Check Enable zone control, the right AUX channel, and that the camera is in a <b>video</b> preset and not recording. Wait for the hold time (400 ms). Read the Zone settings row on Status.</td></tr>
+<tr><td class="wrap">"partly applied (not accepted: …)"</td><td class="wrap">The camera refused those settings. Some options are not valid together, for example a frame rate with the chosen resolution. Pick values the lists offer, and use Capture from camera to start from a known-good combination.</td></tr>
+<tr><td class="wrap">Footage has the wrong date</td><td class="wrap">Clock sync needs a GPS fix with enough satellites and a camera that is idle and connected. See the Clock tab and press Sync now.</td></tr>
+</table></div>
+<div class="callout"><span class="tag">Still stuck</span><p>With <b>Advanced mode</b> on, the System tab shows a short log and the Status tab shows counters and three debug panels. A screenshot of those, plus your firmware version from the header, is what you need when asking for help.</p></div>
+</section><section class="chapter" id="appA">
+<p class="chno">Appendix A</p>
+<h1 class="ch">Reference<a aria-label="link" class="anchor" href="#appA">#</a></h1>
+<h2 id="appA-1">OSD tokens<a aria-label="link" class="anchor" href="#appA-1">#</a></h2>
+<div class="tbl long"><table>
+<tr><th>Token</th><th>Shows</th><th>Looks like</th></tr>
+<tr><td><code>%st</code></td><td class="wrap">Recording state</td><td class="wrap">REC · IDLE · PRE · ----</td></tr>
+<tr><td><code>%et</code></td><td class="wrap">Elapsed recording time</td><td class="wrap">12:34</td></tr>
+<tr><td><code>%rt</code></td><td class="wrap">Remaining recording time</td><td class="wrap">45m · 1h</td></tr>
+<tr><td><code>%bt</code></td><td class="wrap">Camera battery percent</td><td class="wrap">78%</td></tr>
+<tr><td><code>%bb</code></td><td class="wrap">Camera battery bar, 4 characters</td><td class="wrap">###-</td></tr>
+<tr><td><code>%bi</code></td><td class="wrap">Battery icon (analog) or the 4-character bar (digital)</td><td class="wrap">###-</td></tr>
+<tr><td><code>%rs</code></td><td class="wrap">Resolution</td><td class="wrap">4K</td></tr>
+<tr><td><code>%fp</code></td><td class="wrap">Frame rate</td><td class="wrap">60</td></tr>
+<tr><td><code>%ln</code></td><td class="wrap">Lens</td><td class="wrap">WIDE</td></tr>
+<tr><td><code>%ar</code></td><td class="wrap">Aspect ratio</td><td class="wrap">16:9</td></tr>
+<tr><td><code>%pr</code></td><td class="wrap">Colour profile</td><td class="wrap">STD · LOG · HDR · HLG</td></tr>
+<tr><td><code>%bd</code></td><td class="wrap">Bit depth</td><td class="wrap">8b · 10b</td></tr>
+<tr><td><code>%md</code></td><td class="wrap">Camera mode name</td><td class="wrap">VID</td></tr>
+<tr><td><code>%sd</code></td><td class="wrap">SD space: minutes, hours or GB; NO SD; FULL</td><td class="wrap">1h · 45m · 32G</td></tr>
+<tr><td><code>%sg</code></td><td class="wrap">SD free space always in GB</td><td class="wrap">39.3G</td></tr>
+<tr><td><code>%cr</code></td><td class="wrap">Camera link signal in dBm</td><td class="wrap">-52</td></tr>
+<tr><td><code>%wr</code></td><td class="wrap">Active warning (<a class="xref" href="#ch10">chapter 10</a>)</td><td class="wrap">LOW BATT</td></tr>
+<tr><td><code>%cn</code></td><td class="wrap">Craft name from the FC</td><td class="wrap">QUAD1</td></tr>
+<tr><td><code>%gs</code></td><td class="wrap">GPS satellite count</td><td class="wrap">14</td></tr>
+<tr><td><code>%gf</code></td><td class="wrap">GPS fix</td><td class="wrap">3D · NO</td></tr>
+<tr><td><code>%fb</code></td><td class="wrap">Flight battery state from the FC</td><td class="wrap">OK · LOW · CRIT</td></tr>
+<tr><td><code>%sp</code></td><td class="wrap">Ground speed (units setting)</td><td class="wrap">62KMH · 38MPH</td></tr>
+</table></div>
+<p class="sm mut">Any other <code>%</code> code is printed as typed. Normal text passes through unchanged. In digital mode everything is uppercased.</p>
+<h2 id="appA-2">Status LED<a aria-label="link" class="anchor" href="#appA-2">#</a></h2>
+<div class="diagram"><svg aria-label="LED patterns" role="img" viewbox="0 0 700 288"><path d="M250 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="250" y="278">0 s</text><path d="M323 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="323" y="278">1 s</text><path d="M396 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="396" y="278">2 s</text><path d="M469 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="469" y="278">3 s</text><path d="M542 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="542" y="278">4 s</text><path d="M615 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="615" y="278">5 s</text><path d="M688 8 V262" stroke="var(--line)" stroke-dasharray="2 4" stroke-width="1"></path><text class="m t8" text-anchor="middle" x="688" y="278">6 s</text><text class="t10" x="10" y="24">Booting</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="14"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="438.0" x="250.0" y="14"></rect><text class="t10" x="10" y="52">Config portal open</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="250.0" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="267.5" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="323.0" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="340.5" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="396.0" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="413.5" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="469.0" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="486.5" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="542.0" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="559.5" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="615.0" y="42"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="632.5" y="42"></rect><text class="t10" x="10" y="80">Camera recording</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="70"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="438.0" x="250.0" y="70"></rect><text class="t10" x="10" y="108">No flight controller</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="98"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="250.0" y="98"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="271.9" y="98"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="396.0" y="98"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="417.9" y="98"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="542.0" y="98"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="563.9" y="98"></rect><text class="t10" x="10" y="136">Camera lost</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="250.0" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="271.9" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="293.8" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="315.7" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="337.6" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="359.5" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="381.4" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="403.3" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="425.2" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="447.1" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="469.0" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="490.9" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="512.8" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="534.7" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="556.6" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="578.5" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="600.4" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="622.3" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="644.2" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="666.1" y="126"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="688.0" y="126"></rect><text class="t10" x="10" y="164">Searching for camera</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="154"></rect><path d="M250.0 166.0 L251.7 166.0 L253.4 166.0 L255.1 165.9 L256.7 165.9 L258.4 165.8 L260.1 165.7 L261.8 165.5 L263.5 165.4 L265.2 165.3 L266.8 165.1 L268.5 164.9 L270.2 164.7 L271.9 164.5 L273.6 164.3 L275.3 164.0 L277.0 163.8 L278.6 163.5 L280.3 163.2 L282.0 162.9 L283.7 162.6 L285.4 162.3 L287.1 162.0 L288.7 161.7 L290.4 161.4 L292.1 161.1 L293.8 160.7 L295.5 160.4 L297.2 160.1 L298.9 159.7 L300.5 159.4 L302.2 159.1 L303.9 158.7 L305.6 158.4 L307.3 158.1 L309.0 157.8 L310.6 157.5 L312.3 157.2 L314.0 156.9 L315.7 156.6 L317.4 156.3 L319.1 156.1 L320.8 155.8 L322.4 155.6 L324.1 155.4 L325.8 155.2 L327.5 155.0 L329.2 154.8 L330.9 154.6 L332.5 154.5 L334.2 154.4 L335.9 154.3 L337.6 154.2 L339.3 154.1 L341.0 154.1 L342.7 154.0 L344.3 154.0 L346.0 154.0 L347.7 154.0 L349.4 154.1 L351.1 154.1 L352.8 154.2 L354.4 154.3 L356.1 154.4 L357.8 154.5 L359.5 154.7 L361.2 154.9 L362.9 155.0 L364.6 155.2 L366.2 155.4 L367.9 155.7 L369.6 155.9 L371.3 156.1 L373.0 156.4 L374.7 156.7 L376.3 157.0 L378.0 157.3 L379.7 157.6 L381.4 157.9 L383.1 158.2 L384.8 158.5 L386.5 158.8 L388.1 159.2 L389.8 159.5 L391.5 159.8 L393.2 160.2 L394.9 160.5 L396.6 160.8 L398.2 161.2 L399.9 161.5 L401.6 161.8 L403.3 162.1 L405.0 162.4 L406.7 162.7 L408.4 163.0 L410.0 163.3 L411.7 163.6 L413.4 163.9 L415.1 164.1 L416.8 164.3 L418.5 164.6 L420.1 164.8 L421.8 165.0 L423.5 165.1 L425.2 165.3 L426.9 165.5 L428.6 165.6 L430.3 165.7 L431.9 165.8 L433.6 165.9 L435.3 165.9 L437.0 166.0 L438.7 166.0 L440.4 166.0 L442.0 166.0 L443.7 165.9 L445.4 165.9 L447.1 165.8 L448.8 165.7 L450.5 165.6 L452.2 165.5 L453.8 165.4 L455.5 165.2 L457.2 165.0 L458.9 164.8 L460.6 164.6 L462.3 164.4 L463.9 164.2 L465.6 163.9 L467.3 163.7 L469.0 163.4 L470.7 163.1 L472.4 162.8 L474.1 162.5 L475.7 162.2 L477.4 161.9 L479.1 161.6 L480.8 161.3 L482.5 160.9 L484.2 160.6 L485.8 160.3 L487.5 159.9 L489.2 159.6 L490.9 159.3 L492.6 158.9 L494.3 158.6 L496.0 158.3 L497.6 158.0 L499.3 157.7 L501.0 157.4 L502.7 157.1 L504.4 156.8 L506.1 156.5 L507.7 156.2 L509.4 156.0 L511.1 155.7 L512.8 155.5 L514.5 155.3 L516.2 155.1 L517.9 154.9 L519.5 154.7 L521.2 154.6 L522.9 154.5 L524.6 154.3 L526.3 154.2 L528.0 154.1 L529.6 154.1 L531.3 154.0 L533.0 154.0 L534.7 154.0 L536.4 154.0 L538.1 154.0 L539.8 154.1 L541.4 154.1 L543.1 154.2 L544.8 154.3 L546.5 154.5 L548.2 154.6 L549.9 154.7 L551.5 154.9 L553.2 155.1 L554.9 155.3 L556.6 155.5 L558.3 155.7 L560.0 156.0 L561.7 156.2 L563.3 156.5 L565.0 156.8 L566.7 157.1 L568.4 157.4 L570.1 157.7 L571.8 158.0 L573.4 158.3 L575.1 158.6 L576.8 158.9 L578.5 159.3 L580.2 159.6 L581.9 159.9 L583.6 160.3 L585.2 160.6 L586.9 160.9 L588.6 161.3 L590.3 161.6 L592.0 161.9 L593.7 162.2 L595.3 162.5 L597.0 162.8 L598.7 163.1 L600.4 163.4 L602.1 163.7 L603.8 163.9 L605.5 164.2 L607.1 164.4 L608.8 164.6 L610.5 164.8 L612.2 165.0 L613.9 165.2 L615.6 165.4 L617.2 165.5 L618.9 165.6 L620.6 165.7 L622.3 165.8 L624.0 165.9 L625.7 165.9 L627.4 166.0 L629.0 166.0 L630.7 166.0 L632.4 166.0 L634.1 165.9 L635.8 165.9 L637.5 165.8 L639.1 165.7 L640.8 165.6 L642.5 165.5 L644.2 165.3 L645.9 165.1 L647.6 165.0 L649.3 164.8 L650.9 164.6 L652.6 164.3 L654.3 164.1 L656.0 163.9 L657.7 163.6 L659.4 163.3 L661.0 163.0 L662.7 162.7 L664.4 162.4 L666.1 162.1 L667.8 161.8 L669.5 161.5 L671.2 161.2 L672.8 160.8 L674.5 160.5 L676.2 160.2 L677.9 159.8 L679.6 159.5 L681.3 159.2 L682.9 158.8 L684.6 158.5 L686.3 158.2 L688.0 157.9 L688 166 L250 166 Z" fill="var(--acc)" fill-opacity=".85"></path><text class="t10" x="10" y="192">Camera ready, idle</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="182"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="250.0" y="182"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="8.8" x="469.0" y="182"></rect><text class="t10" x="10" y="220">Watchdog recovery (once)</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="210"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="250.0" y="210"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="271.9" y="210"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="11.0" x="293.8" y="210"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="315.7" y="210"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="10.9" x="337.6" y="210"></rect><text class="t10" x="10" y="248">Identify (3 s)</text><rect fill="var(--well)" height="12" rx="2" stroke="var(--line)" stroke-width=".8" width="438" x="250" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="250.0" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="279.2" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="308.4" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="337.6" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="366.8" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="396.0" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="425.2" y="238"></rect><rect fill="var(--acc)" fill-opacity="1" height="12" rx="2" width="14.6" x="454.4" y="238"></rect></svg><p class="cap">What a single-colour LED does over a six-second window.</p></div>
+<p class="sm mut">Timings are nominal. On the production board the LED is a single-colour LED, so patterns differ by rhythm only. Boards with an addressable LED use colour too (blue for the portal, green for recording). The LED shows the highest-priority pattern that applies: portal, then a recent watchdog recovery, then recording, then flight controller down, then the camera link state. Identify overrides everything while it runs.</p>
+<h2 id="appA-3">Factory defaults<a aria-label="link" class="anchor" href="#appA-3">#</a></h2>
+<div class="tbl long"><table>
+<tr><th>Setting</th><th>Default</th></tr>
+<tr><td>Start / stop recording</td><td class="wrap">When the aircraft is armed</td></tr>
+<tr><td>Record switch</td><td class="wrap">Switch type, no channel assigned, on above 1700 µs</td></tr>
+<tr><td>Start delay · stop delay · verify · retries</td><td class="wrap">300 ms · 1500 ms · 800 ms · 3</td></tr>
+<tr><td>Zone control</td><td class="wrap">Off. Three zones at 1300 / 1700 / 2100 µs. Hold time 400 ms. No changes while recording.</td></tr>
+<tr><td>Highlight channel</td><td class="wrap">None</td></tr>
+<tr><td>OSD</td><td class="wrap">Digital · 4 Hz · metric · lines <code>%st %et</code>, <code>%bi%bt %wr</code>, <code>%rs%fp %ln</code>, <code>SD %sd</code></td></tr>
+<tr><td>OSD warnings</td><td class="wrap">Battery 15 % · SD 3 min · blink on · show lost on</td></tr>
+<tr><td>Clock sync</td><td class="wrap">On · needs GPS · 6 satellites · 10 s tolerance · UTC · GoPro check every 5 min · DJI resync every 60 min · 2 retries</td></tr>
+<tr><td>DJI GPS push</td><td class="wrap">Off · 1 Hz</td></tr>
+<tr><td>Wi-Fi</td><td class="wrap">SSID RECLINK-XXXX · password reclinkfpv · channel auto · open while disarmed · auto-close 15 min · Max power</td></tr>
+<tr><td>Bluetooth power</td><td class="wrap">Max (+9 dBm)</td></tr>
+<tr><td>Flight controller link</td><td class="wrap">115200 baud · pins not swapped</td></tr>
+<tr><td>LED brightness · Advanced mode</td><td class="wrap">128 · off</td></tr>
+</table></div>
+<h2 id="appA-4">At a glance<a aria-label="link" class="anchor" href="#appA-4">#</a></h2>
+<div class="cols">
+<div class="grow"><div class="tbl"><table>
+<tr><td>Wi-Fi network</td><td class="wrap">RECLINK-XXXX</td></tr>
+<tr><td>Portal address</td><td class="wrap"><code>http://10.0.0.1</code></td></tr>
+<tr><td>Wi-Fi password</td><td class="wrap"><code>reclinkfpv</code> (change it)</td></tr>
+<tr><td>Max Wi-Fi clients</td><td class="wrap">3</td></tr>
+<tr><td>Max paired cameras</td><td class="wrap">4, one connected at a time</td></tr>
+<tr><td>Max OSD line length</td><td class="wrap">16 characters, 4 lines</td></tr>
+</table></div></div>
+<div class="grow"><div class="tbl"><table>
+<tr><td>Short press</td><td class="wrap">Identify (LED 3 s)</td></tr>
+<tr><td>Hold 3 s</td><td class="wrap">Open or close the portal</td></tr>
+<tr><td>Hold 10 s</td><td class="wrap">Factory reset (not while armed)</td></tr>
+<tr><td>Serial</td><td class="wrap">UART, 8N1, 115200, 3.3 V</td></tr>
+<tr><td>Pins</td><td class="wrap">RX GPIO20 · TX GPIO21 · button GPIO9 · LED GPIO10</td></tr>
+<tr><td>Betaflight</td><td class="wrap">2025.12.0 or newer (API 1.47+)</td></tr>
+</table></div></div>
+</div>
+<h2 id="appA-5">What RecLink can and cannot touch<a aria-label="link" class="anchor" href="#appA-5">#</a></h2>
+<div class="cols">
+<div class="grow">
+<h3>It reads</h3>
+<ul>
+<li>Flight controller: API version, craft name, arm state, RC channels, GPS, battery state, clock.</li>
+<li>Camera: recording, battery, SD, mode, resolution, frame rate and the other values shown on the Status tab.</li>
+</ul>
+<h3>It writes</h3>
+<ul>
+<li>Four lines of OSD text to the flight controller.</li>
+<li>Record, settings, highlight and clock commands to the camera.</li>
+</ul>
+</div>
+<div class="grow">
+<h3>It never sends</h3>
+<ul>
+<li>Any RC, GPS, clock, display-port or reboot command to the flight controller.</li>
+<li>Any command that arms or disarms.</li>
+<li>Any formatting, firmware, reset or file-delete command to the camera from automation. Those exist only as labelled portal actions, while disarmed.</li>
+</ul>
+</div>
+</div>
+<h2 id="appA-6">Glossary<a aria-label="link" class="anchor" href="#appA-6">#</a></h2>
+<div class="tbl"><table>
+<tr><td>AUX</td><td class="wrap">A spare radio channel beyond the four sticks. AUX 1 is channel 5.</td></tr>
+<tr><td>µs</td><td class="wrap">Microseconds. Channel values run from about 1000 (low) to 2000 (high).</td></tr>
+<tr><td>BLE</td><td class="wrap">Bluetooth Low Energy, the link to the camera.</td></tr>
+<tr><td>Bond</td><td class="wrap">The stored pairing between RecLink and one camera.</td></tr>
+<tr><td>MSP</td><td class="wrap">MultiWii Serial Protocol, the language Betaflight speaks over the wire.</td></tr>
+<tr><td>OSD</td><td class="wrap">On-screen display: the text drawn over your video feed.</td></tr>
+<tr><td>OTA</td><td class="wrap">Over-the-air firmware update, done from the configurator.</td></tr>
+<tr><td>Portal</td><td class="wrap">RecLink's Wi-Fi network and configuration web page.</td></tr>
+<tr><td>Zone</td><td class="wrap">A slice of a radio switch's travel that selects a set of camera settings.</td></tr>
+</table></div>
+<p class="sm mut" style="margin-top:6mm">RecLink User Guide, firmware 0.1.0 (pre-release). Screenshots show the real configurator with example values. Menu names in Betaflight Configurator and on cameras can differ slightly between versions.</p>
+</section>
+</main>
+</div>
+<footer class="site-foot"><div><span>Firmware 0.1.0 (pre-release) · Betaflight 2025.12+</span><a href="https://github.com/ShadowM06/RecLink">Source on GitHub</a><a href="#top" class="to-top">Back to top</a></div></footer>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

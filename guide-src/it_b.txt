@@ -1,0 +1,303 @@
+u329|||Trigger
+u330|||arm o interruttore
+u331|||Attesa
+u332|||ritardo avvio 300 ms
+u333|||Avvio
+u334|||comando alla camera
+u335|||Verifica
+u336|||la camera deve dire REC
+u337|||non confermato in 800 ms: riprova, fino a 3 volte
+u339|||se falliscono tutti
+u340|||L'arresto funziona allo stesso modo dopo un ritardo di arresto (predefinito 1,5 s), così gli ultimi istanti non vengono tagliati.
+u341|||La camera è il giudice: RecLink la avvia, poi aspetta che la camera riporti che sta registrando. Se non lo fa entro la finestra di verifica, RecLink riprova. Se tutti i tentativi falliscono compare l'avviso OSD <b>REC FAIL</b>. Il bridge tiene traccia del proprio ultimo comando, quindi una camera che non riporta nulla non può annullare un arresto che RecLink le deve ancora inviare.
+u342|||Temporizzazione (modalità avanzata)
+u343|||Impostazione
+u344|||Predefinito
+u345|||Intervallo
+u346|||Start delay after trigger
+u347|||Attende prima di inviare l'avvio. Lascia assestare l'arm.
+u348|||Keep recording after trigger clears
+u349|||Ritarda l'arresto per catturare anche l'atterraggio.
+u350|||Wait for camera to confirm
+u351|||Per ogni tentativo.
+u352|||Retries if not confirmed
+u353|||Poi REC FAIL.
+u354|||Capitolo 9
+u355|||Zone: impostazioni della camera da un interruttore
+u356|||Un interruttore o una manopola a 2–6 posizioni della radio sceglie una <b>zona</b>. Ogni zona memorizza le impostazioni della camera che desideri e RecLink le invia alla camera quando lo stick si ferma in quella zona.
+u358|||Zona 1
+u359|||4K · 60 fps
+u360|||Lente: Wide
+u361|||HyperSmooth: High
+u362|||Protune on
+u363|||Zona 2
+u365|||Lente: Linear
+u366|||HyperSmooth: Low
+u367|||Zona 3
+u368|||1080 · 240 fps
+u369|||HyperSmooth: Off
+u370|||Impostazioni di esempio per una GoPro. La zona viene applicata quando lo stick vi è rimasto fermo per il tempo di attesa (400 ms).
+u371|||Un interruttore a tre posizioni diviso in tre zone. La barra va da 900 a 2100 µs.
+u372|||GoPro e DJI funzionano in modo diverso
+u373|||<b>GoPro:</b> una zona non carica un preset GoPro. Invia le impostazioni che hai spuntato (risoluzione, frame rate, lente e così via) al preset video attuale della camera. <b>DJI:</b> ogni zona applica invece un numero <b>Mode ID</b> della camera, scritto in un campo sulla riga della zona.
+u374|||Costruire le zone
+u376|||Spunta <b>Enable zone control</b>.
+u377|||Scegli il <b>canale AUX</b> oppure premi <b>Set AUX</b> e muovi l'interruttore.
+u378|||<b>Aggiungi o rimuovi zone</b> finché il numero corrisponde al tuo interruttore (3 per uno a 3 posizioni). I bordi sono distribuiti in modo predefinito: 1300 e 1700 µs per tre zone.
+u379|||Porta lo stick in ogni posizione e controlla che il cursore ambra della barra cada nella zona giusta. Regola i bordi trascinando le maniglie. I bordi restano in ordine e distanti almeno 25 µs. L'ultima zona termina sempre a 2100 µs.
+u380|||Costruisci le impostazioni di ogni zona come mostrato nella pagina seguente.
+u381|||Tempo di attesa
+u382|||Una zona deve restare selezionata per 400 ms prima di essere applicata, così un passaggio veloce nel mezzo non attiva ogni zona lungo il percorso. Cambialo in <b>Advanced → Hold time before applying</b> (50–5000 ms).
+u383|||Impostazioni della camera per ogni zona (GoPro)
+u384|||Sotto le righe delle zone, una scheda per zona mostra una riga per ogni impostazione che la zona può cambiare. <b>Spunta una riga per inviare quell'impostazione; lasciala senza spunta e la camera mantiene il proprio valore.</b> Le righe senza spunta non vengono salvate.
+u387|||Da sapere
+u388|||<b>Gli elenchi seguono la camera.</b> Con la camera collegata e in un preset video, ogni elenco di opzioni mostra solo ciò che la camera accetta in quel momento (ad esempio, solo i frame rate validi alla risoluzione attuale). Un valore che la camera non offre più resta visibile, con l'indicazione «(not available now)».
+u389|||<b>L'ordine conta e lo gestisce RecLink.</b> RecLink scrive prima la risoluzione, poi le impostazioni che ne dipendono, e Protune prima delle sue sotto-impostazioni. Aspetta che la camera accetti ogni scrittura, controlla il risultato e ritenta una volta una scrittura rifiutata.
+u390|||<b>L'otturatore è un angolo di otturazione.</b> 180° significa un'esposizione di 1/(2 × frame rate). La zona mantiene lo stesso angolo se cambi il frame rate.
+u391|||<b>Keep the camera in step while editing</b> (attivo di default) significa che la camera cambia davvero mentre modifichi e mentre selezioni le schede delle zone. Funziona solo da disarmati e senza registrare. Disattivalo per modificare senza toccare la camera.
+u392|||<b>I modelli differiscono.</b> Aspect ratio, Bit depth e Color profile sono nascosti per una HERO11 perché non li ha. Una HERO12 o 13 li mostra.
+u393|||Gruppo
+u394|||Impostazioni che una zona può inviare
+u395|||Video
+u396|||Resolution, Aspect ratio, Frame rate, Lens, HyperSmooth, Bit depth, Color profile
+u397|||Protune
+u398|||Protune on/off, ISO max, ISO min, Shutter angle, White balance, Color, Sharpness, EV comp, 10-bit
+u399|||Quando una zona viene applicata
+u400|||RecLink applica una zona solo quando il collegamento con la camera è pronto, la camera non è occupata e <b>non sta registrando</b>. Per consentire i cambi durante la registrazione, spunta <b>Allow zone changes while recording</b> nelle opzioni avanzate.
+u401|||Se c'è un ostacolo, riprova al ciclo successivo, senza perdere la scelta.
+u402|||Dopo una riconnessione, l'ultima zona selezionata viene applicata una volta, nel caso tu abbia cambiato la camera a mano.
+u403|||La riga <b>Zone settings</b> della scheda Status ti dice il risultato: applicata, applicata in parte (e quali impostazioni la camera ha rifiutato) oppure non applicata. Decide la camera, non RecLink, cosa accettare. Alcune opzioni non sono valide con la risoluzione attuale.
+u404|||Una zona senza impostazioni spuntate non invia nulla.
+u405|||Esempio
+u406|||Zona 1 per la crociera: 4K, 60 fps, Wide, HyperSmooth High. Zona 2 per un passaggio al rallentatore: 2.7K, 120 fps, Linear. Zona 3 per il massimo frame rate: 1080, 240 fps. Aziona l'interruttore in volo e la camera segue quando lo stick è rimasto fermo per 400 ms.
+u407|||Capitolo 10
+u408|||OSD: informazioni della camera nel visore
+u409|||RecLink scrive quattro righe di testo, fino a 16 caratteri ciascuna, nei quattro elementi di messaggio personalizzato che hai posizionato nel capitolo 4.
+u410|||MODELLO
+u415|||stato e tempo trascorso
+u416|||icona batteria, %, avviso
+u417|||risoluzione, fps, lente
+u418|||testo fisso + SD rimasta
+u419|||Ogni riga è un <b>modello</b>: testo normale più token <code>%</code> che RecLink sostituisce con valori in tempo reale. Qui vedi quelli predefiniti. Tutto ciò che la camera non ha confermato viene sostituito con niente.
+u420|||Le righe vuote vengono inviate come un singolo spazio, così Betaflight non mostra il nome segnaposto.
+u421|||Modificare le righe
+u424|||<b>Tocca una riga</b> per selezionarla (bordo verde), poi <b>tocca i token</b> nella palette per aggiungerli. Tocca <b>＋ text</b> per aggiungere testo fisso come <code>SD</code> o <code>BAT</code>.
+u425|||Guarda l'anteprima. Se una riga supera i 16 caratteri la pagina avvisa «Line N is X chars, clipped to …». Accorciala.
+u426|||Preferisci <b>raw</b> se ti piace scrivere direttamente i modelli, ad esempio <code>%st %et</code>. Premi <b>Save settings</b>.
+u427|||Quando la camera è persa
+u429|||Se il collegamento con la camera non è pronto, la riga 1 mostra <b>CAM LOST</b>, oppure un <b>CAM ?</b> lampeggiante mentre RecLink sta ancora cercando o collegandosi. Le righe 2–4 restano vuote. Questo layout compare sempre, qualunque sia l'impostazione degli avvisi, così l'OSD non resta mai fermo senza che tu lo sappia.
+u430|||Tipo di OSD, frequenza e unità
+u431|||OSD type
+u432|||Digital
+u433|||<b>Digital</b> mantiene solo i glifi che i visori in stile DJI disegnano: lettere (maiuscole), cifre e punteggiatura di base. Le barre della batteria diventano <code>#</code> e <code>-</code>. <b>Analog</b> lascia il testo com'è e consente il set di caratteri completo, compresa l'icona della batteria.
+u434|||Update rate
+u435|||1–10 Hz. Una modifica ha pieno effetto dopo un riavvio.
+u436|||Speed units
+u437|||Metric
+u438|||Riguarda solo il token <code>%sp</code>: km/h o mph.
+u439|||Il token <code>%wr</code> mostra l'unico avviso attivo più importante. Una riga che contiene <code>%wr</code> rende visibile l'avviso senza un elemento separato.
+u440|||Priorità
+u441|||Mostra
+u442|||Quando
+u444|||Il collegamento con la camera non è pronto
+u446|||Nessuna scheda nella camera
+u448|||La scheda è piena
+u450|||Comando di registrazione non confermato dopo tutti i tentativi
+u452|||Batteria della camera pari o inferiore alla soglia (predefinito 15 %)
+u454|||Tempo di registrazione residuo pari o inferiore alla soglia (predefinito 3 min)
+u456|||La GoPro segnala surriscaldamento
+u458|||La sincronizzazione dell'orologio si è arresa
+u459|||<b>Blink warnings</b> (attivo di default) fa lampeggiare l'avviso due volte al secondo per attirare l'attenzione.
+u460|||<b>Show a warning when the camera link is lost</b> controlla l'avviso mostrato da <code>%wr</code>. La riga 1 mostra comunque CAM LOST.
+u461|||Imposta le soglie di batteria e SD a piacere nella scheda OSD. Usa 0 per disattivarne una.
+u462|||L'elenco completo dei token è nell'appendice A.
+u463|||Capitolo 11
+u464|||Sincronizzazione orologio, GPS push e tag highlight
+u465|||Tre funzioni minori che rendono i filmati più facili da ordinare e usare.
+u466|||Sincronizzazione dell'orologio della camera
+u468|||RecLink imposta l'orologio della camera dall'ora GPS del flight controller, così ogni clip ha la marca temporale corretta, anche dopo una sostituzione della batteria che aveva riportato la camera a una data predefinita. Scrive solo sulla <b>camera</b> e mai sull'orologio del flight controller.
+u469|||Si sincronizza quando tutte queste condizioni sono vere
+u470|||La sincronizzazione dell'orologio è attiva e (di default) l'FC ha un GPS con fix 3D stabile e almeno 6 satelliti per 10 secondi.
+u471|||L'FC riporta un'ora plausibile.
+u472|||La camera è collegata, non sta registrando e non è occupata.
+u473|||Quando avviene
+u474|||Quando la camera si collega, quando il fix GPS diventa buono, quando premi <b>Sync now</b>, e poi periodicamente (una GoPro ogni 5 minuti di default, una DJI ogni 60).
+u475|||Per una GoPro legge prima l'orologio della camera e scrive solo se è sfasato di più di 10 secondi, poi controlla il risultato. Una DJI non si può leggere, quindi l'ora viene semplicemente inviata.
+u476|||Imposta <b>UTC offset</b> in minuti (e <b>Daylight saving</b>) se vuoi i filmati in ora locale. Lascialo a 0 per UTC.
+u477|||Se l'orologio non si riesce a correggere dopo i tentativi, l'OSD mostra <b>CLK FAIL</b> e la scheda Clock riporta FAILED. Ne risente solo la marca temporale.
+u478|||GPS push per DJI
+u479|||Solo per camera DJI. Con <b>System → Send aircraft GPS position to the camera</b>, RecLink invia la posizione GPS del velivolo all'Osmo a 1 o 2 Hz per l'overlay o i metadati della camera. Richiede un buon fix GPS e un'ora valida. Una GoPro ignora questa impostazione.
+u480|||Tag highlight
+u482|||Un interruttore libero può inserire un segnaposto nel filmato in un momento che vuoi ritrovare dopo. Scegli il suo <b>canale AUX</b> (usa <b>Set AUX</b>). Quando il canale supera <b>1700 µs</b>, RecLink invia un tag <b>HiLight</b> a una GoPro. Una DJI non ha il tag highlight, quindi RecLink preme invece il suo pulsante <b>Quick-Switch</b>.
+u483|||Funziona solo con il collegamento alla camera pronto. Un pulsante momentaneo è l'ideale.
+u484|||Capitolo 12
+u485|||Network, System e aggiornamenti firmware
+u486|||Le schede di servizio: Wi-Fi, collegamento con il flight controller, potenza radio e azioni di manutenzione della scheda.
+u487|||Scheda Network
+u489|||Prima di salvare un nuovo SSID o una nuova password
+u490|||Cambiare l'uno o l'altra cambia il modo in cui raggiungi la pagina. Annota prima i nuovi valori. Si applicano al prossimo avvio del portale.
+u491|||Note
+u493|||vuoto
+u494|||Fino a 19 caratteri.
+u495|||Password
+u497|||Cambiala. Rete aperta se più corta di 8.
+u498|||Open the portal
+u499|||Always, while disarmed
+u500|||Oppure «Only after holding the button» (3 s).
+u501|||Portal auto-close
+u502|||15 min
+u503|||1–120. Servono anche 60 s senza client.
+u504|||Canale Wi-Fi (avanz.)
+u505|||0 (auto)
+u506|||<b>Scan AUX now</b> mostra il valore attuale di AUX 1–14 in µs. Muovi un interruttore e scansiona di nuovo per vedere quale canale è cambiato. Legge gli stessi dati di Set AUX, quindi serve il collegamento con il flight controller.
+u507|||Impostazioni di rete avanzate
+u509|||<b>Radio power.</b> Wi-Fi: Low 2 dBm, Medium 10 dBm, Max 20 dBm (predefinito). Bluetooth: Low −12 dBm, Medium 0 dBm, Max +9 dBm (predefinito). Aumenta la potenza se la connessione è instabile, riducila per consumare meno. La potenza Wi-Fi si applica alla prossima apertura del portale. La potenza Bluetooth si applica dopo un riavvio.
+u510|||<b>Baud rate</b> (da 9600 a 460800, predefinito 115200). Cambialo solo se hai cambiato la velocità della UART del flight controller, o per aggirare un collegamento al limite. I due lati devono coincidere.
+u511|||<b>Swap TX/RX pins</b> corregge i fili incrociati senza saldare.
+u512|||Entrambi richiedono un riavvio. Dopo aver salvato compare nella barra un pulsante <b>Reboot now</b>. Nient'altro qui ne ha bisogno.
+u513|||Scheda System
+u515|||Advanced mode
+u516|||Mostra le opzioni di temporizzazione, la diagnostica, la scheda Clock e il registro.
+u517|||DJI GPS push
+u518|||Vedi il capitolo 11.
+u519|||LED brightness
+u520|||16–255. Riguarda solo un LED a colori; un LED semplice non si può attenuare.
+u521|||Identify
+u522|||Fa lampeggiare il LED per 3 s. Come una pressione breve del pulsante.
+u523|||Reboot bridge
+u524|||Riavvia RecLink. Impostazioni e abbinamenti vengono mantenuti. Il portale cade per circa 10 s.
+u525|||Aggiornare il firmware (OTA)
+u526|||Procurati il file firmware <b>.bin</b>. Non lo <code>.zip</code>.
+u527|||In <b>Danger → Firmware update</b>, scegli il file. Spunta <b>Erase all settings</b> solo se vuoi ripartire da zero.
+u528|||Premi <b>Upload &amp; flash</b> e conferma. Una barra di avanzamento mostra il caricamento. Non spegnere.
+u529|||La scheda si riavvia da sola e la pagina si ricarica. Impostazioni e abbinamenti vengono mantenuti, a meno che tu non abbia scelto di cancellarli.
+u530|||Un'immagine difettosa viene rifiutata e resta il firmware attuale. Il nuovo firmware deve avviarsi correttamente una volta prima di essere accettato, così un aggiornamento difettoso non resta installato.
+u531|||Ripristino di fabbrica
+u532|||Cancella <b>tutte le impostazioni e tutti gli abbinamenti delle camere</b>, poi riavvia. Usa il pulsante nella scheda System (chiede conferma due volte) oppure tieni premuto il pulsante della scheda per 10 secondi. Viene rifiutato se il velivolo è armato. Un normale riavvio non cancella mai nulla.
+u533|||Capitolo 13
+u534|||Volare con RecLink
+u535|||Una volta configurato, RecLink fa il suo lavoro senza che tu lo tocchi. Questo capitolo è la routine: cosa controllare prima, cosa stai vedendo durante il volo e cosa succede se qualcosa cade.
+u536|||Ricorda
+u537|||RecLink 0.1.0 non è stato provato in volo. Prova a banco ogni funzione con le eliche rimosse, come qui sotto, e fai i primi voli brevi e su terreno aperto.
+u538|||Prova a banco, eliche rimosse
+u539|||Passo
+u540|||Dovresti vedere
+u541|||Accendi il quad. Aspetta qualche secondo.
+u542|||LED: due brevi lampeggi al secondo (portale aperto), poi lampeggio di riposo quando la camera è pronta.
+u543|||Apri il portale. Guarda la scheda Status.
+u544|||Aircraft: disarmed. Camera link: READY, in verde. Le letture di batteria e SD sono compilate.
+u545|||Guarda il visore.
+u546|||Le quattro righe mostrano lo stato della camera, non <b>CAM LOST</b>.
+u547|||Scheda Binding: 3 s test recording.
+u548|||La camera registra per 3 secondi. L'OSD mostra REC.
+u549|||Porta l'interruttore delle zone in ogni posizione.
+u550|||Status mostra «Zone N: applied» e la risoluzione e gli fps sull'OSD cambiano.
+u551|||Aziona l'interruttore di registrazione (se lo usi).
+u552|||La camera si avvia e si ferma. L'OSD mostra REC e il tempo trascorso.
+u553|||Chiudi il portale, poi <b>arma</b> con le eliche rimosse.
+u554|||La rete Wi-Fi scompare. La camera inizia a registrare dopo il ritardo di avvio. Il LED è fisso.
+u555|||<b>Disarma.</b>
+u556|||La camera si ferma dopo il ritardo di arresto. Il Wi-Fi può tornare.
+u557|||Controlla batteria e spazio sulla SD della camera.
+u558|||Sufficienti per il volo. L'OSD avvisa a 15 % e 3 minuti di default.
+u559|||Cosa vedi in aria
+u560|||<b>Il Wi-Fi è spento.</b> Funziona solo il Bluetooth, quindi il collegamento con la camera è il più stabile possibile.
+u561|||<b>Il testo OSD si aggiorna</b> alla frequenza impostata. Stato di registrazione e tempo trascorso sono sempre a colpo d'occhio.
+u562|||<b>Il LED</b> è fisso mentre registra.
+u563|||Premere il pulsante in volo non causa danni.
+u564|||Se qualcosa cade
+u565|||<b>Collegamento con la camera perso</b> (fuori portata, camera spenta, interruzione radio): l'OSD mostra <b>CAM LOST</b>, il LED lampeggia veloce e RecLink continua a provare con pause crescenti (1, 2, 4, 8, 16, poi ogni 30 secondi). Quando si ricollega controlla cosa sta facendo la camera e invia al massimo un comando correttivo.
+u566|||<b>Collegamento con il flight controller perso:</b> RecLink smette di scrivere testo. Il velivolo non ne risente.
+u567|||<b>RecLink si riavvia</b> (brown-out o blocco): il testo OSD si blocca per circa 0,3 secondi, poi si riprende. La camera si ricollega da sola.
+u573|||attendi 1, 2, 4, 8, 16, poi 30 s, e cerca di nuovo
+u574|||OSD: CAM ? (lampeggiante)
+u575|||LED: respiro lento
+u576|||OSD: valori in tempo reale
+u577|||LED: lampeggio di riposo / fisso se registra
+u578|||OSD: CAM LOST
+u579|||LED: lampeggio veloce
+u580|||Ciclo di vita del collegamento con la camera. SCAN, CONNECTING e SYNCING compaiono come un unico stato di ricerca.
+u581|||Capitolo 14
+u582|||Risoluzione dei problemi
+u583|||Parti dal LED e dalla scheda Status. Ti dicono quale dei due collegamenti, flight controller o camera, è il problema.
+u584|||Trova il collegamento che non funziona
+u585|||Cosa vedi
+u586|||Significa
+u587|||Vai a
+u588|||LED: 2 brevi lampeggi ogni 2 s
+u589|||Nessun collegamento con il flight controller
+u590|||Collegamento con la camera perso
+u591|||Camera
+u592|||Sta cercando la camera
+u593|||LED: 1 breve lampeggio ogni 3 s
+u594|||Tutto bene, a riposo
+u595|||Wi-Fi e configuratore
+u596|||Problema
+u597|||Prova
+u598|||Non vedo la rete RECLINK
+u599|||Il portale funziona solo da <b>disarmato</b> e con il collegamento con il flight controller attivo. Controlla che il velivolo sia disarmato e che il LED faccia due lampeggi rapidi al secondo. Tieni premuto il pulsante della scheda per 3 secondi per aprirlo a mano. Si chiude anche dopo 15 minuti di inattività, quindi tieni premuto di nuovo se è sparito.
+u600|||Mi sono collegato, ma la pagina non si carica
+u601|||Scrivi <code>http://10.0.0.1</code> nella barra degli indirizzi. Resta collegato anche se il telefono avvisa che non c'è internet. Disattiva i dati mobili se il telefono continua a cambiare rete. Si possono collegare fino a tre dispositivi insieme.
+u602|||La password viene rifiutata
+u603|||La password di fabbrica è <code>reclinkfpv</code>. Se l'hai cambiata e l'hai persa, tieni premuto il pulsante per 10 secondi per il ripristino di fabbrica. Cancella anche gli abbinamenti delle camere.
+u604|||Le mie modifiche sono sparite
+u605|||Premi <b>Save settings</b>. Le modifiche si applicano e restano solo dopo il salvataggio. La barra dice «unsaved changes» finché non salvi.
+u606|||Flight controller e OSD
+u607|||Status mostra FC offline
+u608|||Controlla il cablaggio: TX dell'FC a RX di RecLink e RX dell'FC a TX di RecLink. Controlla che MSP sia attivo su quella UART a 115200. Prova <b>Swap TX/RX pins</b> (advanced), salva e riavvia. Se hai cambiato i baud, falli coincidere su entrambi i lati.
+u609|||L'OSD non mostra nulla da RecLink
+u610|||Verifica che Betaflight sia <b>2025.12 o successivo</b> e che Custom message 1–4 siano attivati e posizionati nella scheda OSD. Un indicatore <b>OSD_UNSUPPORTED</b> significa che l'API è troppo vecchia.
+u611|||Compaiono nomi segnaposto invece del testo
+u612|||La riga è vuota oppure RecLink non è ancora collegato. Controlla prima il collegamento con l'FC.
+u613|||I simboli OSD sembrano sbagliati
+u614|||Fai coincidere <b>OSD type</b> con il tuo visore. Digital filtra in lettere e cifre semplici. Usa analog solo per un chip OSD analogico.
+u615|||Una riga è tagliata
+u616|||Le righe sono limitate a 16 caratteri. Accorcia il modello. L'anteprima ti avvisa.
+u617|||La scheda si riavvia in volo
+u618|||Controlla l'alimentazione a 5 V. Aggiungi un condensatore da 220 µF o più sui pad di alimentazione della scheda. Cerca <b>WDT_RECOVERED</b> o un contatore di riavvii in crescita in Diagnostics.
+u619|||La camera non viene trovata durante l'abbinamento
+u620|||GoPro: mettila prima in <b>Connections → Connect Device → The Remote</b>, poi premi Scan now. Scollegala da qualsiasi app del telefono. Avvicina RecLink. Assicurati che meno di quattro camere siano già abbinate.
+u621|||«Bond list full»
+u622|||Quattro camere sono il limite. Eliminane una nella scheda Binding.
+u623|||Indicatore REPAIR_NEEDED, o la camera non si ricollega mai
+u624|||La camera ha dimenticato RecLink, di solito dopo un azzeramento delle sue connessioni. Dimenticala nella scheda Binding, poi abbinala di nuovo.
+u625|||Si collega, poi cade più volte
+u626|||Allontana la scheda da carbonio e cavi della batteria. In Network (advanced) porta la potenza Bluetooth su Max e riavvia. Dopo tre blocchi silenziosi in due minuti RecLink si riavvia da solo per pulire il collegamento.
+u627|||CAM LOST sull'OSD
+u628|||La camera è spenta, in standby, fuori portata o ha perso il collegamento. Accendila e aspetta; RecLink riprova da solo.
+u629|||I valori in Status sono vuoti
+u630|||La camera non li ha ancora confermati. Premi <b>Refresh camera state</b>. Vuoto significa sconosciuto, di proposito.
+u631|||Registrazione e zone
+u632|||Non registra con l'arm
+u633|||Controlla che <b>Start / stop recording</b> sia impostato su una modalità che comprende l'arm e che la scheda Status mostri il velivolo come armato. Controlla che la camera abbia una scheda e sia collegata (READY).
+u634|||REC FAIL sull'OSD
+u635|||La camera non ha confermato la registrazione. Controlla la scheda SD e che la camera non sia occupata. In modalità avanzata aumenta <b>Wait for camera to confirm</b> o <b>Retries</b>. Apri il pannello Record trigger debug per vedere l'ultimo comando.
+u636|||L'interruttore non fa nulla
+u637|||Usa di nuovo <b>Set AUX</b>. Controlla che il cursore ambra della barra si muova quando azioni l'interruttore e che la soglia stia tra le posizioni off e on. Per un pulsante scegli Trigger type: Button.
+u638|||Le zone non cambiano la camera
+u639|||Controlla Enable zone control, il canale AUX giusto e che la camera sia in un preset <b>video</b> e non stia registrando. Aspetta il tempo di attesa (400 ms). Leggi la riga Zone settings in Status.
+u640|||«partly applied (not accepted: …)»
+u641|||La camera ha rifiutato quelle impostazioni. Alcune opzioni non sono valide insieme, ad esempio un frame rate con la risoluzione scelta. Scegli i valori che gli elenchi propongono e usa Capture from camera per partire da una combinazione valida.
+u642|||I filmati hanno la data sbagliata
+u643|||La sincronizzazione dell'orologio richiede un fix GPS con abbastanza satelliti e una camera a riposo e collegata. Guarda la scheda Clock e premi Sync now.
+u644|||Ancora bloccato
+u645|||Con la <b>modalità avanzata</b> attiva, la scheda System mostra un breve registro e la scheda Status mostra contatori e tre pannelli di debug. Uno screenshot di questi, insieme alla versione del firmware nell'intestazione, è ciò che serve quando chiedi aiuto.
+u646|||Appendice A
+u647|||Riferimento
+u648|||Token OSD
+u649|||Token
+u650|||Aspetto
+u651|||Stato di registrazione
+u653|||Tempo di registrazione trascorso
+u654|||Tempo di registrazione rimanente
+u655|||Percentuale batteria della camera
+u656|||Barra batteria della camera, 4 caratteri
+u657|||Icona batteria (analogico) o barra da 4 caratteri (digitale)
+u658|||Risoluzione
+u659|||Frame rate
+u660|||Lente
+u662|||Proporzioni
+u663|||Profilo colore
+u665|||Profondità colore
+u666|||Nome della modalità della camera
+u668|||Spazio SD: minuti, ore o GB; NO SD; FULL

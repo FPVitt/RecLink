@@ -1,0 +1,179 @@
+<!-- ================= 14 TROUBLESHOOTING ================= -->
+<section class="chapter np">
+<p class="chno">Chapter 14</p>
+<h1 class="ch">Troubleshooting</h1>
+<p class="lead">Start with the LED and the Status tab. They tell you which of the two links, flight controller or camera, is the problem.</p>
+
+<h2>Find the link that is down</h2>
+<div class="tbl"><table>
+<tr><th>You see</th><th>It means</th><th>Go to</th></tr>
+<tr><td>LED: 2 short blinks every 2 s</td><td class="wrap">No flight controller link</td><td class="wrap">Flight controller</td></tr>
+<tr><td>LED: fast blink</td><td class="wrap">Camera link lost</td><td class="wrap">Camera</td></tr>
+<tr><td>LED: slow breathe</td><td class="wrap">Searching for the camera</td><td class="wrap">Camera</td></tr>
+<tr><td>LED: 1 short blink every 3 s</td><td class="wrap">Everything is fine, idle</td><td class="wrap">—</td></tr>
+</table></div>
+
+<h2>Wi-Fi and the configurator</h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">I cannot see the RECLINK network</td><td class="wrap">The portal only runs while <b>disarmed</b> and with the flight controller link up. Check the aircraft is disarmed and the LED shows two quick blinks per second. Hold the board's button for 3 seconds to open it by hand. It also closes after 15 minutes idle, so hold again if it went away.</td></tr>
+<tr><td class="wrap">I joined, but the page will not load</td><td class="wrap">Type <code>http://10.0.0.1</code> in the address bar. Stay connected even if the phone warns about no internet. Turn off mobile data if the phone keeps switching away. Up to three devices can connect at once.</td></tr>
+<tr><td class="wrap">The password is rejected</td><td class="wrap">The factory password is <code>reclinkfpv</code>. If you changed it and lost it, hold the button for 10 seconds to factory reset. That also erases camera pairings.</td></tr>
+<tr><td class="wrap">My changes disappeared</td><td class="wrap">Press <b>Save settings</b>. Changes apply and persist only after saving. The bar says "unsaved changes" until you do.</td></tr>
+</table></div>
+
+<h2>Flight controller and OSD</h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">Status shows FC offline</td><td class="wrap">Check wiring: FC TX to RecLink RX and FC RX to RecLink TX. Check MSP is enabled on that UART at 115200. Try <b>Swap TX/RX pins</b> (advanced), save and reboot. If you changed the baud, match it on both sides.</td></tr>
+<tr><td class="wrap">OSD shows nothing from RecLink</td><td class="wrap">Confirm Betaflight is <b>2025.12 or newer</b>, and that Custom message 1–4 are enabled and placed in the OSD tab. An <b>OSD_UNSUPPORTED</b> chip means the API is too old.</td></tr>
+<tr><td class="wrap">Placeholder names instead of text</td><td class="wrap">The line is empty or RecLink is not connected yet. Check the FC link first.</td></tr>
+<tr><td class="wrap">OSD symbols look wrong</td><td class="wrap">Match <b>OSD type</b> to your goggles. Digital filters to plain letters and digits. Use analog only for an analog OSD chip.</td></tr>
+<tr><td class="wrap">A line is cut off</td><td class="wrap">Lines are limited to 16 characters. Shorten the template. The preview warns you.</td></tr>
+<tr><td class="wrap">The board resets in flight</td><td class="wrap">Check the 5 V supply. Add a 220 µF or larger capacitor across the board's power pads. Watch for <b>WDT_RECOVERED</b> or a rising reboot counter in Diagnostics.</td></tr>
+</table></div>
+</section>
+
+<section>
+<h2>Camera</h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">The camera is not found when pairing</td><td class="wrap">GoPro: put it in <b>Connections → Connect Device → The Remote</b> first, then press Scan now. Disconnect it from any phone app. Move RecLink closer. Make sure fewer than four cameras are already paired.</td></tr>
+<tr><td class="wrap">"Bond list full"</td><td class="wrap">Four cameras are the limit. Forget one on the Binding tab.</td></tr>
+<tr><td class="wrap">REPAIR_NEEDED chip, or the camera never reconnects</td><td class="wrap">The camera forgot RecLink, usually after its connections were reset. Forget it on the Binding tab, then pair it again.</td></tr>
+<tr><td class="wrap">It connects, then drops again and again</td><td class="wrap">Move the board away from carbon and battery leads. In Network (advanced) raise Bluetooth power to Max and reboot. After three silent hangs in two minutes RecLink reboots itself to clear the link.</td></tr>
+<tr><td class="wrap">CAM LOST on the OSD</td><td class="wrap">The camera is off, asleep, out of range or has dropped the link. Turn it on and wait; RecLink retries on its own.</td></tr>
+<tr><td class="wrap">Values on Status are blank</td><td class="wrap">The camera has not confirmed them yet. Press <b>Refresh camera state</b>. Blank means unknown, on purpose.</td></tr>
+</table></div>
+
+<h2>Recording and zones</h2>
+<div class="tbl"><table>
+<tr><th>Problem</th><th>Try</th></tr>
+<tr><td class="wrap">It does not record on arm</td><td class="wrap">Check <b>Start / stop recording</b> is set to a mode that includes arm, and the Status tab shows the aircraft as armed. Check the camera has a card and is connected (READY).</td></tr>
+<tr><td class="wrap">REC FAIL on the OSD</td><td class="wrap">The camera did not confirm recording. Check the SD card and that the camera is not busy. In advanced mode, raise <b>Wait for camera to confirm</b> or <b>Retries</b>. Open the Record trigger debug panel to see the last command.</td></tr>
+<tr><td class="wrap">The switch does nothing</td><td class="wrap">Use <b>Set AUX</b> again. Check the amber cursor on the bar moves when you flip it, and that the threshold sits between the off and on positions. For a push-button choose Trigger type: Button.</td></tr>
+<tr><td class="wrap">Zones do not change the camera</td><td class="wrap">Check Enable zone control, the right AUX channel, and that the camera is in a <b>video</b> preset and not recording. Wait for the hold time (400 ms). Read the Zone settings row on Status.</td></tr>
+<tr><td class="wrap">"partly applied (not accepted: …)"</td><td class="wrap">The camera refused those settings. Some options are not valid together, for example a frame rate with the chosen resolution. Pick values the lists offer, and use Capture from camera to start from a known-good combination.</td></tr>
+<tr><td class="wrap">Footage has the wrong date</td><td class="wrap">Clock sync needs a GPS fix with enough satellites and a camera that is idle and connected. See the Clock tab and press Sync now.</td></tr>
+</table></div>
+
+<div class="callout"><span class="tag">Still stuck</span><p>With <b>Advanced mode</b> on, the System tab shows a short log and the Status tab shows counters and three debug panels. A screenshot of those, plus your firmware version from the header, is what you need when asking for help.</p></div>
+</section>
+
+<!-- ================= APPENDIX ================= -->
+<section class="chapter np">
+<p class="chno">Appendix A</p>
+<h1 class="ch">Reference</h1>
+
+<h2>OSD tokens</h2>
+<div class="tbl"><table>
+<tr><th>Token</th><th>Shows</th><th>Looks like</th></tr>
+<tr><td><code>%st</code></td><td class="wrap">Recording state</td><td class="wrap">REC · IDLE · PRE · ----</td></tr>
+<tr><td><code>%et</code></td><td class="wrap">Elapsed recording time</td><td class="wrap">12:34</td></tr>
+<tr><td><code>%rt</code></td><td class="wrap">Remaining recording time</td><td class="wrap">45m · 1h</td></tr>
+<tr><td><code>%bt</code></td><td class="wrap">Camera battery percent</td><td class="wrap">78%</td></tr>
+<tr><td><code>%bb</code></td><td class="wrap">Camera battery bar, 4 characters</td><td class="wrap">###-</td></tr>
+<tr><td><code>%bi</code></td><td class="wrap">Battery icon (analog) or the 4-character bar (digital)</td><td class="wrap">###-</td></tr>
+<tr><td><code>%rs</code></td><td class="wrap">Resolution</td><td class="wrap">4K</td></tr>
+<tr><td><code>%fp</code></td><td class="wrap">Frame rate</td><td class="wrap">60</td></tr>
+<tr><td><code>%ln</code></td><td class="wrap">Lens</td><td class="wrap">WIDE</td></tr>
+<tr><td><code>%ar</code></td><td class="wrap">Aspect ratio</td><td class="wrap">16:9</td></tr>
+<tr><td><code>%pr</code></td><td class="wrap">Colour profile</td><td class="wrap">STD · LOG · HDR · HLG</td></tr>
+<tr><td><code>%bd</code></td><td class="wrap">Bit depth</td><td class="wrap">8b · 10b</td></tr>
+<tr><td><code>%md</code></td><td class="wrap">Camera mode name</td><td class="wrap">VID</td></tr>
+<tr><td><code>%sd</code></td><td class="wrap">SD space: minutes, hours or GB; NO SD; FULL</td><td class="wrap">1h · 45m · 32G</td></tr>
+<tr><td><code>%sg</code></td><td class="wrap">SD free space always in GB</td><td class="wrap">39.3G</td></tr>
+<tr><td><code>%cr</code></td><td class="wrap">Camera link signal in dBm</td><td class="wrap">-52</td></tr>
+<tr><td><code>%wr</code></td><td class="wrap">Active warning (chapter 10)</td><td class="wrap">LOW BATT</td></tr>
+<tr><td><code>%cn</code></td><td class="wrap">Craft name from the FC</td><td class="wrap">QUAD1</td></tr>
+<tr><td><code>%gs</code></td><td class="wrap">GPS satellite count</td><td class="wrap">14</td></tr>
+<tr><td><code>%gf</code></td><td class="wrap">GPS fix</td><td class="wrap">3D · NO</td></tr>
+<tr><td><code>%fb</code></td><td class="wrap">Flight battery state from the FC</td><td class="wrap">OK · LOW · CRIT</td></tr>
+<tr><td><code>%sp</code></td><td class="wrap">Ground speed (units setting)</td><td class="wrap">62KMH · 38MPH</td></tr>
+</table></div>
+<p class="sm mut">Any other <code>%</code> code is printed as typed. Normal text passes through unchanged. In digital mode everything is uppercased.</p>
+</section>
+
+<section>
+<h2>Status LED</h2>
+[[svg:led]]
+<p class="sm mut">Timings are nominal. On the production board the LED is a single-colour LED, so patterns differ by rhythm only. Boards with an addressable LED use colour too (blue for the portal, green for recording). The LED shows the highest-priority pattern that applies: portal, then a recent watchdog recovery, then recording, then flight controller down, then the camera link state. Identify overrides everything while it runs.</p>
+
+<h2>Factory defaults</h2>
+<div class="tbl"><table>
+<tr><th>Setting</th><th>Default</th></tr>
+<tr><td>Start / stop recording</td><td class="wrap">When the aircraft is armed</td></tr>
+<tr><td>Record switch</td><td class="wrap">Switch type, no channel assigned, on above 1700 µs</td></tr>
+<tr><td>Start delay · stop delay · verify · retries</td><td class="wrap">300 ms · 1500 ms · 800 ms · 3</td></tr>
+<tr><td>Zone control</td><td class="wrap">Off. Three zones at 1300 / 1700 / 2100 µs. Hold time 400 ms. No changes while recording.</td></tr>
+<tr><td>Highlight channel</td><td class="wrap">None</td></tr>
+<tr><td>OSD</td><td class="wrap">Digital · 4 Hz · metric · lines <code>%st %et</code>, <code>%bi%bt %wr</code>, <code>%rs%fp %ln</code>, <code>SD %sd</code></td></tr>
+<tr><td>OSD warnings</td><td class="wrap">Battery 15 % · SD 3 min · blink on · show lost on</td></tr>
+<tr><td>Clock sync</td><td class="wrap">On · needs GPS · 6 satellites · 10 s tolerance · UTC · GoPro check every 5 min · DJI resync every 60 min · 2 retries</td></tr>
+<tr><td>DJI GPS push</td><td class="wrap">Off · 1 Hz</td></tr>
+<tr><td>Wi-Fi</td><td class="wrap">SSID RECLINK-XXXX · password reclinkfpv · channel auto · open while disarmed · auto-close 15 min · Max power</td></tr>
+<tr><td>Bluetooth power</td><td class="wrap">Max (+9 dBm)</td></tr>
+<tr><td>Flight controller link</td><td class="wrap">115200 baud · pins not swapped</td></tr>
+<tr><td>LED brightness · Advanced mode</td><td class="wrap">128 · off</td></tr>
+</table></div>
+
+<h2>At a glance</h2>
+<div class="cols">
+<div class="grow"><div class="tbl"><table>
+<tr><td>Wi-Fi network</td><td class="wrap">RECLINK-XXXX</td></tr>
+<tr><td>Portal address</td><td class="wrap"><code>http://10.0.0.1</code></td></tr>
+<tr><td>Wi-Fi password</td><td class="wrap"><code>reclinkfpv</code> (change it)</td></tr>
+<tr><td>Max Wi-Fi clients</td><td class="wrap">3</td></tr>
+<tr><td>Max paired cameras</td><td class="wrap">4, one connected at a time</td></tr>
+<tr><td>Max OSD line length</td><td class="wrap">16 characters, 4 lines</td></tr>
+</table></div></div>
+<div class="grow"><div class="tbl"><table>
+<tr><td>Short press</td><td class="wrap">Identify (LED 3 s)</td></tr>
+<tr><td>Hold 3 s</td><td class="wrap">Open or close the portal</td></tr>
+<tr><td>Hold 10 s</td><td class="wrap">Factory reset (not while armed)</td></tr>
+<tr><td>Serial</td><td class="wrap">UART, 8N1, 115200, 3.3 V</td></tr>
+<tr><td>Pins</td><td class="wrap">RX GPIO20 · TX GPIO21 · button GPIO9 · LED GPIO10</td></tr>
+<tr><td>Betaflight</td><td class="wrap">2025.12.0 or newer (API 1.47+)</td></tr>
+</table></div></div>
+</div>
+</section>
+
+<section>
+<h2>What RecLink can and cannot touch</h2>
+<div class="cols">
+<div class="grow">
+<h3>It reads</h3>
+<ul>
+<li>Flight controller: API version, craft name, arm state, RC channels, GPS, battery state, clock.</li>
+<li>Camera: recording, battery, SD, mode, resolution, frame rate and the other values shown on the Status tab.</li>
+</ul>
+<h3>It writes</h3>
+<ul>
+<li>Four lines of OSD text to the flight controller.</li>
+<li>Record, settings, highlight and clock commands to the camera.</li>
+</ul>
+</div>
+<div class="grow">
+<h3>It never sends</h3>
+<ul>
+<li>Any RC, GPS, clock, display-port or reboot command to the flight controller.</li>
+<li>Any command that arms or disarms.</li>
+<li>Any formatting, firmware, reset or file-delete command to the camera from automation. Those exist only as labelled portal actions, while disarmed.</li>
+</ul>
+</div>
+</div>
+
+<h2>Glossary</h2>
+<div class="tbl"><table>
+<tr><td>AUX</td><td class="wrap">A spare radio channel beyond the four sticks. AUX 1 is channel 5.</td></tr>
+<tr><td>µs</td><td class="wrap">Microseconds. Channel values run from about 1000 (low) to 2000 (high).</td></tr>
+<tr><td>BLE</td><td class="wrap">Bluetooth Low Energy, the link to the camera.</td></tr>
+<tr><td>Bond</td><td class="wrap">The stored pairing between RecLink and one camera.</td></tr>
+<tr><td>MSP</td><td class="wrap">MultiWii Serial Protocol, the language Betaflight speaks over the wire.</td></tr>
+<tr><td>OSD</td><td class="wrap">On-screen display: the text drawn over your video feed.</td></tr>
+<tr><td>OTA</td><td class="wrap">Over-the-air firmware update, done from the configurator.</td></tr>
+<tr><td>Portal</td><td class="wrap">RecLink's Wi-Fi network and configuration web page.</td></tr>
+<tr><td>Zone</td><td class="wrap">A slice of a radio switch's travel that selects a set of camera settings.</td></tr>
+</table></div>
+<p class="sm mut" style="margin-top:6mm">RecLink User Guide, firmware 0.1.0 (pre-release). Screenshots show the real configurator with example values. Menu names in Betaflight Configurator and on cameras can differ slightly between versions.</p>
+</section>

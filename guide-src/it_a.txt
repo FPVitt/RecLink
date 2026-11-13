@@ -1,0 +1,289 @@
+u1|||Guida utente
+u3|||Installazione e uso del bridge per action cam sul tuo quad Betaflight: cablaggio, abbinamento, controllo della registrazione, OSD e configuratore web.
+u4|||<span>Firmware 0.1.0 (pre-release)</span><span>Betaflight 2025.12+</span><span>GoPro HERO 11–13 · DJI Osmo Action 4/5/6, Osmo 360</span>
+u5|||Indice
+u6|||Tutto quello che c'è in questa guida
+u7|||<b>1</b><span>Cos'è RecLink e cosa non fa mai</span>
+u8|||<b>2</b><span>Cosa serve</span>
+u9|||<b>3</b><span>Cablaggio al flight controller</span>
+u10|||<b>4</b><span>Configurazione di Betaflight</span>
+u11|||<b>5</b><span>Prima accensione e configuratore web</span>
+u12|||<b>6</b><span>Abbinare la camera</span>
+u13|||<b>7</b><span>Leggere la scheda Status</span>
+u14|||<b>8</b><span>Controllo della registrazione</span>
+u15|||<b>9</b><span>Zone: impostazioni della camera da un interruttore</span>
+u16|||<b>10</b><span>OSD: informazioni della camera nel visore</span>
+u17|||<b>11</b><span>Sincronizzazione orologio, GPS push e tag highlight</span>
+u18|||<b>12</b><span>Network, System, aggiornamenti firmware</span>
+u19|||<b>13</b><span>Volare con RecLink</span>
+u20|||<b>14</b><span>Risoluzione dei problemi</span>
+u21|||<b>A</b><span>Riferimento: token, valori predefiniti, LED, pulsante</span>
+u22|||Da leggere prima: stato pre-release
+u23|||Questo firmware (0.1.0) è stato provato a banco su una scheda ESP32-C3 personalizzata collegata a un flight controller Betaflight e a una GoPro HERO11 Black. <b>Non è mai stato provato in volo</b> e alcuni valori del protocollo delle camera sono ancora in fase di verifica su catture dal vivo. Considera ogni volo come un volo di prova. Esegui tutta l'installazione e i test a banco <b>con le eliche rimosse</b> e verifica ogni comportamento descritto in questa guida prima di volare.
+u24|||Passeggero, non pilota
+u25|||RecLink <b>legge</b> soltanto dal flight controller e <b>scrive testo OSD</b>. Non può armare, disarmare, far girare i motori, cambiare i PID o toccare il collegamento radio. Questo limite è imposto dal firmware stesso, non lasciato alla convenzione. Se RecLink si guasta, nel peggiore dei casi in volo il testo OSD smette di aggiornarsi.
+u26|||Come leggere questa guida
+u27|||I capitoli 1–6 portano dalla scheda nuda a una camera abbinata e vanno seguiti in ordine. I capitoli 7–12 spiegano ogni parte del configuratore web. I capitoli 13 e 14 trattano l'uso quotidiano e cosa fare quando qualcosa non va. Gli screenshot mostrano il vero configuratore su smartphone. L'interfaccia del configuratore è in inglese: i nomi di schede, pulsanti e campi sono lasciati in inglese, come li vedrai sullo schermo.
+u28|||Cablaggio
+u29|||Betaflight
+u30|||Wi-Fi
+u31|||Abbina camera
+u32|||Rec + zone
+u33|||Righe OSD
+u34|||Prova a banco
+u35|||Capitolo 1
+u36|||Cos'è RecLink
+u37|||Una piccola scheda ESP32 che sta tra il flight controller e la tua action cam, così la camera è controllata dal velivolo e riporta il suo stato sull'OSD.
+u38|||Radio
+u39|||arm + interruttori AUX
+u40|||Flight controller
+u41|||Betaflight 2025.12+
+u42|||bridge ESP32-C3
+u43|||Action cam
+u44|||GoPro · DJI Osmo
+u45|||Telefono
+u46|||configuratore web
+u47|||Visore
+u48|||video + testo OSD
+u49|||Link RC
+u50|||RC · arm · GPS
+u51|||testo OSD
+u52|||MSP su UART (cavo)
+u53|||Bluetooth LE
+u55|||solo da disarmato
+u56|||video + OSD
+u57|||RecLink ascolta il flight controller con un collegamento seriale a tre fili e parla con la camera via Bluetooth. La rete Wi-Fi esiste solo mentre il velivolo è disarmato, per la configurazione.
+u58|||Cosa fa
+u59|||<b>Informazioni della camera sull'OSD.</b> Stato di registrazione, tempo trascorso e rimanente, batteria della camera, spazio sulla SD, risoluzione, frame rate e stato del collegamento, come 22 token distribuiti su quattro righe da 16 caratteri che componi tu.
+u60|||<b>Registrazione che segue il velivolo.</b> Avvio e arresto con l'arm, con un interruttore radio o con una combinazione. Ogni comando è verificato su ciò che la camera riporta.
+u61|||<b>Impostazioni della camera da un interruttore.</b> Un interruttore o una manopola a 2–6 posizioni seleziona le zone. Su GoPro ogni zona invia i propri valori di risoluzione, frame rate, lente, HyperSmooth e Protune. Su DJI ogni zona seleziona una modalità della camera.
+u62|||<b>Tag highlight</b> da un interruttore momentaneo (GoPro HiLight, DJI Quick-Switch).
+u63|||<b>Fino a quattro camera abbinate</b>, in qualsiasi combinazione di GoPro e DJI. All'accensione si collega a quella con il segnale più forte.
+u64|||<b>Sincronizzazione dell'orologio</b> con l'ora GPS del flight controller, così i filmati hanno la data e l'ora giuste.
+u65|||<b>Un'unica pagina web</b> per tutta la configurazione e per gli aggiornamenti firmware. Niente app, niente cloud.
+u66|||Cosa non fa mai
+u67|||Limiti invalicabili
+u68|||Non invia mai al flight controller comandi RC, GPS, orologio, display o riavvio, e non ne modifica mai la configurazione.
+u69|||Non arma e non disarma mai il velivolo.
+u70|||Non tiene mai il Wi-Fi attivo da armato. Il punto di accesso si spegne entro 100 ms dall'arm.
+u71|||Non alimenta mai la camera e non formatta schede né cancella file in automatico.
+u72|||Non mostra mai un valore che la camera non ha confermato. Un valore sconosciuto resta vuoto: né <code>0</code> né un'ipotesi.
+u73|||Hardware supportato
+u74|||Voce
+u75|||Supportato
+u76|||Collegamento
+u77|||Betaflight 2025.12.0 o successivo (MSP API 1.47+). Le versioni precedenti non possono mostrare i messaggi OSD personalizzati.
+u78|||MSP su una UART libera
+u80|||HERO 11, 12, 13 e modelli più recenti che usano la stessa API Bluetooth Open GoPro
+u82|||Osmo Action 4, 5 e 6, Osmo 360
+u84|||Analogico e digitale. La modalità digitale limita l'uscita ai glifi che i visori in stile DJI sanno disegnare.
+u85|||tramite l'FC
+u86|||Capitolo 2
+u87|||Cosa serve
+u88|||Una scheda RecLink, una UART libera sul flight controller e una camera con alimentazione propria.
+u89|||Lista di controllo
+u90|||Scheda RecLink (ESP32-C3) con il suo cablaggio.
+u91|||Flight controller con <b>Betaflight 2025.12.0 o successivo</b> e OSD (chip o HD) funzionante.
+u92|||Una <b>UART libera</b> sull'FC con i pad TX, RX, 5 V e GND accessibili.
+u93|||Una camera supportata, carica, con una scheda SD.
+u94|||Una radio con almeno un canale AUX libero (due o tre se vuoi registrazione, zone e highlight).
+u95|||Un telefono o un portatile con Wi-Fi per usare il configuratore.
+u96|||Un condensatore da almeno <b>220 µF</b> sull'ingresso 5 V della scheda, se la scheda non lo ha già.
+u97|||Per gli aggiornamenti firmware: un computer e il file <code>.bin</code>.
+u98|||Scheda RecLink
+u100|||LED di stato
+u102|||Pulsante
+u104|||Seriale verso l'FC
+u106|||Ingresso 5 V   ·   GND
+u107|||Comandi e pin sulla scheda di produzione.
+u108|||I due comandi della scheda
+u109|||La scheda ha un <b>pulsante</b> e un <b>LED di stato</b>. Sono tutto ciò che serve quando il portale è chiuso, e ogni gesto funziona solo mentre la scheda è in esecuzione. All'accensione non viene letto nulla.
+u110|||Pressione breve
+u111|||Niente
+u112|||Pressione lunga
+u113|||Tieni premuto
+u114|||Identifica: il LED lampeggia per 3 s
+u115|||Apre o chiude il portale di configurazione
+u116|||Ripristino di fabbrica a 10 s (rifiutato se armato)
+u117|||Gesti del pulsante. Le pressioni tra 1 e 3 secondi non fanno nulla.
+u118|||Capitolo 3
+u119|||Cablaggio al flight controller
+u120|||Quattro fili: due per i dati seriali, due per l'alimentazione. Il collegamento seriale è a logica 3,3 V su entrambi i lati, quindi si collega direttamente, senza adattatore di livello.
+u121|||Logica 3,3 V su entrambi i lati: collegamento diretto
+u122|||una UART libera, es. UART3
+u127|||TX dell'FC  →  RX di RecLink
+u128|||TX di RecLink  →  RX dell'FC
+u129|||massa
+u130|||Camera: batteria o BEC propri
+u131|||mai alimentata da RecLink
+u132|||condensatore ≥ 220 µF sui 5 V
+u133|||(se la scheda non lo ha)
+u134|||I fili seriali si incrociano: il TX dell'FC va all'RX di RecLink e il TX di RecLink va all'RX dell'FC.
+u135|||<b>Scegli una UART libera sul flight controller</b> e annota il numero. Nel capitolo 4 abiliterai MSP su quella UART.
+u136|||<b>Collega i quattro fili</b> come nel disegno. La linea TX della scheda ha già una resistenza serie da 470 Ω sulla scheda. Non aggiungerne un'altra.
+u137|||<b>Aggiungi il condensatore se serve.</b> Le trasmissioni Bluetooth e Wi-Fi assorbono picchi di circa 350 mA. Su un cablaggio lungo e sottile possono far calare l'alimentazione e riavviare la scheda. Un condensatore a basso ESR da 220 µF o più sui pad dei 5 V lo evita.
+u138|||<b>Montala vicino alla camera.</b> Tieni l'antenna della scheda lontana da fibra di carbonio e cavi della batteria. La portata Bluetooth verso la camera è ciò che risente di più di una cattiva posizione.
+u139|||<b>Lascia stare l'alimentazione della camera.</b> La camera funziona con la sua batteria o il suo BEC. RecLink non la alimenta né la polarizza mai.
+u140|||Fili incrociati? Non serve risaldare
+u141|||Se TX e RX risultano scambiati su un cablaggio a quattro pin, puoi correggerlo nel configuratore: <b>Network → Swap TX/RX pins</b> (modalità avanzata), poi riavvia. Vedi il capitolo 12.
+u142|||Alimentazione
+u143|||La scheda prende 5 V dal flight controller tramite il suo regolatore interno. Prima di collegarla, controlla che il pad usato sia a 5 V e non alla tensione della batteria. La scheda ha un rilevatore di brown-out: un calo di tensione la riavvia e si riprende da sola in circa 300 ms, ma in quel momento il testo OSD si blocca.
+u144|||Capitolo 4
+u145|||Configurazione di Betaflight
+u146|||Due modifiche in Betaflight Configurator: attivare MSP sulla UART collegata e rendere visibili sull'OSD quattro elementi di messaggio personalizzato.
+u147|||Controlla la versione
+u148|||I messaggi OSD personalizzati esistono solo in <b>Betaflight 2025.12.0 e successivi</b> (MSP API 1.47 o superiore). Non sono stati aggiunti alle versioni precedenti. Se il tuo firmware è più vecchio, aggiornalo prima. RecLink segnala «FC too old for custom OSD» se rileva un'API più vecchia.
+u149|||1. Abilita MSP sulla UART
+u150|||Collega il flight controller a Betaflight Configurator via USB e apri la scheda <b>Ports</b>.
+u151|||Sulla riga della UART collegata, attiva <b>MSP</b> nella colonna Configuration/MSP. Lascia la velocità a <b>115200</b> baud.
+u152|||Fai clic su <b>Save and Reboot</b>.
+u153|||I nomi dei menu possono cambiare leggermente tra le versioni di Configurator. L'impostazione che serve è «MSP su quella UART a 115200 baud». Se devi usare un'altra velocità, imposta lo stesso valore in RecLink sotto <b>Network → Baud rate</b> (modalità avanzata) e riavvialo.
+u154|||2. Mostra i quattro elementi di messaggio personalizzato
+u155|||Apri la scheda <b>OSD</b>.
+u156|||Nell'elenco degli elementi, spunta <b>Custom message 1, 2, 3 e 4</b> (finché RecLink non scrive, Betaflight mostra i loro nomi segnaposto). Attivali nel profilo che usi in volo.
+u157|||Trascina ciascuno dei quattro nel layout. Sono elementi indipendenti: mettili dove il visore ha spazio. Una colonna ordinata nel terzo sinistro o destro funziona bene.
+u158|||Salva. Tieni ogni riga entro <b>16 caratteri</b>: è il massimo che Betaflight consente per messaggio.
+u162|||16 caratteri
+u163|||il resto del tuo OSD
+u164|||batteria, timer…
+u165|||Consiglio sulla posizione
+u166|||Devi posizionare gli elementi una volta sola. RecLink cambia il testo; Betaflight conserva la posizione. Tienili lontani da dove leggi la tensione della batteria e gli avvisi.
+u167|||Analogico o digitale?
+u168|||Scegli il tipo di OSD nella scheda OSD del configuratore. Digitale (predefinito) è sicuro per i visori in stile DJI; analogico consente il set di caratteri completo. Vedi il capitolo 10.
+u169|||3. Controlla i canali AUX
+u170|||RecLink legge i canali del trasmettitore attraverso il flight controller. Se vuoi che un interruttore avvii la registrazione o selezioni le zone, assegnalo a un <b>canale AUX libero</b> nella radio e verifica nella scheda <b>Receiver</b> di Betaflight che la barra si muova. RecLink conta i canali come Betaflight: <b>AUX 1 è il canale 5</b>. Per questi interruttori non serve una modalità Betaflight. Nel capitolo 8 troverai il canale giusto azionando l'interruttore e lasciando che RecLink lo rilevi.
+u171|||Capitolo 5
+u172|||Prima accensione e configuratore web
+u173|||Accendi il quad, collega il telefono al Wi-Fi di RecLink e apri il configuratore. Da qui in poi tutto si fa in quella pagina.
+u175|||<b>Rimuovi le eliche</b>, poi alimenta il flight controller da batteria o USB. Il LED di RecLink resta acceso fisso durante l'avvio.
+u176|||<b>Aspetta il portale.</b> Quando la scheda vede il flight controller e il velivolo è <b>disarmato</b>, crea la propria rete Wi-Fi. Il LED fa due brevi lampeggi al secondo finché il portale è aperto.
+u177|||<b>Collegati alla rete</b> chiamata <code>RECLINK-XXXX</code> (gli ultimi due byte dell'indirizzo della scheda) dal telefono o dal portatile. La password di fabbrica è <code>reclinkfpv</code>.
+u178|||<b>Apri <code>http://10.0.0.1</code></b> in un browser. Il telefono può avvisare che la rete non ha internet: resta collegato. RecLink non forza una schermata di accesso, quindi l'indirizzo lo apri tu.
+u179|||<b>Cambia la password Wi-Fi</b> quando richiesto (vedi sotto). Si possono collegare fino a tre dispositivi insieme.
+u180|||Cambia la password di fabbrica
+u181|||Finché la password è quella di fabbrica, il configuratore mostra questa richiesta a ogni apertura. Scegli <b>Yes, change it</b>, scrivi una nuova password da 8 a 31 caratteri e premi <b>Save &amp; reboot</b>. La scheda si riavvia e il Wi-Fi torna con la nuova password. Spunta <b>Don't ask me anymore</b> se vuoi tenere quella di fabbrica; la scelta è salvata nella scheda.
+u182|||Annotala
+u183|||Se dimentichi la password puoi comunque raggiungere il portale tenendo premuto il pulsante per 10 secondi per il ripristino di fabbrica. Cancella tutte le impostazioni <b>e</b> gli abbinamenti delle camera.
+u185|||Quando il portale si apre e si chiude
+u186|||Disarmato
+u187|||FC collegato, stato arm noto
+u188|||Portale aperto
+u189|||Wi-Fi attivo · RECLINK-XXXX
+u190|||Armato
+u191|||Wi-Fi spento · solo Bluetooth
+u192|||automatico
+u193|||arm: ≤ 100 ms
+u194|||disarm: il portale può riaprirsi
+u195|||chiusura automatica o pressione di 3 s
+u196|||Il portale non funziona mai mentre il velivolo è armato.
+u197|||<b>Si apre da solo</b> quando il velivolo è disarmato e il collegamento con il flight controller è attivo. Puoi cambiarlo in «solo dopo aver tenuto premuto il pulsante» in <b>Network → Open the portal</b>.
+u198|||<b>Si chiude</b> dopo 15 minuti (regolabile da 1 a 120) se sono passati anche 60 secondi senza attività, oppure quando tieni premuto il pulsante per 3 secondi.
+u199|||<b>Non si apre mai in volo.</b> Se la scheda si riavvia in volo, attende di conoscere lo stato arm prima di accendere il Wi-Fi.
+u200|||Usare il configuratore
+u201|||Scheda
+u203|||Vista in tempo reale: velivolo, camera, registrazione, avvisi, impostazioni della camera
+u205|||Modalità di registrazione, interruttore radio, zone e impostazioni della camera, highlight
+u206|||Le quattro righe OSD, anteprima, soglie degli avvisi
+u208|||Sincronizzazione dell'orologio della camera (solo modalità avanzata)
+u210|||Abbina, elenca e dimentica le camera
+u212|||Wi-Fi, collegamento con l'FC, potenza radio, scansione AUX
+u214|||Modalità avanzata, LED, GPS push, riavvio, aggiornamento, ripristino
+u216|||<b>Nulla viene applicato finché non premi Save settings.</b> La barra resta fissa in fondo allo schermo. Con modifiche non salvate mostra «unsaved changes». Se provi a lasciare la pagina con modifiche non salvate, il browser chiede prima conferma.
+u217|||<b>I salvataggi sono permanenti.</b> Vengono scritti in flash prima che la pagina confermi. Impostazioni e abbinamenti sopravvivono a un riavvio, a un'interruzione di corrente e a un aggiornamento firmware.
+u218|||<b>La modalità avanzata</b> (scheda System) mostra campi di temporizzazione, diagnostica e la scheda Clock. Lasciala spenta durante l'installazione; accendila quando devi regolare nel dettaglio. Viene ricordata dalla scheda.
+u219|||<b>Due impostazioni richiedono un riavvio</b>: velocità in baud / scambio dei pin dell'FC e potenza Bluetooth. Dopo averne salvata una compare nella barra un pulsante <b>Reboot now</b>.
+u220|||<b>Il portale è uno strumento da banco.</b> La pagina interroga la scheda ogni 1,5 secondi. Tieni aperta una sola scheda del browser e chiudi il portale prima di volare.
+u221|||Capitolo 6
+u222|||Abbinare la camera
+u223|||Abbina una volta sola e RecLink si ricollega da solo a ogni accensione. L'abbinamento si fa nella scheda <b>Binding</b>.
+u225|||Apri la scheda <b>Binding</b> e premi <b>Pair GoPro</b>.
+u226|||Sulla camera, scorri verso il basso, poi vai su <b>Preferences → Connections → Connect Device → The Remote</b>.
+u227|||Quando la camera mostra che è in fase di abbinamento, premi <b>Scan now</b> nel portale. RecLink resta in ascolto fino a 45 secondi. Non si collega a nulla finché non scegli tu.
+u228|||Tocca la tua camera nell'elenco. Se più GoPro sono in modalità di abbinamento, controlla prima nome e intensità del segnale.
+u229|||Un segno di spunta verde conferma l'abbinamento. La camera compare sotto <b>Paired cameras</b> e il suo collegamento passa a Connected.
+u230|||Se non compare nessuna camera
+u231|||Il portale dice «No GoPro found. Make sure it is in remote-pairing mode, then press Scan now again». Verifica che la camera sia accesa e mostri la schermata di abbinamento. Se è collegata a un'app sul telefono, scollegala prima da lì.
+u233|||Nella scheda <b>Binding</b> premi <b>Pair DJI</b>. Il portale mostra «pairing… put the DJI into pairing mode now».
+u234|||Metti l'Osmo in modalità di abbinamento. Al primo abbinamento la camera mostra sullo schermo una richiesta di conferma. <b>Accettala.</b>
+u235|||RecLink si collega alla prima DJI compatibile che sente. Da quel momento la riconnessione è automatica e non richiede conferme.
+u236|||Gestire le camera abbinate
+u238|||<b>Fino a quattro camera</b>, in qualsiasi combinazione di GoPro e DJI. Abbinarne una nuova non cancella le altre.
+u239|||<b>Una alla volta.</b> All'accensione RecLink cerca tutte le camera abbinate e si collega a quella con il segnale più forte dopo circa 2,5 secondi, oppure subito a una più forte di −50 dBm.
+u240|||<b>Indicatori:</b> <span class="ok">● Connected · −52 dBm</span>, <span class="wn">Connecting…</span> oppure <span class="mut">Standby</span> per una camera abbinata ma non in uso.
+u241|||<b>3 s test recording</b> avvia la camera collegata per tre secondi. Serve a verificare che tutta la catena funzioni. Funziona solo da disarmato.
+u242|||<b>Forget</b> rimuove una camera. <b>Forget all cameras</b> compare quando ce ne sono due o più e chiede conferma due volte.
+u243|||<b>Telemetry poll</b> (modalità avanzata) imposta ogni quanto si chiede lo stato a una GoPro: Fast 0,5 s, Normal 1 s o Slow 1,5 s. Normal va bene per la maggior parte dei casi.
+u244|||Quando l'associazione si perde
+u245|||Se la camera dimentica RecLink (hai azzerato le sue connessioni o l'hai riabbinata a un telefono), le riconnessioni successive falliscono. Dopo tre fallimenti RecLink dimentica l'associazione di quella camera e attiva il flag <b>REPAIR_NEEDED</b> nella scheda Status. Abbina di nuovo la camera.
+u246|||Capitolo 7
+u247|||Leggere la scheda Status
+u248|||La scheda Status è di sola lettura e ti dice a colpo d'occhio se la catena flight controller → RecLink → camera è in buona salute.
+u250|||Now
+u251|||Aircraft
+u252|||<b>armed</b> o <b>disarmed</b>, oppure <b>FC offline</b> se il collegamento con il flight controller è caduto.
+u253|||Camera link
+u254|||Marca, stato e nome, ad es. <span class="ok">GOPRO · READY · GoPro HERO11 Black</span>. Stati: IDLE, SCAN, CONNECTING, BONDING, SYNCING, READY, LOST.
+u255|||Recording
+u256|||<b>stopped</b>, oppure <b>REC</b> con il tempo trascorso.
+u257|||Warnings
+u258|||L'avviso attivo, oppure <span class="ok">none</span>. Stesso elenco dell'OSD (vedi capitolo 10).
+u259|||Flag di errore
+u261|||Nessun collegamento MSP. Controlla cablaggio, UART, baud.
+u263|||Betaflight è più vecchio dell'API 1.47.
+u265|||Manca l'associazione con la camera. Abbina di nuovo.
+u267|||Le impostazioni salvate erano illeggibili. Caricati i valori predefiniti. Abbina di nuovo.
+u269|||La sincronizzazione dell'orologio si è arresa con l'ora ancora sbagliata.
+u271|||La scheda si è riavviata dopo un blocco. Tocca l'indicatore per confermare.
+u273|||Details
+u274|||<b>Flight controller:</b> variante di Betaflight e versione dell'API MSP. <b>OSD grid</b> è la dimensione della tela riportata dall'FC.
+u275|||<b>GPS:</b> fix, satelliti e se il fix è considerato buono. Visibile quando l'FC ha un GPS.
+u276|||<b>Camera signal, time left, camera battery, SD card.</b> La SD mostra lo spazio libero in GB, oppure «NO SD» / «FULL».
+u277|||<b>Mode, resolution, profile</b> come li riporta la camera in questo momento.
+u278|||<b>Valori Video e Protune della GoPro:</b> ISO max/min, angolo dell'otturatore (ad esempio <code>180° (1/120)</code>), Protune, bilanciamento del bianco, colore, nitidezza, compensazione EV, 10-bit.
+u279|||<b>Zone settings</b> è il risultato dell'ultima applicazione di una zona: <span class="ok">Zone 1: applied</span>, «partly applied (not accepted: …)», «not applied» oppure «waiting for camera».
+u280|||Un campo vuoto è onesto
+u281|||RecLink mostra solo ciò che la camera ha confermato. Dopo una disconnessione, ogni valore della camera resta vuoto finché la camera non risponde di nuovo. È voluto: un numero vecchio o inventato è peggio di nessun numero.
+u282|||Con la <b>modalità avanzata</b> attiva, una scheda <b>Diagnostics</b> aggiunge i valori in tempo reale dei canali AUX in µs, i contatori di errore e tre pannelli di debug comprimibili (collegamento MSP, connessione Bluetooth, trigger di registrazione). Servono per l'assistenza e per trovare la posizione dello stick di un interruttore.
+u285|||Capitolo 8
+u286|||Controllo della registrazione
+u287|||Decidi cosa avvia e ferma la camera. Tutto si trova nella scheda <b>Cam control</b>, nella scheda Recording.
+u288|||Scegli una modalità di registrazione
+u289|||INGRESSI
+u290|||MODALITÀ DI REGISTRAZIONE → LA CAMERA REGISTRA
+u291|||arm
+u292|||interruttore on
+u293|||disarm
+u294|||interruttore off
+u295|||Interruttore radio
+u296|||Da armato
+u297|||Da interruttore
+u298|||Armato OR interruttore
+u299|||Armato AND interruttore
+u300|||Esempio: il velivolo viene armato a 2, l'interruttore si accende a 4, il velivolo viene disarmato a 8 e l'interruttore si spegne a 10. I ritardi di avvio e arresto sono omessi.
+u301|||Modalità
+u302|||Registra quando
+u303|||Ideale per
+u304|||Never (manual only)
+u305|||Mai. La camera la avvii a mano.
+u306|||Lavori a banco, o se usi i comandi della camera
+u307|||When the aircraft is armed
+u308|||Dall'arm al disarm.
+u309|||Il default semplice: ogni volo viene registrato
+u310|||From a radio switch
+u311|||Finché l'interruttore è acceso, oppure alternato da un pulsante.
+u312|||Scegliere esattamente quando riprendere
+u313|||Armed OR switch on
+u314|||Armato, oppure con l'interruttore acceso. Da armato, spegnere l'interruttore interrompe il clip e riaccenderlo ne avvia uno nuovo.
+u315|||Filmare sempre i voli, ma tagliare i tempi morti
+u316|||Armed AND switch on
+u317|||Solo quando entrambe le condizioni sono vere. Rilasciarne una ferma subito il clip.
+u318|||Riprendi solo quando è armato <i>e</i> lo vuoi
+u319|||Impostare l'interruttore radio
+u321|||Scegli <b>From a radio switch</b>, <b>Armed OR switch on</b> oppure <b>Armed AND switch on</b>. Il riquadro Radio switch diventa attivo. Con <i>Never</i> o <i>When the aircraft is armed</i> è in grigio e indicato «not applicable».
+u322|||<b>Trova il canale.</b> Premi <b>Set AUX</b>, poi aziona l'interruttore sul trasmettitore. Mentre ascolta, l'etichetta diventa «push button or switch». RecLink osserva i dati dei canali in tempo reale, sceglie il canale che si muove di 200 µs o più e compila il campo AUX. Rinuncia dopo 15 secondi. Serve il collegamento attivo con il flight controller.
+u323|||<b>Scegli il Trigger type.</b> <b>Switch</b> rispecchia l'interruttore: acceso significa registra, spento significa ferma. <b>Button</b> è per un comando a molla: ogni pressione alterna la registrazione e rilasciare non fa nulla.
+u324|||<b>Controlla la soglia.</b> La barra mostra la posizione del comando in tempo reale come linea ambra. Il valore predefinito di <b>1700 µs</b> va bene per la maggior parte degli interruttori a 3 posizioni (la posizione alta conta come acceso). Regolalo trascinando il cursore o scrivendo un valore da 900 a 2100.
+u325|||<b>Premi Save settings</b> e prova l'interruttore. La scheda Status mostra «REC» e il punto del logo diventa rosso.
+u326|||Preferisci vedere i numeri?
+u327|||<b>Network → Scan AUX now</b> elenca il valore in tempo reale di ogni canale AUX. Muovi l'interruttore e premi di nuovo per vedere quale canale è cambiato.
+u328|||Cosa succede quando lo attivi

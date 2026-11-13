@@ -1,0 +1,37 @@
+Check your Betaflight is <b>2025.12.0 or newer</b>. Older versions cannot show RecLink's text. Then open <b>Betaflight Configurator</b> and go to the <b>Ports</b> tab. On the UART you wired, switch <b>MSP</b> on. Leave the speed at <b>115200</b>. Save.|||Controlla che il tuo Betaflight sia <b>2025.12.0 o successivo</b>: le versioni precedenti non possono mostrare il testo di RecLink. Poi apri <b>Betaflight Configurator</b> e vai nella scheda <b>Ports</b>. Sulla UART collegata, attiva <b>MSP</b>. Lascia la velocità a <b>115200</b>. Salva.
+On your radio, pick a spare switch if you want to start and stop recording by hand. In Betaflight's <b>Receiver</b> tab, flip it and check that an <b>AUX</b> bar moves. This is optional.|||Sulla radio, scegli un interruttore libero se vuoi avviare e fermare la registrazione a mano. Nella scheda <b>Receiver</b> di Betaflight, azionalo e controlla che si muova una barra <b>AUX</b>. È facoltativo.
+Choose <b>when</b> the camera records. There are two common ways. Pick one.|||Scegli <b>quando</b> registra la camera. Ci sono due modi comuni. Scegline uno.
+<b>Record when you arm.</b> Nothing to change. This is the default: the camera starts when you arm and stops when you disarm.|||<b>Registra quando fai arm.</b> Non c'è niente da cambiare. È l'impostazione predefinita: la camera parte quando fai arm e si ferma quando fai disarm.
+<b>Record from a radio switch.</b> You choose when to film with a switch on your transmitter.|||<b>Registra da un interruttore della radio.</b> Scegli tu quando filmare con un interruttore del trasmettitore.
+Open <b>Cam control</b>. Under <b>Start / stop recording</b> choose <b>From a radio switch</b>.|||Apri <b>Cam control</b>. Sotto <b>Start / stop recording</b> scegli <b>From a radio switch</b>.
+Press <b>Set AUX</b>, then flip your switch within 15 seconds. RecLink picks the channel that moved and fills in the <b>AUX channel</b> box. The flight controller must be connected.|||Premi <b>Set AUX</b>, poi aziona l'interruttore entro 15 secondi. RecLink sceglie il canale che si è mosso e compila il campo <b>AUX channel</b>. Il flight controller deve essere collegato.
+Leave <b>Trigger type</b> on <b>Switch</b>: switch on means record, switch off means stop. For a spring-loaded button choose <b>Button</b>: each press starts or stops.|||Lascia <b>Trigger type</b> su <b>Switch</b>: interruttore acceso significa registra, spento significa ferma. Per un pulsante a molla scegli <b>Button</b>: ogni pressione avvia o ferma.
+Flip the switch and watch the bar. The amber line must cross the <b>On above</b> value (default <b>1700 µs</b>) when the switch is on, and stay below it when off.|||Aziona l'interruttore e guarda la barra. La linea ambra deve superare il valore <b>On above</b> (predefinito <b>1700 µs</b>) con l'interruttore acceso e restare sotto con l'interruttore spento.
+Press <b>Save settings</b>. Flip the switch: the camera starts, and the Status tab shows <b>REC</b>.|||Premi <b>Save settings</b>. Aziona l'interruttore: la camera parte e la scheda Status mostra <b>REC</b>.
+Cam control → Recording, radio switch mode.|||Cam control → Recording, modalità interruttore.
+The recording mode.|||La modalità di registrazione.
+Switch or Button.|||Switch o Button.
+The AUX channel.|||Il canale AUX.
+Detects the channel.|||Rileva il canale.
+Live position of the control.|||Posizione attuale del comando.
+On above this value.|||Acceso sopra questo valore.
+Which switch position counts as on depends on the threshold. A 3-position switch usually works with its top position as on.|||Quale posizione dell'interruttore conta come acceso dipende dalla soglia. Un interruttore a 3 posizioni di solito funziona con la posizione alta come acceso.
+Combine arm and switch|||Combina arm e interruttore
+Records when armed or when the switch is on. While armed, switching off cuts the clip.|||Registra con arm o con interruttore acceso. Con arm attivo, spegnere l'interruttore taglia il clip.
+Records only when both are true. Releasing either stops the clip.|||Registra solo se entrambi sono veri. Rilasciarne uno ferma il clip.
+<b>Armed OR switch on</b>|||<b>Armed OR switch on</b>
+<b>Armed AND switch on</b>|||<b>Armed AND switch on</b>
+Using a switch? Flip it on, then off.|||Usi un interruttore? Azionalo su acceso, poi su spento.
+The camera starts, then stops. The OSD shows <b>REC</b> while it records.|||La camera parte, poi si ferma. L'OSD mostra <b>REC</b> mentre registra.
+Use the latest Betaflight Configurator|||Usa l'ultima versione di Betaflight Configurator
+You need <b>Betaflight firmware 2025.12.0 or newer</b> on the flight controller, and the <b>latest Betaflight Configurator</b> on your computer. The screenshots in this guide were taken with Configurator <b>2026.6.2</b>. Use the web app at <code>app.betaflight.com</code> (in Chrome or Edge) or install the newest desktop version. An older Configurator may not offer the Custom message elements.|||Servono il <b>firmware Betaflight 2025.12.0 o successivo</b> sul flight controller e l'<b>ultima versione di Betaflight Configurator</b> sul computer. Le schermate di questa guida sono state fatte con Configurator <b>2026.6.2</b>. Usa la web app su <code>app.betaflight.com</code> (con Chrome o Edge) oppure installa la versione desktop più recente. Un Configurator più vecchio potrebbe non mostrare gli elementi Custom message.
+Betaflight Configurator → Ports.|||Betaflight Configurator → Ports.
+Switch MSP on for the UART you wired.|||Attiva MSP sulla UART che hai collegato.
+Leave the speed at 115200.|||Lascia la velocità a 115200.
+Then press <b>Save and Reboot</b> at the bottom right.|||Poi premi <b>Save and Reboot</b> in basso a destra.
+OSD tab: the four Custom messages in the preview.|||Scheda OSD: i quattro Custom message nell'anteprima.
+OSD tab → Elements: Custom message 1 to 4 ticked.|||Scheda OSD → Elements: Custom message da 1 a 4 spuntati.
+Tick Custom message 1, 2, 3 and 4.|||Spunta Custom message 1, 2, 3 e 4.
+Drag the four messages in the preview to a free spot, one under the other. Do not forget to <b>Save</b>.|||Trascina i quattro messaggi nell'anteprima in un punto libero, uno sotto l'altro. Non dimenticare di premere <b>Save</b>.
+Receiver tab: the bar of your switch moves when you flip it.|||Scheda Receiver: la barra del tuo interruttore si muove quando lo azioni.
+AUX 2 moves to 2000 when the switch is flipped.|||AUX 2 va a 2000 quando azioni l'interruttore.
