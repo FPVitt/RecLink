@@ -231,3 +231,8 @@ svg .onacc{fill:var(--acc-fg)}
   body{font-size:11pt}
   .chapter{break-before:page}
 }
+
+/* card icons */
+.ico{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin-bottom:.9rem;border-radius:12px;background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc-ink)}
+.ico svg{width:24px;height:24px}
+#gh .ico{background:var(--well);color:var(--fg)}

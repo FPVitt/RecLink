@@ -68,6 +68,11 @@ S = {
 
 GH_URL = "https://github.com/FPVitt/RecLink"
 GH_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>'
+ICONS = {
+    "qs": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    "guide": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19a2 2 0 0 0 2 2h13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    "fw": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+}
 MARK = ('<svg class="mark" viewBox="0 0 168 80" aria-hidden="true"><path fill="currentColor" d="M6 6h30v12H18v44h18v12H6zM132 6h30v68h-30V62h18V18h-18z"/>'
         '<circle fill="currentColor" cx="84" cy="40" r="21"/></svg>')
 
@@ -409,14 +414,14 @@ def build_index(lang):
     other = "it" if lang == "en" else "en"
     cards = ""
     for doc, t, d in (("qs", s["qs_t"], s["qs_d"]), ("guide", s["gd_t"], s["gd_d"])):
-        cards += (f'<article class="card"><h2>{t}</h2><p>{d}</p><div class="actions"><a class="btn" href="{PAGES[(lang, doc)]}">{s["read"]}</a></div>'
+        cards += (f'<article class="card"><span class="ico">{ICONS[doc]}</span><h2>{t}</h2><p>{d}</p><div class="actions"><a class="btn" href="{PAGES[(lang, doc)]}">{s["read"]}</a></div>'
                   '</article>')
     fw_t, fw_d, fw_b = (("Install the firmware", "Pick your board, choose a version, then flash it by USB or update it over Wi-Fi.", "Open the installer")
                         if lang == "en" else
                         ("Installa il firmware", "Scegli la scheda e la versione, poi caricala via USB o aggiornala via Wi-Fi.", "Apri l'installer"))
-    cards += (f'<article class="card" id="fw"><h2>{fw_t}</h2><p>{fw_d}</p>'
+    cards += (f'<article class="card" id="fw"><span class="ico">{ICONS["fw"]}</span><h2>{fw_t}</h2><p>{fw_d}</p>'
               f'<div class="actions"><a class="btn" href="../flash/">{fw_b}</a></div></article>')
-    cards += (f'<article class="card" id="gh"><h2>{s["gh_t"]}</h2><p>{s["gh_d"]}</p>'
+    cards += (f'<article class="card" id="gh"><span class="ico">{GH_SVG}</span><h2>{s["gh_t"]}</h2><p>{s["gh_d"]}</p>'
               f'<div class="actions"><a class="btn" href="{GH_URL}" target="_blank" rel="noopener">{GH_SVG}{s["gh"]}</a></div></article>')
     which = "".join(f"<li>{w}</li>" for w in s["which"])
     meta = "".join(f"<span>{html.escape(m)}</span>" for m in s["meta"])
