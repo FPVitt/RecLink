@@ -1,24 +1,53 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RecLink web flasher</title><meta name="theme-color" content="#0f1216">
+<title>Install RecLink firmware</title><meta name="theme-color" content="#0f1216">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
-<style>body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#0f1216;color:#f2f4f8}main{max-width:640px;margin:0 auto;padding:24px 16px}
-h1{margin:0 0 4px}a{color:#2ea043}.card{background:#1a1f27;border:1px solid #333c49;border-radius:10px;padding:16px;margin:14px 0}
-.warn{border-color:#e5484d}.mut{color:#a7b0be;font-size:14px}h2{font-size:15px;margin:0 0 6px}
-esp-web-install-button button{background:#2ea043;color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:15px;cursor:pointer}</style></head>
-<body><main>
-<h1>RecLink web flasher</h1><p class="mut">Flash RecLink 0.2.0 (pre-release) over USB straight from the browser. <a href="../index.html">Guides</a> · Italiano: stessi pulsanti, vedi sotto.</p>
-<div class="card warn"><h2>Read first</h2><p class="mut">Pre-release, bench-tested only, not flight tested. Flashing <b>erases the whole flash</b> (settings and camera pairings too). Use <b>Chrome or Edge</b> on a computer (Web Serial is not available in Firefox/Safari). Remove props / disconnect the flight battery while flashing.</p></div>
-<div class="card"><h2>ESP32-C3 SuperMini <span class="mut">(generic board: LED GPIO8, MSP on UART1 GPIO6/7)</span></h2>
-<esp-web-install-button manifest="manifest-supermini.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge.</span></esp-web-install-button></div>
-<div class="card"><h2>RecLink board <span class="mut">(ESP32-C3 PCB: LED GPIO10, MSP on UART0 GPIO20/21)</span></h2>
-<esp-web-install-button manifest="manifest-board.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge.</span></esp-web-install-button></div>
-<div class="card"><h2>ESP32-S3 dev board</h2>
-<esp-web-install-button manifest="manifest-s3.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge.</span></esp-web-install-button></div>
-<div class="card"><h2>Steps / Passi</h2><ol class="mut"><li>Plug the board in by USB. If it is not detected, hold BOOT while plugging it in. / Collega la scheda via USB; se non viene rilevata tieni premuto BOOT mentre la colleghi.</li>
-<li>Click the button for your board, choose the serial port, and confirm the erase. / Premi il pulsante della tua scheda, scegli la porta e conferma la cancellazione.</li>
-<li>When it finishes, unplug and replug the board; it opens the Wi-Fi network <b>RECLINK-XXXX</b> (password <code>reclinkfpv</code>), then go to <b>http://10.0.0.1</b>. / Al termine ricollega la scheda: crea la rete Wi-Fi RECLINK-XXXX (password reclinkfpv), poi apri http://10.0.0.1.</li></ol>
-<p class="mut">Updating later: use the portal's System tab with the OTA images from the <a href="https://github.com/FPVitt/RecLink/releases">Releases</a> page (keeps your settings).</p></div>
+<style>
+body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#0f1216;color:#f2f4f8}main{max-width:760px;margin:0 auto;padding:24px 16px}
+h1{margin:0 0 4px}a{color:#2ea043}.mut{color:#a7b0be;font-size:14px}.card{background:#1a1f27;border:1px solid #333c49;border-radius:10px;padding:16px;margin:14px 0}
+.warn{border-color:#e5484d}.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.board{background:#1a1f27;border:2px solid #333c49;border-radius:10px;padding:10px;cursor:pointer;color:inherit;font:inherit;text-align:center}
+.board:hover,.board[aria-pressed=true]{border-color:#2ea043}.board .ph{height:150px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:6px;margin-bottom:8px}
+.board .ph img,.board .ph svg{max-height:140px;max-width:100%}.board b{display:block}.board span{font-size:13px;color:#a7b0be}
+.btn,esp-web-install-button button{display:inline-block;background:#2ea043;color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:15px;cursor:pointer;text-decoration:none}
+#panels>div{display:none}#panels>div.on{display:block}ol{padding-left:20px}code{background:#11151b;padding:1px 5px;border-radius:4px}
+</style></head><body><main>
+<h1>Install RecLink firmware</h1>
+<p class="mut">RecLink 0.2.0 (pre-release) · <a href="../index.html">Guides</a> · Italiano: i passi sono bilingui sotto ogni scheda.</p>
+<div class="card warn"><p class="mut" style="margin:0">Pre-release: bench-tested only, <b>not flight tested</b>. Remove props and disconnect the flight battery while flashing.</p></div>
+<h2>1. Which board do you have? <span class="mut">/ Che scheda hai?</span></h2>
+<div class="boards" role="group" aria-label="Board">
+<button class="board" data-b="reclink" aria-pressed="false"><div class="ph"><img src="img/reclink-board.webp" alt="RecLink board"></div><b>RecLink board</b><span>The RecLink PCB (ESP32-C3) → update over Wi-Fi (OTA)</span></button>
+<button class="board" data-b="supermini" aria-pressed="false"><div class="ph"><svg viewBox="0 0 220 140" role="img" aria-label="ESP32-C3 SuperMini"><rect x="40" y="10" width="140" height="120" rx="8" fill="#1d4f91"/><rect x="88" y="4" width="44" height="26" rx="3" fill="#cfd4da"/><rect x="82" y="46" width="56" height="56" rx="4" fill="#222"/><rect x="52" y="22" width="12" height="8" fill="#e5484d"/><rect x="156" y="22" width="12" height="8" fill="#2ea043"/><g fill="#d4af37"><rect x="44" y="20" width="6" height="8"/><rect x="170" y="20" width="6" height="8"/><rect x="44" y="33" width="6" height="8"/><rect x="170" y="33" width="6" height="8"/><rect x="44" y="46" width="6" height="8"/><rect x="170" y="46" width="6" height="8"/><rect x="44" y="59" width="6" height="8"/><rect x="170" y="59" width="6" height="8"/><rect x="44" y="72" width="6" height="8"/><rect x="170" y="72" width="6" height="8"/><rect x="44" y="85" width="6" height="8"/><rect x="170" y="85" width="6" height="8"/><rect x="44" y="98" width="6" height="8"/><rect x="170" y="98" width="6" height="8"/><rect x="44" y="111" width="6" height="8"/><rect x="170" y="111" width="6" height="8"/></g><text x="110" y="80" fill="#888" font-size="9" text-anchor="middle" font-family="sans-serif">ESP32-C3</text></svg></div><b>ESP32-C3 SuperMini</b><span>Generic dev board → flash by USB</span></button>
+<button class="board" data-b="s3" aria-pressed="false"><div class="ph"><svg viewBox="0 0 220 140" role="img" aria-label="ESP32-S3 dev board"><rect x="30" y="10" width="160" height="120" rx="8" fill="#222a33"/><rect x="82" y="4" width="26" height="20" rx="3" fill="#cfd4da"/><rect x="112" y="4" width="26" height="20" rx="3" fill="#cfd4da"/><rect x="78" y="48" width="64" height="48" rx="4" fill="#111"/><rect x="132" y="104" width="40" height="18" fill="#c9a227"/><g fill="#d4af37"><rect x="34" y="22" width="6" height="7"/><rect x="180" y="22" width="6" height="7"/><rect x="34" y="34" width="6" height="7"/><rect x="180" y="34" width="6" height="7"/><rect x="34" y="46" width="6" height="7"/><rect x="180" y="46" width="6" height="7"/><rect x="34" y="58" width="6" height="7"/><rect x="180" y="58" width="6" height="7"/><rect x="34" y="70" width="6" height="7"/><rect x="180" y="70" width="6" height="7"/><rect x="34" y="82" width="6" height="7"/><rect x="180" y="82" width="6" height="7"/><rect x="34" y="94" width="6" height="7"/><rect x="180" y="94" width="6" height="7"/><rect x="34" y="106" width="6" height="7"/><rect x="180" y="106" width="6" height="7"/><rect x="34" y="118" width="6" height="7"/><rect x="180" y="118" width="6" height="7"/></g><text x="110" y="76" fill="#888" font-size="9" text-anchor="middle" font-family="sans-serif">ESP32-S3</text></svg></div><b>ESP32-S3 dev board</b><span>Generic dev board → flash by USB</span></button>
+</div>
+<div id="panels">
+<div id="p-reclink" class="card"><h2>RecLink board: update over Wi-Fi (OTA) <span class="mut">/ aggiornamento OTA</span></h2>
+<p><a class="btn" id="dl" href="https://github.com/FPVitt/RecLink/releases" data-asset="fc_cam_bridge-esp32c3.bin">Download firmware (fc_cam_bridge-esp32c3.bin)</a> <span class="mut" id="ver"></span></p>
+<ol><li>Power the board (flight controller on the bench, disarmed). It opens the Wi-Fi network <b>RECLINK-XXXX</b> (password <code>reclinkfpv</code>, or the one you set). / Alimenta la scheda; crea la rete Wi-Fi RECLINK-XXXX.</li>
+<li>Join it and open <b>http://10.0.0.1</b>. / Collegati e apri http://10.0.0.1.</li>
+<li>Go to the <b>System</b> tab → <b>Firmware update</b> and choose the downloaded <code>.bin</code>. Leave <i>erase settings</i> off to keep your settings and camera pairing. / Scheda Sistema → Aggiornamento firmware; scegli il file .bin, lascia disattivato "cancella impostazioni".</li>
+<li>Wait for the upload to finish; the board reboots by itself (do not unplug it). The previous version stays in the other slot, so you can boot back to it from the same page. / Attendi il riavvio automatico; la versione precedente resta nell'altro slot.</li></ol>
+<p class="mut">The update only works while disarmed. A board that is not flashed yet needs a one-time USB flash: use the SuperMini or a USB programmer, or ask the board's maker. / L'OTA funziona solo da disarmato.</p></div>
+<div id="p-supermini" class="card"><h2>ESP32-C3 SuperMini: flash by USB</h2>
+<esp-web-install-button manifest="manifest-supermini.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge on a computer.</span></esp-web-install-button>
+<p class="mut">LED on GPIO8 (active-low), flight controller on UART1 GPIO6/7. Flashing <b>erases the whole flash</b> (settings and pairings).</p>
+<ol><li>Use <b>Chrome or Edge</b>, plug the board in by USB (hold BOOT while plugging if it is not detected). / Usa Chrome o Edge; collega la scheda (tieni BOOT premuto se non viene rilevata).</li><li>Press the button, pick the serial port, confirm. / Premi il pulsante, scegli la porta, conferma.</li><li>Unplug/replug; join <b>RECLINK-XXXX</b> and open <b>http://10.0.0.1</b>. / Ricollega e apri http://10.0.0.1.</li></ol></div>
+<div id="p-s3" class="card"><h2>ESP32-S3 dev board: flash by USB</h2>
+<esp-web-install-button manifest="manifest-s3.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge on a computer.</span></esp-web-install-button>
+<p class="mut">Development target. Flashing <b>erases the whole flash</b>. Same steps as the SuperMini. / Stessi passi della SuperMini.</p></div>
+</div>
+<p class="mut">Later updates for any board: System tab → Firmware update with the OTA images from the <a href="https://github.com/FPVitt/RecLink/releases">Releases</a> page.</p>
 </main>
+<script>
+(function(){
+var bs=document.querySelectorAll('.board'),ps=document.querySelectorAll('#panels>div');
+function pick(b){bs.forEach(function(x){x.setAttribute('aria-pressed',x.dataset.b===b)});ps.forEach(function(p){p.classList.toggle('on',p.id==='p-'+b)});try{history.replaceState(null,'','#'+b)}catch(e){}}
+bs.forEach(function(x){x.onclick=function(){pick(x.dataset.b)}});
+var h=(location.hash||'').slice(1);if(h)pick(h);
+fetch('https://api.github.com/repos/FPVitt/RecLink/releases?per_page=1').then(function(r){return r.json()}).then(function(a){var r=a&&a[0];if(!r)return;
+document.getElementById('ver').textContent=r.tag_name+(r.prerelease?' (pre-release)':'');(r.assets||[]).forEach(function(x){if(x.name==='fc_cam_bridge-esp32c3.bin')document.getElementById('dl').href=x.browser_download_url})}).catch(function(){});
+})();
+</script>
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 </body></html>
