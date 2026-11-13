@@ -65,6 +65,8 @@ li{margin:0 0 .3em}
 .icon{display:inline-flex;align-items:center;justify-content:center;height:34px;min-width:34px;border:1px solid var(--line);border-radius:var(--radius-md);background:transparent;color:var(--fg);cursor:pointer;font:inherit}
 .icon:hover{background:var(--well)}
 .icon svg{width:18px;height:18px}
+.gh-btn:hover{text-decoration:none}
+.btn svg{width:18px;height:18px;flex:none}
 .toc-btn{display:none;padding:0 .7rem;gap:.4rem;font-size:.85rem;font-weight:600}
 .toc-btn::before{content:"";width:16px;height:2px;background:currentColor;box-shadow:0 5px currentColor,0 -5px currentColor}
 .menu{position:relative}

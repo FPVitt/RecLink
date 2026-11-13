@@ -41,7 +41,7 @@ S = {
         qs_t="Quick start", qs_d="From the box to your first recording in about 15 minutes. Seven short steps, in plain wording.",
         gd_t="User guide", gd_d="Every feature, setting and indicator, explained with diagrams and screenshots of the web configurator. 14 chapters and a reference.",
         read="Read online", dl="Download PDF", meta=["Betaflight 2025.12+", "GoPro HERO 9–13", "DJI Osmo (experimental)"],
-        lang_label="Language", on_page="On this page", pdf_title="Download this guide as a PDF",
+        lang_label="Language", on_page="On this page", pdf_title="Download this guide as a PDF", gh="View on GitHub", gh_t="Source code", gh_d="Browse the firmware, read the spec, report an issue or download releases.",
         which_h="Which one do I need?", which=["New to RecLink? Start with the <b>Quick start</b>.", "Want every detail, or something is not working? Open the <b>User guide</b>."],
         desc_qs="RecLink quick start: wire the board, set up Betaflight, pair your GoPro or DJI camera, record from arm or a radio switch.",
         desc_gd="RecLink user guide: wiring, Betaflight setup, the web configurator, recording control, zones, OSD, clock sync, troubleshooting.",
@@ -56,13 +56,15 @@ S = {
         qs_t="Guida rapida", qs_d="Dalla scatola alla prima registrazione in circa 15 minuti. Sette passaggi brevi, in parole semplici.",
         gd_t="Guida utente", gd_d="Ogni funzione, impostazione e indicatore, spiegati con diagrammi e schermate del configuratore web. 14 capitoli e un riferimento.",
         read="Leggi online", dl="Scarica il PDF", meta=["Betaflight 2025.12+", "GoPro HERO 9–13", "DJI Osmo (experimental)"],
-        lang_label="Lingua", on_page="In questa pagina", pdf_title="Scarica questa guida in PDF",
+        lang_label="Lingua", on_page="In questa pagina", pdf_title="Scarica questa guida in PDF", gh="Vedi su GitHub", gh_t="Codice sorgente", gh_d="Sfoglia il firmware, leggi le specifiche, segnala un problema o scarica le release.",
         which_h="Quale mi serve?", which=["Sei nuovo con RecLink? Parti dalla <b>Guida rapida</b>.", "Vuoi ogni dettaglio, oppure qualcosa non funziona? Apri la <b>Guida utente</b>."],
         desc_qs="Guida rapida RecLink: cabla la scheda, configura Betaflight, abbina la GoPro o la DJI, registra con l'arm o con un interruttore della radio.",
         desc_gd="Guida utente RecLink: cablaggio, configurazione di Betaflight, configuratore web, controllo della registrazione, zone, OSD, sincronizzazione orologio, risoluzione dei problemi.",
     ),
 }
 
+GH_URL = "https://github.com/FPVitt/RecLink"
+GH_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>'
 MARK = ('<svg class="mark" viewBox="0 0 168 80" aria-hidden="true"><path fill="currentColor" d="M6 6h30v12H18v44h18v12H6zM132 6h30v68h-30V62h18V18h-18z"/>'
         '<circle fill="currentColor" cx="84" cy="40" r="21"/></svg>')
 
@@ -266,7 +268,7 @@ def header(lang, doc, rel, alt_href):
     return f'''<header class="topbar"><div class="bar">
 <a class="brand" href="index.html" aria-label="RecLink">{MARK}<span>RecLink</span></a>
 <nav class="tabs" aria-label="Guides">{tabs}</nav>
-<div class="tools">{pdf}<div class="seg" role="group" aria-label="{s["lang_label"]}">{langs}</div>
+<div class="tools">{pdf}<a class="icon gh-btn" href="{GH_URL}" target="_blank" rel="noopener" title="{s["gh"]}" aria-label="{s["gh"]}">{GH_SVG}</a><div class="seg" role="group" aria-label="{s["lang_label"]}">{langs}</div>
 <button class="icon theme-btn" type="button" title="{s["theme"]}" aria-label="{s["theme"]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>{toc_btn}</div>
 </div><div id="progress" aria-hidden="true"></div></header>'''
 
@@ -353,6 +355,8 @@ def build_index(lang):
                         ("Installa il firmware", "Scegli la scheda e la versione, poi caricala via USB o aggiornala via Wi-Fi.", "Apri l'installer"))
     cards += (f'<article class="card" id="fw"><h2>{fw_t}</h2><p>{fw_d}</p>'
               f'<div class="actions"><a class="btn" href="../flash/">{fw_b}</a></div></article>')
+    cards += (f'<article class="card" id="gh"><h2>{s["gh_t"]}</h2><p>{s["gh_d"]}</p>'
+              f'<div class="actions"><a class="btn" href="{GH_URL}" target="_blank" rel="noopener">{GH_SVG}{s["gh"]}</a></div></article>')
     which = "".join(f"<li>{w}</li>" for w in s["which"])
     meta = "".join(f"<span>{html.escape(m)}</span>" for m in s["meta"])
     main = (f'<div class="hero"><p class="eyebrow">{s["site"]}</p><h1>RecLink</h1><p class="sub">{s["home_sub"]}</p><div class="meta">{meta}</div></div>'
