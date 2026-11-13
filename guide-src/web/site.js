@@ -37,6 +37,15 @@
     a.addEventListener('click', function () { store.set('rl-lang', a.dataset.lang); });
   });
   var cur = $('.seg a[aria-current="true"]');
+  /* first visit (no saved choice): Italian browsers get the Italian pages, everyone else English */
+  if (cur && !store.get('rl-lang')) {
+    var want = /^it\b/i.test(navigator.language || '') ? 'it' : 'en';
+    var alt = $('.seg a[data-lang="' + want + '"]');
+    if (want !== cur.dataset.lang && alt && alt.getAttribute('href') !== '#') {
+      store.set('rl-lang', want);
+      location.replace(alt.href);
+    }
+  }
   if (cur) store.set('rl-lang', cur.dataset.lang);
 
   /* ---- PDF menu: close on outside click / Escape ---- */
