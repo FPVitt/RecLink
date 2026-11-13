@@ -14,6 +14,8 @@ config portal — no phone app, no cloud.
 ![link](https://img.shields.io/badge/FC-MSP%20over%20UART-333)
 ![link](https://img.shields.io/badge/camera-BLE-5b2c9e)
 
+**[Guides, board explorer and firmware installer → fpvitt.github.io/RecLink](https://fpvitt.github.io/RecLink/)**
+
 </div>
 
 ---
