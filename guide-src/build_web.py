@@ -252,6 +252,7 @@ def header(lang, doc, rel, alt_href):
     for key in ("qs", "guide"):
         cur = ' aria-current="page"' if key == doc else ""
         tabs += f'<a href="{PAGES[(lang, key)]}"{cur}>{s[key]}</a>'
+    tabs += f'<a href="../flash/">{"Install firmware" if lang == "en" else "Installa firmware"}</a>'
     langs = ""
     for code in ("en", "it"):
         href = alt_href if code == other else "#"
