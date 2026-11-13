@@ -231,23 +231,3 @@ svg .onacc{fill:var(--acc-fg)}
   body{font-size:11pt}
   .chapter{break-before:page}
 }
-
-/* ---------- landing page polish ---------- */
-body:has(.cards) .hero{position:relative;padding:2.2rem 0 .4rem;margin-bottom:1.6rem}
-body:has(.cards) .hero::before{content:"";position:absolute;inset:-3rem -50vw auto -50vw;height:22rem;z-index:-1;pointer-events:none;
-  background:radial-gradient(60% 100% at 30% 0,color-mix(in srgb,var(--acc) 22%,transparent),transparent 70%)}
-body:has(.cards) .hero h1{font-size:clamp(3rem,8vw,5rem)}
-body:has(.cards) .hero .sub{font-size:1.25rem;color:var(--mut)}
-.cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:1rem}
-.card{display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
-.card:hover{border-color:var(--acc);transform:translateY(-2px)}
-.card p{flex:1}
-.card .actions{margin-top:.4rem}
-.ico{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin-bottom:.9rem;border-radius:12px;
-  background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc-ink)}
-.ico svg{width:24px;height:24px}
-#gh .ico{background:var(--well);color:var(--fg)}
-.btn.ghost{padding:.5rem 1rem;font-size:.92rem}
-.which{list-style:none;padding:0;display:grid;gap:.6rem;max-width:42rem}
-.which li{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:var(--radius-md);padding:.7rem 1rem}
-@media (prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
