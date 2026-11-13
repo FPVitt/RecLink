@@ -276,7 +276,7 @@ def header(lang, doc, rel, alt_href):
         pdf = f'<details class="menu pdf"><summary title="{s["pdf_title"]}">{s["pdf"]}</summary><div class="menu-body">{links}</div></details>'
     toc_btn = f'<button class="icon toc-btn" type="button" aria-controls="toc" aria-expanded="false" title="{s["menu"]}"><span>{s["menu"]}</span></button>' if doc not in ("index", "board") else ""
     return f'''<header class="topbar"><div class="bar">
-<a class="brand" href="index.html" aria-label="RecLink">{MARK}<span>RecLink</span></a>
+<a class="brand" href="index.html" aria-label="RecLink">{MARK}<span>FPVitt</span></a>
 <nav class="tabs" aria-label="Guides">{tabs}</nav>
 <div class="tools">{pdf}<a class="icon gh-btn" href="{GH_URL}" target="_blank" rel="noopener" title="{s["gh"]}" aria-label="{s["gh"]}">{GH_SVG}</a><div class="seg" role="group" aria-label="{s["lang_label"]}">{langs}</div>
 <button class="icon theme-btn" type="button" title="{s["theme"]}" aria-label="{s["theme"]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>{toc_btn}</div>
@@ -515,7 +515,7 @@ def build_index(lang):
               f'<div class="actions"><a class="btn" href="../flash/">{fw_b}</a></div></article>')
     which = "".join(f"<li>{w}</li>" for w in s["which"])
     meta = "".join(f"<span>{html.escape(m)}</span>" for m in s["meta"])
-    main = (f'<div class="hero"><p class="eyebrow">FPVitt</p><h1 class="logo-h1">{MARK}RecLink</h1><p class="sub">{s["home_sub"]}</p><div class="meta">{meta}</div><p class="gh-row"><a class="btn ghost" href="{GH_URL}" target="_blank" rel="noopener">{GH_SVG}{s["gh"]}</a></p></div>'
+    main = (f'<div class="hero"><h1 class="logo-h1">{MARK}RecLink</h1><p class="sub">{s["home_sub"]}</p><div class="meta">{meta}</div><p class="gh-row"><a class="btn ghost" href="{GH_URL}" target="_blank" rel="noopener">{GH_SVG}{s["gh"]}</a></p></div>'
             f'<div class="callout danger"><span class="tag">{s["pre_tag"]}</span><p>{s["pre"]}</p></div>'
             f'<div class="cards">{cards}</div><h2 class="plain">{s["which_h"]}</h2><ul class="which">{which}</ul>')
     alt_href = f"../{other}/index.html"
