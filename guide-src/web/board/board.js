@@ -49,7 +49,7 @@ function start() {
       const g = new THREE.ExtrudeGeometry(shape, { depth: th, bevelEnabled: false });
       g.rotateX(-Math.PI / 2);                    // shape y -> -z, extrusion -> +y
       g.translate(0, -th / 2, 0);
-      const m = new THREE.Mesh(g, fr4); board.add(m); slabs.push(m);
+      const m = new THREE.Mesh(g, fr4); m.userData.ro = 2 * i + 1; board.add(m); slabs.push(m);
     }
     // layer artwork
     names.forEach((n, i) => {
@@ -59,7 +59,7 @@ function start() {
         map: tx[i], transparent: true, alphaTest: outer ? 0.5 : 0, depthWrite: outer,
         side: THREE.DoubleSide, roughness: outer ? 0.42 : 0.55, metalness: outer ? 0.05 : 0.35,
       });
-      const p = new THREE.Mesh(geo, mat); p.renderOrder = i; board.add(p); layers.push({ p, y0: LY[i] });
+      const p = new THREE.Mesh(geo, mat); p.userData.ro = 2 * i; board.add(p); layers.push({ p, y0: LY[i] });
     });
     // components
     const addParts = (list, grp) => list.forEach((m) => {
@@ -114,6 +114,9 @@ function start() {
     top.position.y = LY[0] * (spread - 1) + cur.e1 * 3.2;
     bottomParts.position.y = LY[3] * (spread - 1) - cur.e1 * 3.2;
     const az = (cur.az + off.az) * Math.PI / 180;
+    // see-through sheets don't write depth, so draw them far-to-near from wherever the camera is
+    const fromBelow = cur.pol + off.pol > 90;
+    [...layers.map((l) => l.p), ...slabs].forEach((m) => { m.renderOrder = fromBelow ? m.userData.ro : 6 - m.userData.ro; });
     const pol = Math.min(176, Math.max(4, cur.pol + off.pol)) * Math.PI / 180;
     const d = cur.d * (camera.aspect < 1 ? 2.2 : 1.32);
     camera.position.set(d * Math.sin(pol) * Math.sin(az), d * Math.cos(pol), d * Math.sin(pol) * Math.cos(az));
