@@ -412,7 +412,7 @@ def build_doc(doc, lang):
 
 BOARD = {
     "en": dict(
-        title="The board", eyebrow="RecLink hardware",
+        title="The board", eyebrow="RecLink hardware", note="Work in progress: the design may still change.",
         sub="The custom RecLink PCB: an ESP32-C3 with its own antenna, about the size of a fingernail, with four solder pads to the flight controller.",
         desc="The RecLink board: a custom 12 x 13 mm four-layer PCB with an ESP32-C3, chip antenna and four castellated solder pads (GND, 5V, TX, RX). Currently in development.",
         tag="In development",
@@ -442,7 +442,7 @@ BOARD = {
         hnext="Next steps", next=['Wiring step by step: <a href="quick-start.html">Quick start</a>.', 'Put the firmware on the board, or update it over Wi-Fi: <a href="../flash/">Install firmware</a>.'],
         foot="Dimensions and part list are taken from the current design files and may change while the board is in development."),
     "it": dict(
-        title="La scheda", eyebrow="Hardware RecLink",
+        title="La scheda", eyebrow="Hardware RecLink", note="Progetto in corso: può ancora cambiare.",
         sub="Il PCB personalizzato RecLink: un ESP32-C3 con la sua antenna, grande quanto un'unghia, con quattro pad da saldare al flight controller.",
         desc="La scheda RecLink: un PCB personalizzato a quattro strati di 12 x 13 mm con ESP32-C3, antenna ceramica e quattro pad castellati (GND, 5V, TX, RX). Attualmente in sviluppo.",
         tag="In sviluppo",
@@ -485,19 +485,10 @@ def build_board(lang):
     n_steps = len(b["steps"])
     steps = "".join(f'<li class="exp-step" data-from="{[0, .12, .30, .50, .70, .88][k]}" data-to="{[.12, .30, .50, .70, .88, 1.01][k]}"><b>{html.escape(t)}</b><span>{html.escape(d)}</span></li>'
                     for k, (t, d) in enumerate(b["steps"]))
-    main = f"""<div class="hero"><p class="eyebrow">{b["eyebrow"]}</p><h1>{b["title"]}</h1><p class="sub">{b["sub"]}</p></div>
-<div class="callout warn"><span class="tag">{b["tag"]}</span><p>{b["warn"]}</p></div>
-<section class="exp" id="exp" aria-label="{b["h3d"]}"><div class="exp-sticky"><canvas id="bc" role="img" aria-label="{b["alt3d"]}"></canvas><img class="exp-poster" src="{A}board-iso.webp" alt="{b["alt3d"]}">
+    main = f"""<section class="exp full" id="exp" aria-label="{b["h3d"]}"><div class="exp-sticky"><canvas id="bc" role="img" aria-label="{b["alt3d"]}"></canvas><img class="exp-poster" src="{A}board-iso.webp" alt="{b["alt3d"]}">
+<div class="exp-head"><h1>{b["title"]}</h1><p class="pill"><b>{b["tag"]}</b> {b["note"]}</p></div>
 <p class="exp-hint">{b["hint"]}</p>
 <ol class="exp-steps">{steps}</ol><div class="exp-bar" aria-hidden="true"><i></i></div></div></section>
-<h2 class="plain">{b["hphotos"]}</h2>
-<div class="pair"><figure class="shot"><img src="{A}board-top.webp" alt="{html.escape(b["cap_top"], quote=True)}" width="800" height="870" loading="lazy"><figcaption>{b["cap_top"]}</figcaption></figure>
-<figure class="shot"><img src="{A}board-bottom.webp" alt="{html.escape(b["cap_bot"], quote=True)}" width="800" height="870" loading="lazy"><figcaption>{b["cap_bot"]}</figcaption></figure></div>
-<h2 class="plain">{b["hfacts"]}</h2><div class="tbl"><table><tbody>{facts}</tbody></table></div>
-<h2 class="plain">{b["hpads"]}</h2><p>{b["pads_intro"]}</p><div class="tbl"><table><thead><tr>{th}</tr></thead><tbody>{pads}</tbody></table></div>
-<p>{b["pads_note"]}</p>
-<h2 class="plain">{b["hnext"]}</h2><ul class="which">{nxt}</ul>
-<p class="fine">{b["foot"]}</p>
 <script type="module" src="{A}board.js"></script>
 """
     return page(lang, "board", b["title"], b["desc"], main, alt_href=f"../{other}/{PAGES[(other, 'board')]}")

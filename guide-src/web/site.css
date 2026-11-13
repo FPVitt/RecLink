@@ -274,3 +274,19 @@ svg .onacc{fill:var(--acc-fg)}
 html[lang=it] .menu.pages .menu-body a span.it{display:inline}
 html[lang=it] .menu.pages .menu-body a span.en{display:none}
 @media (max-width:760px){.menu.pages{display:block}.tools{gap:6px}}
+
+/* the board page: full-page explorer, no box */
+body[data-doc="board"] .content{max-width:none;padding:0}
+body[data-doc="board"] .layout{max-width:none;padding:0}
+.exp.full{height:420vh;margin:0}
+.exp.full .exp-sticky{top:var(--bar-h);height:calc(100vh - var(--bar-h));height:calc(100svh - var(--bar-h));border:0;border-radius:0;
+  background:radial-gradient(55% 60% at 50% 46%,color-mix(in srgb,var(--acc) 12%,transparent),transparent 72%)}
+.exp-head{position:absolute;left:max(1.1rem,calc(50% - 600px));top:1.2rem;pointer-events:none}
+.exp-head h1{margin:0;font:900 clamp(1.8rem,4vw,2.6rem)/1 var(--font-brand);letter-spacing:-.02em}
+.pill{display:inline-block;margin:.6rem 0 0;padding:.25rem .7rem;border:1px solid var(--warn);border-radius:999px;color:var(--mut);font-size:.82rem}
+.pill b{color:var(--warn);text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;margin-right:.3rem}
+.exp.full .exp-hint{top:auto;bottom:.5rem;opacity:.9}
+.exp.full .exp-steps{left:max(1.1rem,calc(50% - 600px));right:auto;width:min(30rem,calc(100% - 2.2rem));bottom:2.2rem}
+.exp.full .exp-poster{padding:12% 6%}
+@media (max-width:640px){.exp.full{height:380vh}.exp.full .exp-steps{height:8rem}}
+.exp.full.started .exp-hint{opacity:0}
