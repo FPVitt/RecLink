@@ -349,15 +349,15 @@ def build_index(lang):
                        for o, k in (("port", "portrait"), ("land", "landscape")))
         cards += (f'<article class="card"><h2>{t}</h2><p>{d}</p><div class="actions"><a class="btn" href="{PAGES[(lang, doc)]}">{s["read"]}</a></div>'
                   f'<div class="actions sub">{pdfs}</div></article>')
-    fw_t, fw_d, fw_b, fw_n = (("Firmware download", "The latest RecLink firmware (OTA image). Upload it from the portal's System tab; the other slot keeps the previous build. Pre-release: bench-tested only.", "Download firmware", "All releases")
+    fw_t, fw_d, fw_b, fw_n, fw_f = (("Firmware download", "The latest RecLink firmware (OTA image). Upload it from the portal's System tab; the other slot keeps the previous build. Pre-release: bench-tested only.", "Download firmware", "All releases", "Flash from the browser (USB)")
                               if lang == "en" else
-                              ("Scarica il firmware", "L'ultimo firmware RecLink (immagine OTA). Caricalo dalla scheda Sistema del portale; l'altro slot conserva la versione precedente. Pre-release: provato solo a banco.", "Scarica il firmware", "Tutte le release"))
+                              ("Scarica il firmware", "L'ultimo firmware RecLink (immagine OTA). Caricalo dalla scheda Sistema del portale; l'altro slot conserva la versione precedente. Pre-release: provato solo a banco.", "Scarica il firmware", "Tutte le release", "Flash dal browser (USB)"))
     rel = REPO_URL + "/releases"
     cards += (f'<article class="card" id="fw"><h2>{fw_t}</h2><p>{fw_d}</p><div class="actions">'
               f'<a class="btn" id="fw-c3" href="{rel}" data-asset="fc_cam_bridge-esp32c3.bin">{fw_b} · ESP32-C3 (RecLink board)</a>'
               f'<a class="btn ghost" id="fw-sm" href="{rel}" data-asset="fc_cam_bridge-esp32c3-supermini.bin">{fw_b} · ESP32-C3 SuperMini</a>'
               f'<a class="btn ghost" id="fw-s3" href="{rel}" data-asset="fc_cam_bridge-esp32s3.bin">{fw_b} · ESP32-S3</a></div>'
-              f'<div class="actions sub"><a class="btn ghost" href="{rel}">{fw_n}</a><span class="muted" id="fw-ver"></span></div></article>'
+              f'<div class="actions sub"><a class="btn ghost" href="../flash/">{fw_f}</a><a class="btn ghost" href="{rel}">{fw_n}</a><span class="muted" id="fw-ver"></span></div></article>'
               '<script>(function(){fetch("https://api.github.com/repos/FPVitt/RecLink/releases?per_page=1").then(function(r){return r.json();})'
               '.then(function(a){var r=a&&a[0];if(!r)return;document.getElementById("fw-ver").textContent=r.tag_name+(r.prerelease?" (pre-release)":"");'
               '(r.assets||[]).forEach(function(x){var e=document.querySelector(\'[data-asset="\'+x.name+\'"]\');if(e)e.href=x.browser_download_url;});})'

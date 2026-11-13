@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RecLink web flasher</title><meta name="theme-color" content="#0f1216">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<style>body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#0f1216;color:#f2f4f8}main{max-width:640px;margin:0 auto;padding:24px 16px}
+h1{margin:0 0 4px}a{color:#2ea043}.card{background:#1a1f27;border:1px solid #333c49;border-radius:10px;padding:16px;margin:14px 0}
+.warn{border-color:#e5484d}.mut{color:#a7b0be;font-size:14px}h2{font-size:15px;margin:0 0 6px}
+esp-web-install-button button{background:#2ea043;color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:15px;cursor:pointer}</style></head>
+<body><main>
+<h1>RecLink web flasher</h1><p class="mut">Flash RecLink 0.2.0 (pre-release) over USB straight from the browser. <a href="../index.html">Guides</a> · Italiano: stessi pulsanti, vedi sotto.</p>
+<div class="card warn"><h2>Read first</h2><p class="mut">Pre-release, bench-tested only, not flight tested. Flashing <b>erases the whole flash</b> (settings and camera pairings too). Use <b>Chrome or Edge</b> on a computer (Web Serial is not available in Firefox/Safari). Remove props / disconnect the flight battery while flashing.</p></div>
+<div class="card"><h2>ESP32-C3 SuperMini <span class="mut">(generic board: LED GPIO8, MSP on UART1 GPIO6/7)</span></h2>
+<esp-web-install-button manifest="manifest-supermini.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge.</span></esp-web-install-button></div>
+<div class="card"><h2>RecLink board <span class="mut">(ESP32-C3 PCB: LED GPIO10, MSP on UART0 GPIO20/21)</span></h2>
+<esp-web-install-button manifest="manifest-board.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge.</span></esp-web-install-button></div>
+<div class="card"><h2>ESP32-S3 dev board</h2>
+<esp-web-install-button manifest="manifest-s3.json"><span slot="unsupported">This browser has no Web Serial: use Chrome or Edge.</span></esp-web-install-button></div>
+<div class="card"><h2>Steps / Passi</h2><ol class="mut"><li>Plug the board in by USB. If it is not detected, hold BOOT while plugging it in. / Collega la scheda via USB; se non viene rilevata tieni premuto BOOT mentre la colleghi.</li>
+<li>Click the button for your board, choose the serial port, and confirm the erase. / Premi il pulsante della tua scheda, scegli la porta e conferma la cancellazione.</li>
+<li>When it finishes, unplug and replug the board; it opens the Wi-Fi network <b>RECLINK-XXXX</b> (password <code>reclinkfpv</code>), then go to <b>http://10.0.0.1</b>. / Al termine ricollega la scheda: crea la rete Wi-Fi RECLINK-XXXX (password reclinkfpv), poi apri http://10.0.0.1.</li></ol>
+<p class="mut">Updating later: use the portal's System tab with the OTA images from the <a href="https://github.com/FPVitt/RecLink/releases">Releases</a> page (keeps your settings).</p></div>
+</main>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</body></html>
