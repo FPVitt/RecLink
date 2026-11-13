@@ -63,7 +63,7 @@ def status(sc):
       "zone_apply":{"zone":1,"state":"ok","fail":[]} if ready else {"zone":0,"state":"none","fail":[]},
       "model":"HERO11 Black" if ready else "","caps_gen":1 if ready else 0,"sd_missing":False,"sd_full":False,"hot":False}
     if rec: cs["elapsed_s"]=754
-    return {"fw":"0.1.0","uptime_s":412,"flags":["FC_OFFLINE"] if sc=="fcdown" else (["REPAIR_NEEDED"] if sc=="repair" else []),
+    return {"fw":"0.2.0","uptime_s":412,"flags":["FC_OFFLINE"] if sc=="fcdown" else (["REPAIR_NEEDED"] if sc=="repair" else []),
       "msp":{"connected":sc!="fcdown","api":"1.47","variant":"BTFL","armed":armed,"canvas":"30x16",
              "aux":aux,"gps":{"present":True,"fix":3,"sats":14,"good":True},"fc_utc":1793560000,"last_rx_ms":18,
              "debug":{"rc_period_ms":100,"rc_hz":10.0,"rc_age_ms":42,"rc_channels":18,"status_period_ms":50,"status_hz":20.0,

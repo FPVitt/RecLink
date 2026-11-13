@@ -178,7 +178,7 @@ u533|||Capitolo 13
 u534|||Volare con RecLink
 u535|||Una volta configurato, RecLink fa il suo lavoro senza che tu lo tocchi. Questo capitolo è la routine: cosa controllare prima, cosa stai vedendo durante il volo e cosa succede se qualcosa cade.
 u536|||Ricorda
-u537|||RecLink 0.1.0 non è stato provato in volo. Prova a banco ogni funzione con le eliche rimosse, come qui sotto, e fai i primi voli brevi e su terreno aperto.
+u537|||RecLink 0.2.0 non è stato provato in volo. Prova a banco ogni funzione con le eliche rimosse, come qui sotto, e fai i primi voli brevi e su terreno aperto.
 u538|||Prova a banco, eliche rimosse
 u539|||Passo
 u540|||Dovresti vedere

@@ -23,7 +23,7 @@ ASSETS = os.path.join(DOCS, "assets")
 IMG = os.path.join(ASSETS, "img")
 PDFDIR = os.path.join(DOCS, "pdf")
 REPO_URL = "https://github.com/FPVitt/RecLink"
-FW = "0.1.0"
+FW = "0.2.0"
 
 PAGES = {  # (lang, doc) -> file name
     ("en", "index"): "index.html", ("en", "qs"): "quick-start.html", ("en", "guide"): "user-guide.html",

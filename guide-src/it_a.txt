@@ -1,6 +1,6 @@
 u1|||Guida utente
 u3|||Installazione e uso del bridge per action cam sul tuo quad Betaflight: cablaggio, abbinamento, controllo della registrazione, OSD e configuratore web.
-u4|||<span>Firmware 0.1.0 (pre-release)</span><span>Betaflight 2025.12+</span><span>GoPro HERO 11–13 · DJI Osmo Action 4/5/6, Osmo 360</span>
+u4|||<span>Firmware 0.2.0 (pre-release)</span><span>Betaflight 2025.12+</span><span>GoPro HERO 11–13 · DJI Osmo Action 4/5/6, Osmo 360</span>
 u5|||Indice
 u6|||Tutto quello che c'è in questa guida
 u7|||<b>1</b><span>Cos'è RecLink e cosa non fa mai</span>
@@ -19,7 +19,7 @@ u19|||<b>13</b><span>Volare con RecLink</span>
 u20|||<b>14</b><span>Risoluzione dei problemi</span>
 u21|||<b>A</b><span>Riferimento: token, valori predefiniti, LED, pulsante</span>
 u22|||Da leggere prima: stato pre-release
-u23|||Questo firmware (0.1.0) è stato provato a banco su una scheda ESP32-C3 personalizzata collegata a un flight controller Betaflight e a una GoPro HERO11 Black. <b>Non è mai stato provato in volo</b> e alcuni valori del protocollo delle camera sono ancora in fase di verifica su catture dal vivo. Considera ogni volo come un volo di prova. Esegui tutta l'installazione e i test a banco <b>con le eliche rimosse</b> e verifica ogni comportamento descritto in questa guida prima di volare.
+u23|||Questo firmware (0.2.0) è stato provato a banco su una scheda ESP32-C3 personalizzata collegata a un flight controller Betaflight e a una GoPro HERO11 Black. <b>Non è mai stato provato in volo</b> e alcuni valori del protocollo delle camera sono ancora in fase di verifica su catture dal vivo. Considera ogni volo come un volo di prova. Esegui tutta l'installazione e i test a banco <b>con le eliche rimosse</b> e verifica ogni comportamento descritto in questa guida prima di volare.
 u24|||Passeggero, non pilota
 u25|||RecLink <b>legge</b> soltanto dal flight controller e <b>scrive testo OSD</b>. Non può armare, disarmare, far girare i motori, cambiare i PID o toccare il collegamento radio. Questo limite è imposto dal firmware stesso, non lasciato alla convenzione. Se RecLink si guasta, nel peggiore dei casi in volo il testo OSD smette di aggiornarsi.
 u26|||Come leggere questa guida

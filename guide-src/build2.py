@@ -4,8 +4,8 @@ from bs4 import BeautifulSoup, Comment
 from svgs import SVG
 ANN=json.load(open("shots/annot.json"))
 PARTS={"guide":["part1.html","part2.html","part3.html","part4.html"],"qs":["qs.html"]}
-FOOT={("guide","en"):"RecLink User Guide · firmware 0.1.0",("guide","it"):"RecLink Guida utente · firmware 0.1.0",
-      ("qs","en"):"RecLink Quick Start · firmware 0.1.0",("qs","it"):"RecLink Guida rapida · firmware 0.1.0"}
+FOOT={("guide","en"):"RecLink User Guide · firmware 0.2.0",("guide","it"):"RecLink Guida utente · firmware 0.2.0",
+      ("qs","en"):"RecLink Quick Start · firmware 0.2.0",("qs","it"):"RecLink Guida rapida · firmware 0.2.0"}
 NAMES={("guide","en","port"):"RecLink-User-Guide",("guide","en","land"):"RecLink-User-Guide-Landscape",
        ("qs","en","port"):"RecLink-Quick-Start",("qs","en","land"):"RecLink-Quick-Start-Landscape",
        ("guide","it","port"):"RecLink-Guida-Utente",("guide","it","land"):"RecLink-Guida-Utente-Orizzontale",
@@ -130,7 +130,7 @@ def build(doc,lang,orient):
         return m.group(0).replace('<div class="tbl">','<div class="tbl long">',1) if m.group(0).count('<tr')>9 else m.group(0)
     body=re.sub(r'<div class="tbl">.*?</table></div>',tbl,body,flags=re.S)
     css=open("guide.css").read()
-    css=css.replace("RecLink User Guide · firmware 0.1.0",FOOT[(doc,lang)])
+    css=css.replace("RecLink User Guide · firmware 0.2.0",FOOT[(doc,lang)])
     if orient=="land": css+=open("land.css").read()
     if doc=="qs": css=re.sub(r'@page:first\{.*?\}\}','',css,flags=re.S); css=css.replace("@page:first{margin:0}","")
     css+=open("qs.css").read() if doc=="qs" else ""

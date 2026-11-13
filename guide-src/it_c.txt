@@ -85,7 +85,7 @@ u764|||Portale
 u765|||La rete Wi-Fi di RecLink e la sua pagina web di configurazione.
 u766|||Zona
 u767|||Una fetta della corsa di un interruttore radio che seleziona un insieme di impostazioni della camera.
-u768|||RecLink Guida utente, firmware 0.1.0 (pre-release). Gli screenshot mostrano il vero configuratore con valori di esempio. I nomi dei menu in Betaflight Configurator e sulle camere possono differire leggermente tra le versioni.
+u768|||RecLink Guida utente, firmware 0.2.0 (pre-release). Gli screenshot mostrano il vero configuratore con valori di esempio. I nomi dei menu in Betaflight Configurator e sulle camere possono differire leggermente tra le versioni.
 u769|||Il configuratore su smartphone.
 u770|||Logo RecLink. Il punto centrale diventa rosso e pulsa mentre la camera registra.
 u771|||Sette schede. Clock compare solo in modalità avanzata.
@@ -163,7 +163,7 @@ u842|||Scegli il file del firmware.
 u843|||Guida rapida
 u844|||RecLink collega il tuo flight controller alla tua action cam. La camera registra quando armi e il suo stato compare sull'OSD. Questa pagina ti porta dalla scatola alla tua prima registrazione.
 u845|||Firmware pre-release
-u846|||Il firmware 0.1.0 è stato provato solo a banco e <b>non è stato provato in volo</b>. Esegui ogni passo qui sotto con le <b>eliche rimosse</b> e verifica che tutto funzioni prima di volare.
+u846|||Il firmware 0.2.0 è stato provato solo a banco e <b>non è stato provato in volo</b>. Esegui ogni passo qui sotto con le <b>eliche rimosse</b> e verifica che tutto funzioni prima di volare.
 u847|||Ti serve
 u848|||La scheda RecLink
 u849|||Un flight controller con <b>Betaflight 2025.12 o successivo</b> e una UART libera
