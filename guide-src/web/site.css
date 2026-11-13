@@ -290,3 +290,4 @@ body[data-doc="board"] .layout{max-width:none;padding:0}
 .exp.full .exp-poster{padding:12% 6%}
 @media (max-width:640px){.exp.full{height:380vh}.exp.full .exp-steps{height:8rem}}
 .exp.full.started .exp-hint{opacity:0}
+@media (max-width:760px){.exp .exp-hint{display:none}}
