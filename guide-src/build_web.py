@@ -354,7 +354,8 @@ def build_index(lang):
                               ("Scarica il firmware", "L'ultimo firmware RecLink (immagine OTA). Caricalo dalla scheda Sistema del portale; l'altro slot conserva la versione precedente. Pre-release: provato solo a banco.", "Scarica il firmware", "Tutte le release"))
     rel = REPO_URL + "/releases"
     cards += (f'<article class="card" id="fw"><h2>{fw_t}</h2><p>{fw_d}</p><div class="actions">'
-              f'<a class="btn" id="fw-c3" href="{rel}" data-asset="fc_cam_bridge-esp32c3.bin">{fw_b} · ESP32-C3</a>'
+              f'<a class="btn" id="fw-c3" href="{rel}" data-asset="fc_cam_bridge-esp32c3.bin">{fw_b} · ESP32-C3 (RecLink board)</a>'
+              f'<a class="btn ghost" id="fw-sm" href="{rel}" data-asset="fc_cam_bridge-esp32c3-supermini.bin">{fw_b} · ESP32-C3 SuperMini</a>'
               f'<a class="btn ghost" id="fw-s3" href="{rel}" data-asset="fc_cam_bridge-esp32s3.bin">{fw_b} · ESP32-S3</a></div>'
               f'<div class="actions sub"><a class="btn ghost" href="{rel}">{fw_n}</a><span class="muted" id="fw-ver"></span></div></article>'
               '<script>(function(){fetch("https://api.github.com/repos/FPVitt/RecLink/releases?per_page=1").then(function(r){return r.json();})'

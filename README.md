@@ -82,6 +82,19 @@ idf.py -p <port> flash monitor
 options (static FreeRTOS allocation, persistent NimBLE bonds, 4 s task watchdog
 with panic, brown-out detector). A generated `sdkconfig` is **not** checked in.
 
+### Boards
+
+The pin map is a build-time board profile. The default is the RecLink PCB (MSP on UART0 GPIO21/GPIO20,
+LED on GPIO10 active-high). For a generic **ESP32-C3 SuperMini** (MSP on UART1 GPIO6/GPIO7, LED on GPIO8
+active-low) use the release image `fc_cam_bridge-esp32c3-supermini.bin`, or build it yourself:
+
+```sh
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.board-supermini" \
+       -B build_supermini set-target esp32c3 build
+```
+
+Other boards: copy `sdkconfig.defaults.board-supermini` and change the `CONFIG_BRIDGE_*` pins.
+
 The portal's web assets (`components/portal/www/`) are gzipped at build time and
 embedded in the app image, so `gzip` must be on `PATH`.
 

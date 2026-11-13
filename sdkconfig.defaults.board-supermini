@@ -1,0 +1,14 @@
+# Board profile: generic ESP32-C3 SuperMini (not the RecLink PCB). Applied on top of the
+# esp32c3 defaults; see README "Boards". Build:
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.board-supermini" \
+#          -B build_supermini set-target esp32c3 build
+# FC MSP link on UART1 (UART0 is the USB console on a SuperMini).
+CONFIG_BRIDGE_UART_PORT=1
+CONFIG_BRIDGE_UART_TX_GPIO=6
+CONFIG_BRIDGE_UART_RX_GPIO=7
+CONFIG_BRIDGE_BUTTON_GPIO=9
+CONFIG_BRIDGE_BUTTON_ACTIVE_LOW=y
+# Onboard blue LED on GPIO8, active-low.
+CONFIG_BRIDGE_LED_GPIO=y
+CONFIG_BRIDGE_LED_GPIO_NUM=8
+CONFIG_BRIDGE_LED_ACTIVE_LOW=y
