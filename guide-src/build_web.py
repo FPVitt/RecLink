@@ -413,9 +413,9 @@ def build_doc(doc, lang):
 
 BOARD = {
     "en": dict(
-        title="The board", eyebrow="RecLink hardware", note="Work in progress: the design may still change.",
+        title="The board", eyebrow="RecLink hardware", note="Work in progress: the design may still change.", pts=("Made for cinewhoops", "Just 0.48 g", "Essential board: no unnecessary components"),
         sub="The custom RecLink PCB: an ESP32-C3 with its own antenna, about the size of a fingernail, with four solder pads to the flight controller.",
-        desc="The RecLink board: a custom 12 x 13 mm four-layer PCB with an ESP32-C3, chip antenna and four castellated solder pads (GND, 5V, TX, RX). Currently in development.",
+        desc="The RecLink board: made for cinewhoops, just 0.48 g, an essential 12 x 13 mm four-layer PCB with an ESP32-C3, chip antenna and four solder pads (GND, 5V, TX, RX). Currently in development.",
         tag="In development",
         warn="The RecLink board is <b>currently in development</b>. What you see here is the work-in-progress design: dimensions, pad layout and components may still change, and it is not a finished product yet. Until then, any ESP32-C3 or ESP32-S3 dev board works (see the Quick start).",
         h3d="Explore the board", hint="Scroll to take the board apart. Drag to look around.", alt3d="The RecLink board",
@@ -443,9 +443,9 @@ BOARD = {
         hnext="Next steps", next=['Wiring step by step: <a href="quick-start.html">Quick start</a>.', 'Put the firmware on the board, or update it over Wi-Fi: <a href="../flash/">Install firmware</a>.'],
         foot="Dimensions and part list are taken from the current design files and may change while the board is in development."),
     "it": dict(
-        title="La scheda", eyebrow="Hardware RecLink", note="Progetto in corso: può ancora cambiare.",
+        title="La scheda", eyebrow="Hardware RecLink", note="Progetto in corso: può ancora cambiare.", pts=("Pensata per i cinewhoop", "Solo 0,48 g", "Scheda essenziale: nessun componente superfluo"),
         sub="Il PCB personalizzato RecLink: un ESP32-C3 con la sua antenna, grande quanto un'unghia, con quattro pad da saldare al flight controller.",
-        desc="La scheda RecLink: un PCB personalizzato a quattro strati di 12 x 13 mm con ESP32-C3, antenna ceramica e quattro pad castellati (GND, 5V, TX, RX). Attualmente in sviluppo.",
+        desc="La scheda RecLink: pensata per i cinewhoop, solo 0,48 g, un PCB essenziale a quattro strati di 12 x 13 mm con ESP32-C3, antenna ceramica e quattro pad (GND, 5V, TX, RX). Attualmente in sviluppo.",
         tag="In sviluppo",
         warn="La scheda RecLink è <b>attualmente in sviluppo</b>. Quello che vedi qui è il progetto in corso d'opera: dimensioni, disposizione dei pad e componenti possono ancora cambiare, e non è ancora un prodotto finito. Nel frattempo va bene qualsiasi scheda di sviluppo ESP32-C3 o ESP32-S3 (vedi la Guida rapida).",
         h3d="Esplora la scheda", hint="Scorri per smontare la scheda. Trascina per guardarla da altre angolazioni.", alt3d="La scheda RecLink",
@@ -484,10 +484,11 @@ def build_board(lang):
     th = "".join(f"<th>{h}</th>" for h in b["padhead"])
     nxt = "".join(f"<li>{n}</li>" for n in b["next"])
     n_steps = len(b["steps"])
+    pts = "".join(f"<li>{html.escape(x)}</li>" for x in b["pts"])
     steps = "".join(f'<li class="exp-step" data-from="{[0, .12, .30, .50, .70, .88][k]}" data-to="{[.12, .30, .50, .70, .88, 1.01][k]}"><b>{html.escape(t)}</b><span>{html.escape(d)}</span></li>'
                     for k, (t, d) in enumerate(b["steps"]))
     main = f"""<section class="exp full" id="exp" aria-label="{b["h3d"]}"><div class="exp-sticky"><canvas id="bc" role="img" aria-label="{b["alt3d"]}"></canvas><img class="exp-poster" src="{A}board-iso.webp" alt="{b["alt3d"]}">
-<div class="exp-head"><h1>{b["title"]}</h1><p class="pill"><b>{b["tag"]}</b> {b["note"]}</p></div>
+<div class="exp-head"><h1>{b["title"]}</h1><ul class="pts">{pts}</ul><p class="pill"><b>{b["tag"]}</b> {b["note"]}</p></div>
 <p class="exp-hint">{b["hint"]}</p>
 <ol class="exp-steps">{steps}</ol><div class="exp-bar" aria-hidden="true"><i></i></div></div></section>
 <script type="module" src="{A}board.js"></script>

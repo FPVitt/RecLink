@@ -276,7 +276,7 @@ html[lang=it] .menu.pages .menu-body a span.en{display:none}
 @media (max-width:760px){.menu.pages{display:block}.tools{gap:6px}}
 
 /* the board page: full-page explorer, no box */
-body[data-doc="board"] .content{max-width:none;padding:0}
+body[data-doc="board"] .layout:not(.has-toc) .content,body[data-doc="board"] .content{max-width:none;padding:0;margin:0}
 body[data-doc="board"] .layout{max-width:none;padding:0}
 .exp.full{height:420vh;margin:0}
 .exp.full .exp-sticky{top:var(--bar-h);height:calc(100vh - var(--bar-h));height:calc(100svh - var(--bar-h));border:0;border-radius:0;
@@ -295,3 +295,7 @@ body[data-doc="board"] .layout{max-width:none;padding:0}
 /* main page: four cards, two per row */
 .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:640px){.cards{grid-template-columns:1fr}}
+
+.pts{list-style:none;margin:.7rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+.pts li{padding:.2rem .7rem;border-radius:999px;background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc-ink);font-weight:650;font-size:.88rem}
+@media (max-width:640px){.pts li{font-size:.78rem;padding:.15rem .55rem}}
