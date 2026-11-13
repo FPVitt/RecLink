@@ -1,6 +1,6 @@
 u1|||Guida utente
 u3|||Installazione e uso del bridge per action cam sul tuo quad Betaflight: cablaggio, abbinamento, controllo della registrazione, OSD e configuratore web.
-u4|||<span>Firmware 0.2.0 (pre-release)</span><span>Betaflight 2025.12+</span><span>GoPro HERO 11–13 · DJI Osmo Action 4/5/6, Osmo 360</span>
+u4|||<span>Firmware 0.2.0 (pre-release)</span><span>Betaflight 2025.12+</span><span>GoPro HERO 9–13 · DJI Osmo (experimental)</span>
 u5|||Indice
 u6|||Tutto quello che c'è in questa guida
 u7|||<b>1</b><span>Cos'è RecLink e cosa non fa mai</span>
@@ -74,8 +74,8 @@ u75|||Supportato
 u76|||Collegamento
 u77|||Betaflight 2025.12.0 o successivo (MSP API 1.47+). Le versioni precedenti non possono mostrare i messaggi OSD personalizzati.
 u78|||MSP su una UART libera
-u80|||HERO 11, 12, 13 e modelli più recenti che usano la stessa API Bluetooth Open GoPro
-u82|||Osmo Action 4, 5 e 6, Osmo 360
+u80|||HERO 9, 10, 11, 12, 13 e modelli più recenti che usano la stessa API Bluetooth Open GoPro (HERO11 Black è l'unica provata a banco; Mission 1 prevista ma non verificata)
+u82|||<b>Sperimentale, non verificato:</b> Osmo Action 4, 5 Pro e 6, Osmo Nano, Osmo 360 (nessuna camera DJI è stata ancora provata)
 u84|||Analogico e digitale. La modalità digitale limita l'uscita ai glifi che i visori in stile DJI sanno disegnare.
 u85|||tramite l'FC
 u86|||Capitolo 2
