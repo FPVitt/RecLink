@@ -262,3 +262,15 @@ svg .onacc{fill:var(--acc-fg)}
 .pair img{display:block;width:100%;height:auto;border-radius:var(--radius-md)}
 .pair figcaption{color:var(--mut);font-size:.88rem;margin-top:.6rem}
 .fine{color:var(--mut);font-size:.85rem;margin-top:1.6rem}
+
+/* page menu (small screens) */
+.menu.pages{display:none}
+.menu.pages>summary{padding:0;width:34px;justify-content:center}
+.menu.pages>summary::before{display:none}
+.menu.pages>summary svg{width:18px;height:18px}
+.menu.pages .menu-body{right:auto;left:0;min-width:200px}
+.menu.pages .menu-body a[aria-current="page"]{background:var(--well);box-shadow:inset 3px 0 var(--acc)}
+.menu.pages .menu-body a span.it{display:none}
+html[lang=it] .menu.pages .menu-body a span.it{display:inline}
+html[lang=it] .menu.pages .menu-body a span.en{display:none}
+@media (max-width:760px){.menu.pages{display:block}.tools{gap:6px}}

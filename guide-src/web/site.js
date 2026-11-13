@@ -69,6 +69,22 @@
   if (cur) store.set('rl-lang', cur.dataset.lang);
 
   /* ---- PDF menu: close on outside click / Escape ---- */
+  /* small screens: the page tabs collapse into a menu so every page stays reachable */
+  (function () {
+    var tabs = $('.tabs'), tools = $('.tools');
+    if (!tabs || !tools) return;
+    var d = document.createElement('details');
+    d.className = 'menu pages';
+    var sum = document.createElement('summary');
+    sum.setAttribute('aria-label', 'Pages');
+    sum.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    var body = document.createElement('div');
+    body.className = 'menu-body';
+    tabs.querySelectorAll('a').forEach(function (a) { body.appendChild(a.cloneNode(true)); });
+    d.appendChild(sum); d.appendChild(body);
+    tools.insertBefore(d, tools.firstChild);
+  })();
+
   var menus = $$('details.menu');
   document.addEventListener('click', function (e) {
     menus.forEach(function (d) { if (d.open && !d.contains(e.target)) d.open = false; });
