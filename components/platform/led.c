@@ -91,32 +91,50 @@ void led_service(void)
     led_pattern_t p = s_base;
     if ((int32_t)(s_identify_until - t) > 0) { p = LED_IDENTIFY; }
 
-    uint8_t v = 0;      // white channel level
-    uint8_t rr = 0, gg = 0, bb = 0;
+    // Pattern timing (identical on every board): v is the on/off/breathe level 0..255.
+    uint8_t v = 0;
     switch (p) {
     case LED_BOOT:          v = 255; break;
     case LED_FC_DOWN:       v = nblink(t, 2000, 2, 90, 140); break;
     case LED_CAM_SEARCHING: v = breathe(t, 2600); break;
     case LED_CAM_IDLE:      v = blink(t, 3000, 60); break;
-    case LED_RECORDING:     gg = 255; break;
+    case LED_RECORDING:     v = 255; break;
     case LED_CAM_LOST:      v = blink(t, 300, 150); break;
-    case LED_PORTAL:        bb = nblink(t, 1000, 2, 70, 110); break;
+    case LED_PORTAL:        v = nblink(t, 1000, 2, 70, 110); break;
     case LED_FAULT:         v = nblink(t, 100000, 5, 70, 90); break;
     case LED_IDENTIFY:      v = blink(t, 200, 100); break;
     default:                v = 0; break;
     }
-    if (v) { rr = gg = bb = v; }
 
 #if CONFIG_BRIDGE_LED_WS2812
-    // cfg.led_brightness scales the WS2812 output (a plain GPIO LED is on/off
-    // only and cannot dim, so it is left untouched there).
+    // An RGB pixel adds a colour per state on top of the same timing (spec 10.6), and
+    // cfg.led_brightness scales it (a plain GPIO LED is on/off only and cannot dim).
+    static const uint8_t colour[LED_PATTERN_COUNT][3] = {
+        [LED_BOOT]          = {255, 255, 255},   // white
+        [LED_FC_DOWN]       = {170,   0, 255},   // purple
+        [LED_CAM_SEARCHING] = {255, 130,   0},   // amber
+        [LED_CAM_IDLE]      = {  0, 255, 255},   // cyan
+        [LED_RECORDING]     = {  0, 255,   0},   // green
+        [LED_CAM_LOST]      = {255,   0,   0},   // red
+        [LED_PORTAL]        = {  0,   0, 255},   // blue
+        [LED_FAULT]         = {255,   0,   0},   // red
+        [LED_IDENTIFY]      = {255, 255, 255},   // white
+    };
     const cfg_t *cfg = cfg_get();
-    uint8_t scale = cfg ? cfg->led_brightness : 128;
-    if (scale != 255) {
-        rr = (uint16_t)rr * scale / 255;
-        gg = (uint16_t)gg * scale / 255;
-        bb = (uint16_t)bb * scale / 255;
-    }
-#endif
+    uint32_t scale = cfg ? cfg->led_brightness : 128;
+    const uint8_t *c = colour[p < LED_PATTERN_COUNT ? p : LED_BOOT];   // v is 0 for any unknown pattern
+    uint32_t k = (uint32_t)v * scale;            // 0..255*255
+    uint8_t rr = (uint8_t)(c[0] * k / 65025);
+    uint8_t gg = (uint8_t)(c[1] * k / 65025);
+    uint8_t bb = (uint8_t)(c[2] * k / 65025);
+    // Skip identical frames (one RMT transfer per change) but still refresh once a
+    // second so a glitched pixel cannot stay wrong.
+    static uint8_t last[3];
+    static uint32_t last_ms;
+    if (rr == last[0] && gg == last[1] && bb == last[2] && (uint32_t)(t - last_ms) < 1000) { return; }
+    last[0] = rr; last[1] = gg; last[2] = bb; last_ms = t;
     led_write(rr, gg, bb);
+#else
+    led_write(v, v, v);
+#endif
 }

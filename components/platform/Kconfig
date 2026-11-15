@@ -46,6 +46,10 @@ menu "RecLink board"
     config BRIDGE_LED_GPIO_NUM
         int "Status LED GPIO"
         default 8
+        help
+            GPIO of the status LED (plain LED, or the data pin of a single
+            WS2812). Waveshare ESP32-S3-Zero: WS2812 on GPIO21 -- use the
+            sdkconfig.defaults.board-s3zero profile.
 
     config BRIDGE_LED_ACTIVE_LOW
         bool "Plain LED is active-low"

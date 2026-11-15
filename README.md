@@ -95,6 +95,18 @@ idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkc
        -B build_supermini set-target esp32c3 build
 ```
 
+For the **Waveshare ESP32-S3-Zero** (4 MB flash, one WS2812 RGB LED on GPIO21, BOOT button on GPIO0; MSP on
+UART1, FC TX to GPIO4 and FC RX from GPIO5):
+
+```sh
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.board-s3zero" \
+       -B build_s3zero set-target esp32s3 build
+```
+
+An RGB LED shows each state in its own colour (same blink timing as the plain LED): white = booting,
+purple = no flight controller, amber = searching for the camera, cyan = camera ready, green = recording,
+red = camera lost, blue = config portal. `led_brightness` in the portal's System tab dims it.
+
 Other boards: copy `sdkconfig.defaults.board-supermini` and change the `CONFIG_BRIDGE_*` pins.
 
 The portal's web assets (`components/portal/www/`) are gzipped at build time and

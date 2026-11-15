@@ -1,0 +1,18 @@
+# Board profile: Waveshare ESP32-S3-Zero (4 MB flash, one WS2812 RGB LED). Applied on top of the
+# esp32s3 defaults; see README "Boards". Build:
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.board-s3zero" \
+#          -B build_s3zero set-target esp32s3 build
+# FC MSP link on UART1 (the USB-Serial/JTAG console owns the native USB port).
+CONFIG_BRIDGE_UART_PORT=1
+CONFIG_BRIDGE_UART_TX_GPIO=5
+CONFIG_BRIDGE_UART_RX_GPIO=4
+# BOOT button (GPIO0), active-low. Polled at runtime only, never sampled at boot.
+CONFIG_BRIDGE_BUTTON_GPIO=0
+CONFIG_BRIDGE_BUTTON_ACTIVE_LOW=y
+# The only LED is a WS2812 RGB pixel on GPIO21 (no plain GPIO LED). Colour-coded states: spec 10.6.
+CONFIG_BRIDGE_LED_WS2812=y
+CONFIG_BRIDGE_LED_GPIO_NUM=21
+# 4 MB flash (partitions.csv is laid out for 4 MB). The shared S3 default says 8 MB, which would
+# make the bootloader reject a 4 MB part, so override it here.
+# CONFIG_ESPTOOLPY_FLASHSIZE_8MB is not set
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
