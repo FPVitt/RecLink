@@ -38,8 +38,9 @@ static void render_all(const fc_state_t *fc, const cam_state_t *cam, const cfg_t
 static void osd_task(void *arg)
 {
     (void)arg;
-    // osd_task is not WDT-subscribed (spec 3.5 lists msp/cam/ctrl/housekeeping);
-    // it is low-priority and may be merged into msp_task later.
+    // WDT-subscribed: a hung osd_task leaves the LAST text frozen on the goggles (REC while the
+    // camera has actually stopped), which is worse than the ~300 ms reboot a stall costs.
+    twdt_register(WDT_OSD);
     const cfg_t *cfg = cfg_get();
     uint8_t hz = cfg ? cfg->osd.refresh_hz : 4;
     if (hz < 1) { hz = 1; }
@@ -54,8 +55,9 @@ static void osd_task(void *arg)
         bool blink = ((now_ms() / 500) & 1) != 0;
 
         if (fc.link_up && fc.osd_supported) {
-            render_all(&fc, &cam, cfg, blink);
+            render_all(&fc, &cam, cfg_get(), blink);   // re-fetched: commits publish a new snapshot
         }
+        twdt_feed(WDT_OSD);
         vTaskDelayUntil(&last, period);
     }
 }

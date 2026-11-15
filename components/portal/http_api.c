@@ -51,7 +51,8 @@ extern const uint8_t css_end[]   asm("_binary_style_css_gz_end");
 static bool fc_armed(void)
 {
     fc_state_t s; fc_state_get(&s);
-    return s.armed;
+    // The arm bit is forgotten when the FC link drops; the flight hint is not (it also survives a reboot).
+    return s.armed || flight_may_be_airborne();
 }
 
 static esp_err_t send_json(httpd_req_t *r, cJSON *j, const char *status)

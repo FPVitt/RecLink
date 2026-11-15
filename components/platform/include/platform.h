@@ -52,6 +52,7 @@ typedef enum {
     WDT_CAM,
     WDT_CTRL,
     WDT_HOUSEKEEPING,
+    WDT_OSD,             // a hung OSD task would leave the last text (e.g. REC) frozen on the goggles
     WDT_TASK_COUNT,
 } wdt_task_t;
 
@@ -72,3 +73,10 @@ crash_stats_t rtcnv_get(void);
 void         rtcnv_set_last_disconnect(const char *why);
 void         rtcnv_note_wdt_recovered_ack(void);
 bool         rtcnv_wdt_recovered_unacked(void);   // -> FLAG_WDT_RECOVERED
+
+// "The aircraft may be in the air" hint (spec 13.3). housekeeping reports every decoded
+// arm state; the answer also survives a warm reboot (silent-hang esp_restart, brown-out,
+// watchdog) in RTC memory, so a mid-flight reboot cannot be mistaken for a fresh bench boot.
+// It clears only when a DISARMED state has been decoded, or on a true power cycle.
+void         flight_note_armed(bool armed);       // housekeeping only; call with a decoded state
+bool         flight_may_be_airborne(void);        // any task

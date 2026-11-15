@@ -14,7 +14,8 @@ typedef enum {
     BLE_EVT_DISCONNECTED,
     BLE_EVT_MTU_DONE,
     BLE_EVT_ENC_DONE,       // bonding/encryption established
-    BLE_EVT_ENC_FAIL,
+    BLE_EVT_ENC_FAIL,       // key/authentication failure: evidence the camera dropped its side of the bond
+    BLE_EVT_ENC_TRANSIENT,  // encryption failed for any other reason (timeout, link lost, busy): says nothing about the bond
     BLE_EVT_DISC_DONE,      // GATT discovery complete
     BLE_EVT_DISC_FAIL,
 } ble_central_evt_t;
@@ -26,6 +27,9 @@ typedef void (*ble_notify_cb_t)(uint16_t val_handle, const uint8_t *data, uint16
 // Start the controller + host. Idempotent. Call once from app_main.
 void ble_central_init(void);
 void ble_central_set_tx_power(uint8_t preset);   // RF_PWR_* (cfg.h); reboot to change
+// While the aircraft may be in the air the radio is capped at RF_PWR_LOW (the camera sits next to the
+// board, and a 2.4 GHz RC receiver sits next to both); the configured level returns when it is not.
+void ble_central_set_flight_power(bool airborne);
 
 // True once the NimBLE host has synced (address ready, stack usable). Bond-store
 // queries before this return garbage -- callers must wait (review H15).

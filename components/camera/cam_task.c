@@ -475,6 +475,13 @@ static void exec_cmd(const cam_cmd_t *c)
 // Should the BLE scanner be active right now, and if so, gentle?
 static bool scan_wanted(bool *gentle)
 {
+    // Airborne (or armed state unknown after a reboot): the active 60 ms/50 ms scan sits right next to
+    // a 2.4 GHz RC receiver. A bonded reconnect only needs the low-duty PASSIVE scan (no scan-request
+    // TX, same as with the portal up); anything else (cold hunt, pairing) waits for the bench.
+    if (flight_may_be_airborne()) {
+        if (gentle) { *gentle = true; }
+        return s_bond_n > 0;
+    }
     bool aggressive_ok = !s_scan_paused || s_first_pair || s_pair_discover ||
                          s_connected_this_session;
     if (aggressive_ok) { if (gentle) { *gentle = false; } return true; }
@@ -575,12 +582,24 @@ static void handle_ble_evt(int ev, int status)
         set_link(CAM_LINK_SYNCING);
         ble_central_discover_all();
         break;
+    case BLE_EVT_ENC_TRANSIENT:
+        // Timeout / link lost / controller busy while encrypting: the usual result at the edge of
+        // range. It says nothing about the bond, so it is never counted towards erasing it.
+        ESP_LOGW(TAG, "encryption failed (status %d, not a key failure) -> retry", status);
+        go_lost("encryption failed", false);
+        break;
     case BLE_EVT_ENC_FAIL:
-        // On a bonded reconnect, repeated identical pairing failures mean the
-        // camera dropped its side of the bond -- erasing ours and asking for a
-        // re-pair is the only real fix (spec 3.6 / 11.0 FLAG_REPAIR_NEEDED).
-        // Counted per camera, and only THAT camera's bond is dropped: three failures at the
-        // edge of range, or one camera re-paired elsewhere, must not wipe the other bonds.
+        // On a bonded reconnect, repeated KEY/AUTHENTICATION failures (ble_central classifies them;
+        // timeouts and link loss arrive as BLE_EVT_ENC_TRANSIENT) mean the camera dropped its side
+        // of the bond -- erasing ours and asking for a re-pair is the only real fix (spec 3.6 / 11.0
+        // FLAG_REPAIR_NEEDED). Counted per camera, and only THAT camera's bond is dropped.
+        // Never while the aircraft may be airborne: a re-pair needs the bench, so in the air the
+        // bond is kept and the reconnect simply keeps trying (spec 13: reliability over tidiness).
+        if (flight_may_be_airborne()) {
+            ESP_LOGW(TAG, "pairing failure (status %d) while airborne -> bond kept, retry", status);
+            go_lost("bond failed", false);
+            break;
+        }
         if (!s_first_pair && memcmp(s_bond_fail_addr, s_target_addr, 6) != 0) {
             memcpy(s_bond_fail_addr, s_target_addr, 6);
             s_bond_fails = 0;
@@ -668,6 +687,7 @@ static void cam_task(void *arg)
 
     for (;;) {
         iq_item_t it;
+        ble_central_set_flight_power(flight_may_be_airborne());   // cheap: acts only on a change
         drain_notifications();      // before blocking: a wake-up in s_iq ends the wait below
         if (xQueueReceive(s_iq, &it, pdMS_TO_TICKS(100)) == pdTRUE) {
             switch (it.kind) {

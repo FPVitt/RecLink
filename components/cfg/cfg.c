@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
@@ -16,7 +18,21 @@ static const char *TAG = "cfg";
 
 bool cfg_migrate_chain(cfg_t *c);   // cfg_migrate.c
 
-static cfg_t s_live;                // last-good, always valid after cfg_init
+// Readers (any task) always see a COMPLETE config: cfg_get() returns an immutable snapshot, and a
+// commit builds the next one in a spare slot and publishes it with one pointer store. Three
+// rotating slots keep the previous snapshot intact for two further commits, so a reader that is
+// part-way through a read when a commit lands (commits are rare and disarmed-only) never sees a
+// half-written struct. Callers must therefore re-fetch cfg_get() instead of holding the pointer
+// for the life of a task.
+static cfg_t s_slot[3];
+static cfg_t *volatile s_cur = &s_slot[0];
+#define s_live (*s_cur)                 // last-good, always valid after cfg_init
+
+// Serialises writers (the portal and the camera task both commit). Created in cfg_init.
+static SemaphoreHandle_t s_wlock;
+static StaticSemaphore_t s_wlock_buf;
+static void wlock(void)   { if (s_wlock) { xSemaphoreTake(s_wlock, portMAX_DELAY); } }
+static void wunlock(void) { if (s_wlock) { xSemaphoreGive(s_wlock); } }
 static bool  s_ready;
 
 // CRC covers everything from `magic` up to but not including `crc32`.
@@ -27,7 +43,7 @@ static uint32_t blob_crc(const cfg_t *c)
 
 const cfg_t *cfg_get(void)
 {
-    return s_ready ? &s_live : NULL;
+    return s_ready ? s_cur : NULL;
 }
 
 void cfg_snapshot(cfg_t *dst)
@@ -192,9 +208,25 @@ static esp_err_t write_blob(const cfg_t *c)
     return err;
 }
 
-esp_err_t cfg_commit(const cfg_t *cand)
+static void publish_locked(const cfg_t *src)
+{
+    cfg_t *next = &s_slot[((int)(s_cur - s_slot) + 1) % 3];
+    *next = *src;
+    __sync_synchronize();               // the whole struct is written before the pointer moves
+    s_cur = next;
+}
+
+// keep_bonds: the camera bond fields (camera, cams, cam_poll_ds) belong to the camera task and its
+// helpers below. A candidate built from an older snapshot (the portal's POST /api/config) must not
+// roll them back, so the public commit takes them from the live config.
+static esp_err_t commit_locked(const cfg_t *cand, bool keep_bonds)
 {
     cfg_t tmp = *cand;
+    if (keep_bonds) {
+        tmp.camera = s_live.camera;
+        memcpy(tmp.cams, s_live.cams, sizeof(tmp.cams));
+        memcpy(tmp.cam_poll_ds, s_live.cam_poll_ds, sizeof(tmp.cam_poll_ds));
+    }
     char msg[64];
     esp_err_t err = cfg_validate(&tmp, msg, sizeof(msg));
     if (err != ESP_OK) {
@@ -209,11 +241,19 @@ esp_err_t cfg_commit(const cfg_t *cand)
     err = write_blob(&tmp);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "nvs write failed: %s -- keeping last-good in RAM", esp_err_to_name(err));
-        return err;                 // s_live untouched (spec 11.1)
+        return err;                 // live config untouched (spec 11.1)
     }
-    s_live = tmp;
+    publish_locked(&tmp);
     ESP_LOGI(TAG, "cfg committed (%u bytes)", (unsigned)sizeof(cfg_t));
     return ESP_OK;
+}
+
+esp_err_t cfg_commit(const cfg_t *cand)
+{
+    wlock();
+    esp_err_t e = commit_locked(cand, true);
+    wunlock();
+    return e;
 }
 
 static int bond_index_of(const cfg_t *c, const uint8_t addr[6])
@@ -234,8 +274,8 @@ static void set_active_from(cfg_t *c, const cam_bond_t *b)
     c->camera.bonded = b->brand[0] ? 1 : 0;
 }
 
-esp_err_t cfg_set_camera_bond(const char *brand, const uint8_t addr[6],
-                              const char *name, uint32_t dji_device_id)
+static esp_err_t set_camera_bond_impl(const char *brand, const uint8_t addr[6],
+                                    const char *name, uint32_t dji_device_id)
 {
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
@@ -255,20 +295,37 @@ esp_err_t cfg_set_camera_bond(const char *brand, const uint8_t addr[6],
         b->dji_device_id = s_live.camera.dji_device_id;
     }
     set_active_from(&c, b);            // newly paired camera becomes active
-    return cfg_commit(&c);
+    return commit_locked(&c, false);
 }
 
-esp_err_t cfg_set_active_camera(const uint8_t addr[6])
+esp_err_t cfg_set_camera_bond(const char *brand, const uint8_t addr[6],
+                              const char *name, uint32_t dji_device_id)
+{
+    wlock();
+    esp_err_t e = set_camera_bond_impl(brand, addr, name, dji_device_id);
+    wunlock();
+    return e;
+}
+
+static esp_err_t set_active_camera_impl(const uint8_t addr[6])
 {
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
     if (i < 0) { return ESP_ERR_NOT_FOUND; }
     if (memcmp(c.camera.addr, addr, 6) == 0 && c.camera.bonded) { return ESP_OK; }
     set_active_from(&c, &c.cams[i]);
-    return cfg_commit(&c);
+    return commit_locked(&c, false);
 }
 
-esp_err_t cfg_forget_camera(const uint8_t addr[6])
+esp_err_t cfg_set_active_camera(const uint8_t addr[6])
+{
+    wlock();
+    esp_err_t e = set_active_camera_impl(addr);
+    wunlock();
+    return e;
+}
+
+static esp_err_t forget_camera_impl(const uint8_t addr[6])
 {
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
@@ -284,26 +341,50 @@ esp_err_t cfg_forget_camera(const uint8_t addr[6])
         if (c.cams[0].brand[0]) { set_active_from(&c, &c.cams[0]); }
         else                    { memset(&c.camera, 0, sizeof(c.camera)); }
     }
-    return cfg_commit(&c);
+    return commit_locked(&c, false);
 }
 
-esp_err_t cfg_clear_camera(void)
+esp_err_t cfg_forget_camera(const uint8_t addr[6])
+{
+    wlock();
+    esp_err_t e = forget_camera_impl(addr);
+    wunlock();
+    return e;
+}
+
+static esp_err_t clear_camera_impl(void)
 {
     cfg_t c = s_live;
     memset(&c.camera, 0, sizeof(c.camera));
     memset(c.cams, 0, sizeof(c.cams));
     memset(c.cam_poll_ds, 0, sizeof(c.cam_poll_ds));
-    return cfg_commit(&c);
+    return commit_locked(&c, false);
 }
 
-esp_err_t cfg_cam_set_poll(const uint8_t addr[6], uint8_t poll_ds)
+esp_err_t cfg_clear_camera(void)
+{
+    wlock();
+    esp_err_t e = clear_camera_impl();
+    wunlock();
+    return e;
+}
+
+static esp_err_t cam_set_poll_impl(const uint8_t addr[6], uint8_t poll_ds)
 {
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
     if (i < 0) { return ESP_ERR_NOT_FOUND; }
     CLAMP(poll_ds, CAM_POLL_DS_MIN, CAM_POLL_DS_MAX);
     c.cam_poll_ds[i] = poll_ds;
-    return cfg_commit(&c);
+    return commit_locked(&c, false);
+}
+
+esp_err_t cfg_cam_set_poll(const uint8_t addr[6], uint8_t poll_ds)
+{
+    wlock();
+    esp_err_t e = cam_set_poll_impl(addr, poll_ds);
+    wunlock();
+    return e;
 }
 
 uint16_t cfg_active_poll_ms(void)
@@ -350,6 +431,7 @@ esp_err_t cfg_factory_erase(void)
 // --------------------------------------------------------------------------
 esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
 {
+    if (!s_wlock) { s_wlock = xSemaphoreCreateMutexStatic(&s_wlock_buf); }
     if (out_cfg_reset)          { *out_cfg_reset = false; }
     if (out_erase_orphan_bond)  { *out_erase_orphan_bond = false; }
 

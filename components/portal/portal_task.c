@@ -24,7 +24,8 @@
 
 static const char *TAG = "portal";
 
-static TaskHandle_t   s_task;
+static TaskHandle_t   s_task;            // created once on the first portal_start(), then parked between sessions
+static volatile bool  s_busy;            // a portal session is starting, up or tearing down
 static volatile bool  s_want_stop;
 static volatile bool  s_running;         // AP + HTTP actually up
 static httpd_handle_t s_httpd;
@@ -132,9 +133,8 @@ static void portal_teardown(void)
     applog_note("portal down");
 }
 
-static void portal_task(void *arg)
+static void portal_session(void)
 {
-    (void)arg;
     ESP_LOGI(TAG, "portal task: bringing up AP + HTTP");
     cam_ble_pause_scan(true);        // stop the camera hunt: a continuous BLE scan
     cam_throttle(true);              // starves Wi-Fi association on the single C3 radio
@@ -163,33 +163,52 @@ static void portal_task(void *arg)
     cam_throttle(false);
     cam_ble_pause_scan(false);       // resume the camera hunt
     s_running = false;
-    s_task = NULL;
-    vTaskDelete(NULL);
+}
+
+// One long-lived task. It used to vTaskDelete(NULL) itself after clearing s_task, which let a new
+// portal_start() reuse the static stack/TCB while the old task was still exiting (a real hazard on
+// the dual-core S3). Now it parks between sessions and the static memory is never reused.
+static void portal_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        portal_session();
+        ulTaskNotifyTake(pdTRUE, 0);                 // drop a stop wake-up that arrived after the loop ended
+        s_busy = false;                              // only now may portal_start() begin the next session
+        do {
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // park until portal_start()
+        } while (!s_busy);                           // ignore a stray notification
+    }
 }
 
 // ---- cheap public API (any task) ------------------------------------
 void portal_start(void)
 {
-    if (s_task) { return; }          // already running / starting
+    if (s_busy) { return; }          // already starting / up / tearing down
     s_want_stop = false;
-    s_task = xTaskCreateStatic(portal_task, "portal_task",
-                               sizeof(s_stack) / sizeof(s_stack[0]),
-                               NULL, 5, s_stack, &s_tcb);
+    s_busy = true;
+    if (!s_task) {
+        s_task = xTaskCreateStatic(portal_task, "portal_task",
+                                   sizeof(s_stack) / sizeof(s_stack[0]),
+                                   NULL, 5, s_stack, &s_tcb);
+    } else {
+        xTaskNotifyGive(s_task);     // wake the parked task: next session
+    }
 }
 
 void portal_stop(void)
 {
     TaskHandle_t t = s_task;
-    if (!t) { return; }
+    if (!t || !s_busy) { return; }
     s_want_stop = true;
     // Radio first, right here (esp_wifi_stop is thread-safe): the AP must be off within
-    // ~100 ms of the armed edge (spec 12.4) and portal_task's own teardown can wait
+    // ~100 ms of the armed edge (spec 12.4) and the session's own teardown can wait
     // behind a running HTTP handler (httpd_stop blocks until it returns).
     esp_wifi_stop();
     xTaskNotifyGive(t);              // wake it now -> finish the teardown
 }
 
-bool portal_active(void) { return s_running || s_task != NULL; }
+bool portal_active(void) { return s_running || s_busy; }
 
 // ---- supervision, called from housekeeping at ~10 Hz ------------------
 void portal_supervise(bool armed, bool trigger_open, bool button_long)
@@ -198,7 +217,7 @@ void portal_supervise(bool armed, bool trigger_open, bool button_long)
 
     // Hard rule (spec 13.3): never run the AP while armed.
     if (armed) {
-        if (s_task) { portal_stop(); }
+        if (s_busy) { portal_stop(); }
         long_prev = button_long;
         return;
     }
@@ -206,7 +225,7 @@ void portal_supervise(bool armed, bool trigger_open, bool button_long)
     bool long_edge = button_long && !long_prev;
     long_prev = button_long;
 
-    if (!s_task) {
+    if (!s_busy) {
         if (trigger_open || long_edge) { portal_start(); }
     } else if (long_edge) {
         portal_stop();               // long-press again = close early

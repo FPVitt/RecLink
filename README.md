@@ -59,7 +59,7 @@ PIDs, or navigation.
 | Brand | Models | Protocol |
 |---|---|---|
 | GoPro | **Supported:** HERO 9 / 10 / 11 / 12 / 13 (and newer with the same BLE API); HERO11 Black is the bench-tested one. **Mission 1 / Mission 1 Pro: expected, unverified** (may need two-byte setting ids this firmware does not speak; BLE advertising unknown). HERO8 and older are not supported (no Open GoPro BLE) | [Open GoPro](https://gopro.github.io/OpenGoPro/) BLE |
-| DJI | **Experimental / unverified:** Osmo Action 4 / 5 Pro / 6, Osmo Nano, Osmo 360 — no DJI camera has been tested yet; record, mode switch and status are implemented from DJI's open-source demo, but behaviour per model is not confirmed | DUML over BLE |
+| DJI | **Experimental / unverified:** Osmo Action 4 / 5 Pro / 6 and Osmo 360 — no DJI camera has been tested yet; record, mode switch and status are implemented from DJI's open-source demo (the Action-line protocol), but behaviour per model is not confirmed. **Osmo Nano: not expected to work** — it speaks a different DJI protocol that this driver does not implement | DUML over BLE |
 
 ### Requirements
 

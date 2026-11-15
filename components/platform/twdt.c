@@ -1,5 +1,5 @@
-// twdt.c -- thin wrapper over esp_task_wdt. Each of the four critical tasks
-// (msp/cam/ctrl/housekeeping) registers itself and feeds once per loop. A stall
+// twdt.c -- thin wrapper over esp_task_wdt. Each of the critical tasks
+// (msp/cam/ctrl/housekeeping/osd) registers itself and feeds once per loop. A stall
 // -> panic -> reboot (spec 3.5); we do NOT attempt selective task restart.
 #include "platform.h"
 

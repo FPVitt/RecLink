@@ -150,6 +150,21 @@ static void emit(ble_central_evt_t ev, int status)
 }
 
 // ---- GAP event handler --------------------------------------------
+// Only a key/authentication failure says the camera lost (or never had) our bond. A timeout, a
+// link dropped mid-encryption or a busy controller -- the usual result at the edge of range --
+// must never count towards erasing the bond (it would strand the camera until a bench re-pair).
+#define SM_ERR_AUTH_FAIL    0x05   // HCI: authentication failure
+#define SM_ERR_PINKEY_MISS  0x06   // HCI: PIN or key missing (peer has no key for us)
+static bool enc_status_is_bond_loss(int st)
+{
+    if (st == BLE_HS_EAUTHEN) { return true; }
+    if (st == BLE_HS_HCI_ERR(SM_ERR_AUTH_FAIL) || st == BLE_HS_HCI_ERR(SM_ERR_PINKEY_MISS)) { return true; }
+    // Security Manager protocol errors, raised by us or reported by the peer (pairing refused, confirm failed ...).
+    if (st >= BLE_HS_ERR_SM_US_BASE   && st < BLE_HS_ERR_SM_US_BASE   + 0x100) { return true; }
+    if (st >= BLE_HS_ERR_SM_PEER_BASE && st < BLE_HS_ERR_SM_PEER_BASE + 0x100) { return true; }
+    return false;
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg);
 
 static void parse_adv(const struct ble_gap_disc_desc *d, ble_adv_t *out)
@@ -206,7 +221,9 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         emit(BLE_EVT_DISCONNECTED, event->disconnect.reason);
         break;
     case BLE_GAP_EVENT_ENC_CHANGE:
-        emit(event->enc_change.status == 0 ? BLE_EVT_ENC_DONE : BLE_EVT_ENC_FAIL,
+        emit(event->enc_change.status == 0 ? BLE_EVT_ENC_DONE
+             : enc_status_is_bond_loss(event->enc_change.status) ? BLE_EVT_ENC_FAIL
+             : BLE_EVT_ENC_TRANSIENT,
              event->enc_change.status);
         break;
     case BLE_GAP_EVENT_MTU:
@@ -536,14 +553,32 @@ void ble_central_init(void)
 // Call after ble_central_init(); takes effect immediately, but since NimBLE
 // itself is only ever brought up once at boot, changing cfg.ble_tx_power needs
 // a reboot to actually re-apply.
-void ble_central_set_tx_power(uint8_t preset)
+static uint8_t s_pwr_pref = 2;      // configured RF_PWR_* preset
+static bool    s_pwr_air;           // flight cap active
+
+static void apply_tx_power(void)
 {
     static const esp_power_level_t k_levels[] = {
         ESP_PWR_LVL_N12,   // RF_PWR_LOW    -12 dBm
         ESP_PWR_LVL_N0,    // RF_PWR_MEDIUM   0 dBm
         ESP_PWR_LVL_P9,    // RF_PWR_MAX     +9 dBm (matches the NimBLE/BT default)
     };
-    if (preset > 2) { preset = 2; }
-    esp_err_t e = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, k_levels[preset]);
+    uint8_t eff = s_pwr_air ? 0 : s_pwr_pref;      // airborne: always the lowest level
+    esp_err_t e = esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_DEFAULT, k_levels[eff]);
     if (e != ESP_OK) { ESP_LOGW(TAG, "ble tx power: %s", esp_err_to_name(e)); }
+}
+
+void ble_central_set_tx_power(uint8_t preset)
+{
+    if (preset > 2) { preset = 2; }
+    s_pwr_pref = preset;
+    apply_tx_power();
+}
+
+void ble_central_set_flight_power(bool airborne)
+{
+    if (s_pwr_air == airborne) { return; }
+    s_pwr_air = airborne;
+    apply_tx_power();
+    ESP_LOGI(TAG, "ble tx power: %s", airborne ? "capped LOW (airborne)" : "configured level");
 }

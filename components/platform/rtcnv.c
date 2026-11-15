@@ -12,8 +12,10 @@
 static RTC_NOINIT_ATTR uint32_t s_magic;
 static RTC_NOINIT_ATTR crash_stats_t s_stats;
 static RTC_NOINIT_ATTR bool s_wdt_unacked;
+static RTC_NOINIT_ATTR bool s_was_armed;     // last decoded arm state survived a warm reboot (spec 13.3)
+static volatile bool s_armed_now;
 
-#define RTCNV_MAGIC 0x52544356u  // "RTCV"
+#define RTCNV_MAGIC 0x52544357u  // "RTCW" -- bumped when s_was_armed was added: an older image's RTC layout must not be trusted
 
 void rtcnv_boot_update(void)
 {
@@ -22,6 +24,7 @@ void rtcnv_boot_update(void)
     if (s_magic != RTCNV_MAGIC) {
         memset(&s_stats, 0, sizeof(s_stats));
         s_wdt_unacked = false;
+        s_was_armed = false;
         s_magic = RTCNV_MAGIC;
     }
 
@@ -54,3 +57,12 @@ void rtcnv_set_last_disconnect(const char *why)
 void rtcnv_note_wdt_recovered_ack(void) { s_wdt_unacked = false; }
 
 bool rtcnv_wdt_recovered_unacked(void) { return s_wdt_unacked; }
+
+// ---- flight hint ----------------------------------------------------------
+void flight_note_armed(bool armed)
+{
+    s_armed_now = armed;
+    if (s_was_armed != armed) { s_was_armed = armed; }   // one RTC write per arm/disarm edge
+}
+
+bool flight_may_be_airborne(void) { return s_armed_now || s_was_armed; }

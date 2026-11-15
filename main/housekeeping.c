@@ -89,9 +89,14 @@ static void hk_task(void *arg)
     (void)arg;
     twdt_register(WDT_HOUSEKEEPING);
     uint32_t last_liveness = 0;
+    // Was the aircraft armed when the previous boot ended? (RTC; false after a power cycle)
+    bool armed_seen = flight_may_be_airborne();
 
     for (;;) {
         fc_state_t fc; fc_state_get(&fc);
+        // Publish the decoded arm state for every task (BLE quieting, bond-erase guard).
+        // An unknown state (link down / not yet decoded) changes nothing.
+        if (fc.link_up && fc.armed_valid) { flight_note_armed(fc.armed); }
         cam_link_state_t cam_link; tribool_t cam_rec;
         cam_state_get_brief(&cam_link, &cam_rec);          // not the whole ~450 B cam_state_t
 
@@ -122,7 +127,7 @@ static void hk_task(void *arg)
         // portal's own guard on this action (never disrupt a flying aircraft
         // for a discretionary reset). GPIO9 can't be sampled at boot for this
         // (see platform.h), so there's no boot-time equivalent any more.
-        if (be == BTN_FACTORY && !fc.armed) {
+        if (be == BTN_FACTORY && !fc.armed && !flight_may_be_airborne()) {   // hint outlives a lost FC link
             ESP_LOGW(TAG, "factory reset (button held 10 s)");
             cfg_factory_erase();
             cam_erase_all_bonds();
@@ -140,13 +145,14 @@ static void hk_task(void *arg)
         // flying aircraft after a mid-flight reboot. Refuse if the FC has
         // reported armed at any point this boot, within the first 5 s, or on a
         // watchdog-recovery boot (spec 13.3 / 12.3).
-        static bool armed_seen;
+        // armed_seen starts from the RTC hint (hk_task), so a silent-hang or brown-out
+        // reboot in flight also keeps the AP off.
         if (fc.armed) { armed_seen = true; }
         if (!fc.link_up && always && !armed_seen && now_ms() > 5000 &&
             !bridge_flag_get(FLAG_WDT_RECOVERED)) {
             trig = true;
         }
-        portal_supervise(fc.armed, trig, be == BTN_LONG);
+        portal_supervise(fc.armed || flight_may_be_airborne(), trig, be == BTN_LONG);
 
         // --- camera liveness (spec 3.5) ----------------------
         if (now_ms() - last_liveness > 1000) {

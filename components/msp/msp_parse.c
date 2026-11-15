@@ -116,13 +116,10 @@ bool msp_parse_frame(const msp_frame_t *f, fc_state_t *s, msp_parse_ctx_t *ctx)
             s->armed = (modeflags >> ctx->arm_bit_index) & 1u;
             s->armed_valid = true;
         }
-        // FIXME(protocol-verifier -> implementer): the previous fixed-offset
-        // heuristic below reads the WRONG u32 (for the common BC=0 / len=25 case
-        // it lands on {armingDisableFlags[3], configState, cpuTemp}). Correct
-        // parse is a forward walk: bc = p[15]; count = p[16+bc];
-        // armingDisableFlags = rd_u32(p, 17+bc). Left as-is (informational field,
-        // not flight-critical) pending a logic fix + perf-coherence review.
-        if (f->len >= 15) {
+        // armingDisableFlags: forward walk past the variable-length flight-mode byte count
+        // (bc = p[15]; count = p[16+bc]; armingDisableFlags = u32 at 17+bc). Informational only,
+        // not flight-critical. p[15] is read, so the frame must be at least 16 bytes long.
+        if (f->len >= 16) {
             uint8_t bc = rd_u8(p, 15);
             size_t adf_off = (size_t)17 + bc;
             if ((size_t)(adf_off + 4) <= f->len) {

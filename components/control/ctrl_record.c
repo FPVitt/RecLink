@@ -8,6 +8,17 @@
 
 static const char *TAG = "ctrl.rec";
 
+// How long the camera gets to confirm a START/STOP before it is re-sent. DJI cameras are slower to
+// confirm (a stop took over 1.5 s on the Osmo Nano) and reject a duplicate STOP, so with the short
+// default a slow-but-fine stop would be re-sent and could end in a false REC FAIL: DJI gets at
+// least 3 s whatever the portal says. GoPro keeps the configured value.
+static uint32_t verify_ms(const cfg_t *cfg)
+{
+    uint32_t v = cfg->record.verify_timeout_ms;
+    if (strcmp(cfg->camera.brand, "dji") == 0 && v < 3000) { v = 3000; }
+    return v;
+}
+
 // Must stay in the same order as CTRL_REC_* in control.h (ctrl_record_status).
 enum { PH_IDLE, PH_START_DELAY, PH_VERIFY_START, PH_STOP_DELAY, PH_VERIFY_STOP };
 
@@ -117,7 +128,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
         S.phase = PH_IDLE;
         S.gave_up = false;
         S.reconcile_pending = true;
-        S.reconcile_by = c->now_ms + cfg->record.verify_timeout_ms + 2000;
+        S.reconcile_by = c->now_ms + verify_ms(cfg) + 2000;
     }
     if (S.reconcile_pending && cam_ready(c)) {
         if (c->cam.recording != TRIBOOL_UNKNOWN) {
@@ -129,8 +140,8 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
                 issue(desired);
                 S.phase = desired ? PH_VERIFY_START : PH_VERIFY_STOP;
                 S.retries_left = cfg->record.retry_count;
-                S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
-                S.give_up_at = c->now_ms + (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+                S.phase_deadline = c->now_ms + verify_ms(cfg);
+                S.give_up_at = c->now_ms + (uint32_t)verify_ms(cfg) * (cfg->record.retry_count + 1);
             }
         } else if ((int32_t)(c->now_ms - S.reconcile_by) >= 0) {
             S.reconcile_pending = false;   // camera never reported; keep acting on S.cmd
@@ -175,12 +186,12 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             // Absolute cap covers a camera stuck `busy` (review H2): armed here,
             // not after issue(), so a hold that never clears still ends in REC FAIL.
             S.give_up_at = c->now_ms + cfg->record.arm_delay_ms +
-                           (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+                           (uint32_t)verify_ms(cfg) * (cfg->record.retry_count + 1);
         } else if (!desired && S.cmd == TRIBOOL_TRUE) {
             S.phase = PH_STOP_DELAY;
             S.phase_deadline = c->now_ms + cfg->record.stop_delay_ms;
             S.give_up_at = c->now_ms + cfg->record.stop_delay_ms +
-                           (uint32_t)cfg->record.verify_timeout_ms * (cfg->record.retry_count + 1);
+                           (uint32_t)verify_ms(cfg) * (cfg->record.retry_count + 1);
         }
         break;
 
@@ -195,7 +206,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             issue(true);
             S.retries_left = cfg->record.retry_count;
             S.phase = PH_VERIFY_START;
-            S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
+            S.phase_deadline = c->now_ms + verify_ms(cfg);
         }
         break;
 
@@ -207,7 +218,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             if (contradicted && S.retries_left > 0 && (int32_t)(c->now_ms - S.give_up_at) < 0) {
                 S.retries_left--;
                 issue(true);
-                S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
+                S.phase_deadline = c->now_ms + verify_ms(cfg);
             } else if (contradicted) {
                 applog_note("REC FAIL (start rejected by camera)");
                 osd_set_rec_fail(true);
@@ -235,7 +246,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             issue(false);
             S.retries_left = cfg->record.retry_count;
             S.phase = PH_VERIFY_STOP;
-            S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
+            S.phase_deadline = c->now_ms + verify_ms(cfg);
         }
         break;
 
@@ -247,7 +258,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             if (contradicted && S.retries_left > 0 && (int32_t)(c->now_ms - S.give_up_at) < 0) {
                 S.retries_left--;
                 issue(false);
-                S.phase_deadline = c->now_ms + cfg->record.verify_timeout_ms;
+                S.phase_deadline = c->now_ms + verify_ms(cfg);
             } else if (contradicted) {
                 applog_note("REC FAIL (camera still recording after stop)");
                 osd_set_rec_fail(true);
