@@ -150,20 +150,12 @@ static void emit(ble_central_evt_t ev, int status)
 }
 
 // ---- GAP event handler --------------------------------------------
-// Only a key/authentication failure says the camera lost (or never had) our bond. A timeout, a
-// link dropped mid-encryption or a busy controller -- the usual result at the edge of range --
-// must never count towards erasing the bond (it would strand the camera until a bench re-pair).
-#define SM_ERR_AUTH_FAIL    0x05   // HCI: authentication failure
-#define SM_ERR_PINKEY_MISS  0x06   // HCI: PIN or key missing (peer has no key for us)
-static bool enc_status_is_bond_loss(int st)
-{
-    if (st == BLE_HS_EAUTHEN) { return true; }
-    if (st == BLE_HS_HCI_ERR(SM_ERR_AUTH_FAIL) || st == BLE_HS_HCI_ERR(SM_ERR_PINKEY_MISS)) { return true; }
-    // Security Manager protocol errors, raised by us or reported by the peer (pairing refused, confirm failed ...).
-    if (st >= BLE_HS_ERR_SM_US_BASE   && st < BLE_HS_ERR_SM_US_BASE   + 0x100) { return true; }
-    if (st >= BLE_HS_ERR_SM_PEER_BASE && st < BLE_HS_ERR_SM_PEER_BASE + 0x100) { return true; }
-    return false;
-}
+#include "ble_status.h"
+_Static_assert(BLESTAT_EAUTHEN == BLE_HS_EAUTHEN, "ble_status.h out of date");
+_Static_assert(BLESTAT_HCI_BASE == BLE_HS_ERR_HCI_BASE, "ble_status.h out of date");
+_Static_assert(BLESTAT_SM_US_BASE == BLE_HS_ERR_SM_US_BASE, "ble_status.h out of date");
+_Static_assert(BLESTAT_SM_PEER_BASE == BLE_HS_ERR_SM_PEER_BASE, "ble_status.h out of date");
+#define enc_status_is_bond_loss ble_enc_status_is_bond_loss
 
 static int gap_event(struct ble_gap_event *event, void *arg);
 

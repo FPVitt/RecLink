@@ -84,6 +84,19 @@ idf.py -p <port> flash monitor
 options (static FreeRTOS allocation, persistent NimBLE bonds, 4 s task watchdog
 with panic, brown-out detector). A generated `sdkconfig` is **not** checked in.
 
+### Tests and CI
+
+The pure logic (CRCs, MSP codec and parser, DJI frames, the record-trigger state machine, switch decode,
+BLE failure classification, the GoPro packetizer) has host unit tests that need no ESP-IDF:
+
+```sh
+make -C test/host        # builds with AddressSanitizer + UBSan and runs everything
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs them and builds all four board profiles (RecLink board,
+SuperMini, generic ESP32-S3, S3-Zero) on ESP-IDF v5.4.1. `dependencies.lock` is committed, so builds of
+the same commit resolve the same components.
+
 ### Boards
 
 The pin map is a build-time board profile. The default is the RecLink PCB (MSP on UART0 GPIO21/GPIO20,

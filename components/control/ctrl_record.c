@@ -222,6 +222,8 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             } else if (contradicted) {
                 applog_note("REC FAIL (start rejected by camera)");
                 osd_set_rec_fail(true);
+                S.cmd = TRIBOOL_FALSE; // the camera says it is NOT recording: drop our belief that START took,
+                                       // or a quick disarm/re-arm would never send a fresh START
                 S.gave_up = true;      // latched -- no re-entry until desired flips
                 S.phase = PH_IDLE;
             } else {
@@ -262,6 +264,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
             } else if (contradicted) {
                 applog_note("REC FAIL (camera still recording after stop)");
                 osd_set_rec_fail(true);
+                S.cmd = TRIBOOL_TRUE;  // it IS still recording: the STOP is still owed once the latch clears
                 S.gave_up = true;
                 S.phase = PH_IDLE;
             } else {

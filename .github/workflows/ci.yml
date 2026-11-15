@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Pure-logic unit tests (CRCs, MSP codec/parser, DJI frames, record state machine, switch decode,
+  # BLE status classification, GoPro packetizer) on the host with AddressSanitizer + UBSan. No ESP-IDF.
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run host tests
+        run: make -C test/host
+
+  # Firmware builds for every board profile, on the same ESP-IDF version the bench boards run.
+  # dependencies.lock and main/idf_component.yml pin the registry components.
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: reclink-c3
+            target: esp32c3
+            defaults: "sdkconfig.defaults;sdkconfig.defaults.esp32c3"
+          - name: supermini
+            target: esp32c3
+            defaults: "sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.board-supermini"
+          - name: esp32s3
+            target: esp32s3
+            defaults: "sdkconfig.defaults;sdkconfig.defaults.esp32s3"
+          - name: s3-zero
+            target: esp32s3
+            defaults: "sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.board-s3zero"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.name }}
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          . "$IDF_PATH/export.sh"
+          ARGS=(-D "SDKCONFIG_DEFAULTS=${{ matrix.defaults }}" -D "SDKCONFIG=sdkconfig.${{ matrix.name }}" -B "build_${{ matrix.name }}")
+          idf.py "${ARGS[@]}" set-target ${{ matrix.target }}
+          idf.py "${ARGS[@]}" build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fc_cam_bridge-${{ matrix.name }}
+          path: build_${{ matrix.name }}/fc_cam_bridge.bin
+          if-no-files-found: error

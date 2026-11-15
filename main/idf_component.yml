@@ -1,5 +1,6 @@
 ## Managed component dependencies (spec 3.1).
 dependencies:
-  idf: ">=5.1"
+  # Pinned to what CI builds and the bench boards run (v5.4.x): other IDF versions are unverified.
+  idf: ">=5.4.1,<5.5"
   # Addressable status LED (WS2812 single pixel).
-  espressif/led_strip: "^3.0.0"
+  espressif/led_strip: "3.0.3"

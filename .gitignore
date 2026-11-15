@@ -5,9 +5,8 @@ sdkconfig
 sdkconfig.old
 sdkconfig.ci
 
-# IDF component manager
+# IDF component manager (dependencies.lock IS committed: it pins the registry components for CI)
 /managed_components/
-dependencies.lock
 
 # Editors / OS
 .vscode/
@@ -28,3 +27,7 @@ components/portal/www/*.h
 /LOGO.png
 /fc-cam-bridge-spec.md
 /tools/
+
+# Host test binaries
+/test/host/test_*
+!/test/host/test_*.c
