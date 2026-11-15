@@ -211,6 +211,11 @@ GoPro / DJI capture (see [VERIFY.md](VERIFY.md)).
 
 ## License
 
-No license is granted yet. The DJI driver reuses parser, CRC and enum tables
-from DJI's MIT-licensed `Osmo-Action-GPS-BLE` demo, pinned by commit hash in the
-source.
+RecLink's firmware is free software under the **GNU General Public License v3.0**
+(see [LICENSE](LICENSE)): you can use, study, modify and sell it, and anyone who distributes a
+modified version must share its source under the same licence. Copyright (C) 2026 Vittorio.
+
+The DJI driver reuses code from DJI's MIT-licensed `Osmo-GPS-Controller-Demo`; that and the other
+third-party components (ESP-IDF, NimBLE, cJSON, `led_strip`) keep their own licences, listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The PCB design files and the website guides are not
+covered by this licence.
