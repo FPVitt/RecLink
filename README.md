@@ -105,7 +105,7 @@ idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkc
 
 An RGB LED shows each state in its own colour (same blink timing as the plain LED): white = booting,
 purple = no flight controller, amber = searching for the camera, cyan = camera ready, green = recording,
-red = camera lost, blue = config portal. `led_brightness` in the portal's System tab dims it.
+red = camera lost. The LED does not change while the config portal is open. `led_brightness` in the portal's System tab dims it.
 
 Other boards: copy `sdkconfig.defaults.board-supermini` and change the `CONFIG_BRIDGE_*` pins.
 

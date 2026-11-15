@@ -17,7 +17,6 @@ typedef enum {
     LED_CAM_IDLE,        // 1 short blink / 3 s
     LED_RECORDING,       // solid (green)
     LED_CAM_LOST,        // fast blink
-    LED_PORTAL,          // double-blink / 1 s (blue)
     LED_FAULT,           // 5 fast blinks once
     LED_IDENTIFY,        // 3 s bright blink override
     LED_PATTERN_COUNT,

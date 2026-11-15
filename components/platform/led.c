@@ -100,7 +100,6 @@ void led_service(void)
     case LED_CAM_IDLE:      v = blink(t, 3000, 60); break;
     case LED_RECORDING:     v = 255; break;
     case LED_CAM_LOST:      v = blink(t, 300, 150); break;
-    case LED_PORTAL:        v = nblink(t, 1000, 2, 70, 110); break;
     case LED_FAULT:         v = nblink(t, 100000, 5, 70, 90); break;
     case LED_IDENTIFY:      v = blink(t, 200, 100); break;
     default:                v = 0; break;
@@ -116,7 +115,6 @@ void led_service(void)
         [LED_CAM_IDLE]      = {  0, 255, 255},   // cyan
         [LED_RECORDING]     = {  0, 255,   0},   // green
         [LED_CAM_LOST]      = {255,   0,   0},   // red
-        [LED_PORTAL]        = {  0,   0, 255},   // blue
         [LED_FAULT]         = {255,   0,   0},   // red
         [LED_IDENTIFY]      = {255, 255, 255},   // white
     };

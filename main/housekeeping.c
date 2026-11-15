@@ -70,7 +70,6 @@ static void heap_watch(void)
 
 static led_pattern_t pick_led(const fc_state_t *fc, cam_link_state_t link, tribool_t recording)
 {
-    if (portal_active())               { return LED_PORTAL; }
     // A watchdog-recovery boot flashes LED_FAULT until roughly the point the
     // link would normally be up; the sticky flag stays until acked in the
     // portal. Kept short so it doesn't read as a dead board.

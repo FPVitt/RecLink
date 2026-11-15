@@ -143,7 +143,6 @@ static void portal_task(void *arg)
     s_opened_ms = now_ms();
     s_last_client_ms = s_opened_ms;
     s_running = true;
-    led_request(LED_PORTAL);
 
     while (!s_want_stop) {
         // Woken immediately by portal_stop(); otherwise poll for the timeout.
