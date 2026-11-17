@@ -201,13 +201,13 @@ implements `camera_driver_t` — it never touches core code.
 Early development. The firmware builds for both targets and the full feature set
 is implemented, and it has been bench-tested on real ESP32-C3 hardware wired to
 a Betaflight FC and a GoPro HERO11 Black — MSP link, OSD rendering, recording
-triggers, the config portal and the settings-based zone presets all working —
-but it has **not been flight tested**, and several
-protocol constants are still assumed pending verification against a live
-GoPro / DJI capture (see [VERIFY.md](VERIFY.md)).
+triggers, the config portal and the settings-based zone presets all working.
+Version 0.2.1 is a **pre-release and may contain bugs**. Several protocol
+constants are still assumed pending verification against a live GoPro / DJI
+capture (see [VERIFY.md](VERIFY.md)).
 
 > [!WARNING]
-> This is not a released image. Do not fly it.
+> This is a pre-release and may contain bugs. Use it at your own risk.
 
 ## License
 
