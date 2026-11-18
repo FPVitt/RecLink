@@ -220,6 +220,38 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
                          (unsigned long)((fc->gps.spd_cm_s * 36u + 500u) / 1000u));
             }
             len = app(out, out_cap, len, tmp);
+        } else if (TOK2('i','x')) {                // ISO max (GoPro setting 13, video only)
+            p++;
+            if (!field_on(cfg, OSD_TOK_IX) || !cam->iso_max.valid) { continue; }
+            len = app(out, out_cap, len, cam->iso_max.v);
+        } else if (TOK2('i','n')) {                // ISO min (setting 102)
+            p++;
+            if (!field_on(cfg, OSD_TOK_IN) || !cam->iso_min.valid) { continue; }
+            len = app(out, out_cap, len, cam->iso_min.v);
+        } else if (TOK2('s','h')) {                // shutter (setting 145), e.g. 1/120
+            p++;
+            if (!field_on(cfg, OSD_TOK_SH) || !cam->shutter.valid) { continue; }
+            len = app(out, out_cap, len, cam->shutter.v);
+        } else if (TOK2('w','b')) {                // white balance (setting 115)
+            p++;
+            if (!field_on(cfg, OSD_TOK_WB) || !cam->wb.valid) { continue; }
+            len = app(out, out_cap, len, cam->wb.v);
+        } else if (TOK2('c','o')) {                // Protune colour (setting 116)
+            p++;
+            if (!field_on(cfg, OSD_TOK_CO) || !cam->color.valid) { continue; }
+            len = app(out, out_cap, len, cam->color.v);
+        } else if (TOK2('s','a')) {                // sharpness (setting 117)
+            p++;
+            if (!field_on(cfg, OSD_TOK_SA) || !cam->sharpness.valid) { continue; }
+            len = app(out, out_cap, len, cam->sharpness.v);
+        } else if (TOK2('e','v')) {                // EV compensation (setting 118)
+            p++;
+            if (!field_on(cfg, OSD_TOK_EV) || !cam->ev.valid) { continue; }
+            len = app(out, out_cap, len, cam->ev.v);
+        } else if (TOK2('p','t')) {                // Protune ON/OFF (setting 114)
+            p++;
+            if (!field_on(cfg, OSD_TOK_PT) || !cam->protune.valid) { continue; }
+            len = app(out, out_cap, len, cam->protune.v);
         } else if (TOK2('r','p')) {                // Remote ID proximity warning (spec 8.8.7)
             p++;
             if (!field_on(cfg, OSD_TOK_RP) || !rp || !rp->text[0]) { continue; }

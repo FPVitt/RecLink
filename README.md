@@ -29,8 +29,18 @@ PIDs, or navigation.
 
 - **Camera telemetry → Betaflight OSD.** Recording state, elapsed / remaining
   time, camera battery, SD card free space (minutes *and* GB), resolution, frame
-  rate, colour profile, shooting mode, link status — 22 tokens across 4 freely
+  rate, colour profile, shooting mode, Protune settings (ISO min/max, shutter, white balance,
+  colour, sharpness, EV, on/off), link status — 31 tokens across 4 freely
   editable 16-character lines.
+- **Remote ID receiver (new in 0.3.0, off by default).** Hears other aircraft's
+  Open Drone ID broadcasts — Bluetooth always, Wi-Fi only while armed — and puts
+  a proximity warning on the OSD with the aircraft's number, distance, bearing
+  arrow and above/below: `!RID1 240M ↗+`. One aircraft per message; alerts take
+  the whole line, warnings alternate with it; only the `!` blinks. Receive-only:
+  it never transmits Remote ID, keeps only each aircraft's ID, range and bearing
+  (no operator data), and runs only with a GPS fix. An informational aid, **not
+  collision avoidance**. Pre-release: not yet validated in flight or for
+  coexistence with the camera link.
 - **Recording that follows the aircraft.** Start/stop on arm, on a radio switch,
   or a combination — arm OR the switch (either one triggers it), or arm AND the
   switch (both must be true at once). Every command is verified against what the
@@ -50,9 +60,13 @@ PIDs, or navigation.
   telemetry overlay.
 - **Analog *and* digital OSD.** A "digital" mode restricts output to the glyphs
   the DJI goggle OSD can render.
+- **Settings per camera.** With several cameras paired, the Cam control, OSD, Remote ID and
+  Clock settings are saved for each camera and switch automatically to the ones of whichever
+  camera connects; a selector on those tabs (shown once a camera is paired) edits any paired camera's settings. A newly paired
+  camera starts as a copy of the previous one.
 - **Config portal + OTA.** The board raises its own Wi-Fi access point while
   disarmed; everything is configured from a captive web page and firmware
-  updates upload straight to it. Wi-Fi drops within 100 ms of arming.
+  updates upload straight to it. The access point drops within 100 ms of arming.
 
 ### Supported cameras
 
@@ -87,7 +101,8 @@ with panic, brown-out detector). A generated `sdkconfig` is **not** checked in.
 ### Tests and CI
 
 The pure logic (CRCs, MSP codec and parser, DJI frames, the record-trigger state machine, switch decode,
-BLE failure classification, the GoPro packetizer) has host unit tests that need no ESP-IDF:
+BLE failure classification, the GoPro packetizer, and the Remote ID decoder, geometry, message formatting,
+config migration and heading logic) has host unit tests that need no ESP-IDF:
 
 ```sh
 make -C test/host        # builds with AddressSanitizer + UBSan and runs everything
@@ -100,7 +115,9 @@ the same commit resolve the same components.
 ### Boards
 
 The pin map is a build-time board profile. The default is the RecLink PCB (MSP on UART0 GPIO21/GPIO20,
-LED on GPIO10 active-high). For a generic **ESP32-C3 SuperMini** (MSP on UART1 GPIO6/GPIO7, LED on GPIO8
+LED on GPIO10 active-high). On that board the portal Wi-Fi is always on while disarmed (and off while
+armed), so the portal's "Open the portal" option is hidden; the prototype boards keep it
+(`CONFIG_BRIDGE_BOARD_RECLINK`). For a generic **ESP32-C3 SuperMini** (MSP on UART1 GPIO6/GPIO7, LED on GPIO8
 active-low) use the release image `fc_cam_bridge-esp32c3-supermini.bin`, or build it yourself:
 
 ```sh
@@ -136,11 +153,16 @@ While the aircraft is disarmed, RecLink hosts an open Wi-Fi network
   values and the result of the last zone push), and MSP diagnostics.
 - **Cam control** — recording mode, the arm/switch triggers (with one-touch AUX
   channel auto-detect — flip the switch you want and it finds the channel for
-  you), the zone builder (add up to 6 zones, per-zone camera settings, capture
-  from the camera, options filtered by the camera's capabilities), highlight
-  switch.
-- **OSD** — pick analog or digital, drag telemetry tokens onto the four lines,
-  preview them against live or sample data.
+  you), the zone builder (add up to 6 zones and set their edges on the slider;
+  per-zone camera settings, editable while a camera is connected, capture from
+  the camera, options filtered by the camera's capabilities), highlight switch.
+- **OSD** — pick analog or digital, add and arrange telemetry tokens on the four
+  lines, preview them against live or sample data (including a simulation of the
+  Remote ID message on the line that holds `%rp`).
+- **Remote ID** — switch the receiver on, choose Bluetooth / Wi-Fi / both, set
+  the warning distances and options, list your own aircraft to ignore, see the
+  aircraft heard right now, and run a 30 s reception test that lists them
+  (ID, range, bearing, above/below).
 - **Binding** — pair, list and forget cameras; a guided GoPro pairing flow with a
   GoPro Labs QR shortcut.
 - **Network** — Wi-Fi credentials, MSP baud rate and TX/RX swap, Wi-Fi/BLE
@@ -168,12 +190,15 @@ Six rules shape every line of the firmware:
    than recover in place.
 4. **Never block on the camera.** Every BLE write is fire-and-forget with async
    verification.
-5. **Wi-Fi only while disarmed.** The access point is down within 100 ms of the
-   armed edge; in flight only BLE is active.
-6. **Deterministic memory.** No heap allocation in the flight path (everything
-   the bridge needs while flying is static). The config portal exists only on
-   the bench and does use the heap, so it is sized for it: large JSON responses
-   are streamed section by section, and task stacks are measured and logged.
+5. **Wi-Fi never transmits in flight.** The access point is down within 100 ms of
+   the armed edge. In flight the radio is off — or, only if the Remote ID
+   receiver's Wi-Fi mode is enabled, passively listening; it never transmits.
+6. **Deterministic memory.** No heap allocation in the flight path: everything
+   the bridge needs while flying is allocated once at boot (the Remote ID
+   receiver's memory only if it is enabled, which needs a reboot). The config
+   portal exists only on the bench and does use the heap, so it is sized for
+   it: large JSON responses are streamed section by section, and task stacks
+   are measured and logged.
 
 ### Layout
 
@@ -188,7 +213,8 @@ Six rules shape every line of the firmware:
 | `components/camera_dji/` | DJI DUML BLE driver |
 | `components/control/` | record / preset / clock-sync / highlight + GPS-push state machines |
 | `components/osd/` | token → 4×16 line formatter + `osd_task` |
-| `components/portal/` | SoftAP + captive HTTP portal + OTA |
+| `components/portal/` | SoftAP + captive HTTP portal + OTA; the single owner of the Wi-Fi driver |
+| `components/rid/` | Remote ID receiver: Open Drone ID decode, aircraft table, `rid_task` |
 | `main/` | `app_main` init order + `housekeeping` |
 
 Adding a camera brand is a new `components/camera_<brand>/` directory that
@@ -202,9 +228,12 @@ Early development. The firmware builds for both targets and the full feature set
 is implemented, and it has been bench-tested on real ESP32-C3 hardware wired to
 a Betaflight FC and a GoPro HERO11 Black — MSP link, OSD rendering, recording
 triggers, the config portal and the settings-based zone presets all working.
-Version 0.3.0 is a **pre-release and may contain bugs**. Several protocol
+Version 0.3.1 is a **pre-release and may contain bugs**. Several protocol
 constants are still assumed pending verification against a live GoPro / DJI
-capture (see [VERIFY.md](VERIFY.md)).
+capture (see [VERIFY.md](VERIFY.md)). The Remote ID receiver (new in 0.3.0) has
+been built for every board profile and booted on the ESP32-C3 board; its Wi-Fi
+reception, its effect on the camera link and its warnings in flight have **not**
+been validated yet, which is why it ships switched off.
 
 > [!WARNING]
 > This is a pre-release and may contain bugs. Use it at your own risk.
@@ -215,7 +244,8 @@ RecLink's firmware is free software under the **GNU General Public License v3.0*
 (see [LICENSE](LICENSE)): you can use, study, modify and sell it, and anyone who distributes a
 modified version must share its source under the same licence. Copyright (C) 2026 Vittorio.
 
-The DJI driver reuses code from DJI's MIT-licensed `Osmo-GPS-Controller-Demo`; that and the other
+The DJI driver reuses code from DJI's MIT-licensed `Osmo-GPS-Controller-Demo`, and the Remote ID
+receiver uses the Apache-2.0 Open Drone ID core C library; that and the other
 third-party components (ESP-IDF, NimBLE, cJSON, `led_strip`) keep their own licences, listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The PCB design files and the website guides are not
 covered by this licence.

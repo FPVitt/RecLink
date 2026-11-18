@@ -29,6 +29,7 @@ esp_err_t nvs_get_blob(nvs_handle_t h, const char *k, void *out, size_t *len)
 }
 esp_err_t nvs_commit(nvs_handle_t h) { (void)h; return ESP_OK; }
 esp_err_t nvs_erase_all(nvs_handle_t h) { (void)h; g_blob_len = 0; return ESP_OK; }
+esp_err_t nvs_erase_key(nvs_handle_t h, const char *k) { (void)h; (void)k; return ESP_OK; }
 void nvs_close(nvs_handle_t h) { (void)h; }
 
 static uint32_t head_crc(const cfg_t *c) { return crc32_iso_hdlc((const uint8_t *)c, offsetof(cfg_t, crc32)); }
@@ -83,6 +84,26 @@ static void test_validate_no_or_in(void)
     c.osd.fields_mask = 0x0FFFu;
     CHECK_EQ(cfg_validate(&c, err, sizeof err), ESP_OK);
     CHECK_EQ(c.osd.fields_mask, (1u << OSD_TOK_RP) - 1u);
+}
+
+// The Protune token group (%ix %in %sh %wb %co %sa %ev %pt) arrived after %rp. An upgraded blob
+// that has every older token on and none of the group gets the group turned on; a blob that
+// already has any of them on is the user's choice and is left alone.
+static void test_validate_protune_group(void)
+{
+    char err[64];
+    cfg_t c; cfg_load_defaults(&c);
+    CHECK_EQ(c.osd.fields_mask, (1u << OSD_TOK_COUNT) - 1u);        // factory: everything on
+    c.osd.fields_mask = (1u << OSD_TOK_IX) - 1u;                    // a 0.3.0 blob: older tokens only
+    CHECK_EQ(cfg_validate(&c, err, sizeof err), ESP_OK);
+    CHECK_EQ(c.osd.fields_mask, (1u << OSD_TOK_COUNT) - 1u);
+    c.osd.fields_mask = ((1u << OSD_TOK_IX) - 1u) | (1u << OSD_TOK_SH);   // user has chosen a subset
+    CHECK_EQ(cfg_validate(&c, err, sizeof err), ESP_OK);
+    CHECK_EQ(c.osd.fields_mask, ((1u << OSD_TOK_IX) - 1u) | (1u << OSD_TOK_SH));
+    c.osd.fields_mask = (1u << OSD_TOK_IX) - 1u - (1u << OSD_TOK_RP);     // %rp switched off: not an upgrade
+    CHECK_EQ(cfg_validate(&c, err, sizeof err), ESP_OK);
+    CHECK(!(c.osd.fields_mask & OSD_TOK_PROTUNE_MASK));
+    CHECK_EQ(OSD_TOK_PROTUNE_MASK, 0xFFu << OSD_TOK_IX);
 }
 
 static void test_rid_validate(void)
@@ -162,6 +183,7 @@ int main(void)
     RUN(test_defaults);
     RUN(test_migrate_6_to_7);
     RUN(test_validate_no_or_in);
+    RUN(test_validate_protune_group);
     RUN(test_rid_validate);
     RUN(test_rid_crc_fallback);
     RUN(test_commit_seals);

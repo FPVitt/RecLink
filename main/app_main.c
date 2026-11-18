@@ -50,7 +50,7 @@ void app_main(void)
     // Remote ID receiver (spec 8.8): its RAM (task stack, message buffers, table) is allocated
     // here, once, before steady state -- and ONLY if it is enabled in the stored config. Disabled
     // at boot: nothing is reserved; switching it on later takes effect at the next reboot.
-    rid_boot_init(cfg_get()->rid.enabled != 0);
+    rid_boot_init(cfg_rid_any_enabled());
 
     // --- BLE host up, then reconcile cfg vs bond store ---------------
     ble_central_init();

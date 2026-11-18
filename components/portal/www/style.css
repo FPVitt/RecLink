@@ -12,7 +12,7 @@ body{margin:0;font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-seri
 header{display:flex;flex-direction:column;align-items:center;gap:3px;
   padding:16px 16px 12px;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:14px;color:var(--fg)}
-.logo{height:34px;width:auto;flex:none;display:block}
+.logo{height:34px;width:auto;flex:none;display:block;color:#3fb950}
 .wordmark{font-family:"Avenir Next","Avenir",ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-weight:900;letter-spacing:-.01em;font-size:30px;line-height:1}
 #fw{font-size:11px;text-align:center}
@@ -271,3 +271,7 @@ input.bad{border-color:var(--dng)}
 .tac .mono{display:block;word-break:break-all}
 .osdline[data-l]::after{content:attr(data-l);font-size:11px;font-weight:600;margin-left:1.5ch;color:var(--warn);text-shadow:none}
 .tips{margin:6px 0 0;padding-left:18px}.tips li{margin:3px 0}
+.nocam-hide{display:none!important}
+.camsel{margin:0 0 10px}.camsel>div{display:flex;align-items:center;gap:10px}.camsel span{font-size:14px}
+.camsel select{flex:1;min-width:0;padding:6px 8px;font-size:14px}.camsel p{margin:4px 0 0;font-size:12px}.camsel p:empty{display:none}
+.camlock{opacity:.4;pointer-events:none;filter:grayscale(1)}

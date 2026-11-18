@@ -67,6 +67,18 @@
   </div>
 </div>
 
+<div id="nick" class="modal" hidden>
+  <div class="modal-card">
+    <h3 id="nick-h">Name your camera</h3>
+    <p id="nick-b"></p>
+    <label>Name<input id="nick-in" maxlength="23" autocomplete="off"></label>
+    <div class="row">
+      <button type="button" id="nick-save">Save name</button>
+      <button type="button" id="nick-skip" class="ghost">Skip</button>
+    </div>
+  </div>
+</div>
+
 <div id="ask" class="modal" hidden>
   <div class="modal-card">
     <h3 id="ask-h"></h3>
@@ -105,11 +117,21 @@
 </nav>
 
 <main>
+<div class="card" id="nocam" hidden>
+  <h3>Pair a camera first</h3>
+  <p>Cam control, OSD, Remote ID and Clock settings are saved for each camera. Pair one on the Binding tab, then come back here.</p>
+  <div class="row"><button type="button" id="nocam-go">Go to Binding</button></div>
+</div>
+<div class="camsel" id="camsel" hidden>
+  <div><span>Camera</span><select id="camsel-s" aria-label="Settings for camera"></select></div>
+  <p class="muted" id="camsel-n"></p>
+</div>
 <section id="status" class="tab on">
   <div class="card">
     <h3>Now</h3>
     <div class="grid" id="stat-primary"></div>
     <div id="flags" class="flags"></div>
+    <div class="row"><button type="button" id="rectest" class="ghost">Test record (3 s)</button></div>
   </div>
   <div class="card">
     <h3>Details</h3>
@@ -240,6 +262,7 @@
     <div id="palette" class="palette"></div>
     <p class="warn-inline" id="osd-nol" hidden>Remote ID alerts have no line to appear on &mdash; add %rp to one of the four lines.</p>
     <p class="muted"><b>%rp</b>: Remote ID warning, e.g. <b>!RID1 240M &#8599;+</b>. Alerts take the whole line; warnings alternate with it. Options: Remote ID tab.</p>
+    <p class="muted"><b>%ix %in %sh %wb %co %sa %ev %pt</b>: GoPro Protune settings (video presets).</p>
     <div id="olines">
       <div class="oline" data-i="0"><div class="olh"><b>Line 1</b></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"></div>
       <div class="oline" data-i="1"><div class="olh"><b>Line 2</b></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"></div>
@@ -326,10 +349,8 @@
       <pre class="mono" id="rid-prev"></pre>
       <ul class="muted tips">
         <li>One aircraft per message: <b>!RID<i>x</i> distance bearing</b>, <i>x</i> = its number 1&ndash;9.</li>
-        <li><b>+</b> after the bearing: it is above you; <b>-</b>: below you (&plusmn;15 m is level).</li>
-        <li><b>ALERT</b> messages are shown alone, one after another, on the whole %rp line.</li>
-        <li><b>WARN</b> and <b>NOTICE</b> messages alternate with the normal line.</li>
-        <li>Only the <b>!</b> blinks: slowly at WARN, fast at ALERT.</li>
+        <li><b>+</b> / <b>-</b> after the bearing: above / below you (&plusmn;15 m is level).</li>
+        <li><b>ALERT</b> messages take the whole %rp line, one after another; <b>WARN</b> and <b>NOTICE</b> alternate with the normal line. Only the <b>!</b> blinks: slowly at WARN, fast at ALERT.</li>
         <li>The arrow needs ~5 s of flight at 5&nbsp;m/s with 5+ satellites; until then: compass text.</li>
       </ul>
     </fieldset>

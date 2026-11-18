@@ -257,6 +257,41 @@ typedef struct __attribute__((packed)) {
     } rid;
 } cfg_t;
 
+// ---- per-camera settings ("profiles") ----------------------------------------------------
+// The Cam control (record, zones, highlight), OSD, Remote ID and Clock pages are per camera. The
+// head fields of cfg_t ALWAYS hold the settings of the ACTIVE camera (cfg.camera), so every
+// consumer keeps reading cfg_get()->record / ->osd / ->clock / ->rid / ->preset unchanged. When a
+// different bonded camera becomes active, the outgoing camera's settings are saved to its own NVS
+// key ("p<addr>" in namespace "cfg") and the incoming camera's are loaded into the head fields.
+// A camera without a stored profile inherits what is in the head (a freshly paired camera starts
+// as a copy of the camera before it). Profiles have their own magic/version/CRC; one that does not
+// validate is treated as absent -- the camera inherits, nothing else is touched.
+#define CFG_PROF_MAGIC   0x43505246u   // "CPRF"
+#define CFG_PROF_VERSION 1u
+#define CFG_PROF_FIELD(f) __typeof__(((cfg_t *)0)->f) f
+typedef struct __attribute__((packed)) {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t size;
+    CFG_PROF_FIELD(record);
+    CFG_PROF_FIELD(preset);
+    CFG_PROF_FIELD(hilight);
+    CFG_PROF_FIELD(osd);
+    CFG_PROF_FIELD(clock);
+    CFG_PROF_FIELD(n_zones);
+    CFG_PROF_FIELD(bands_x);
+    CFG_PROF_FIELD(gp_preset);
+    CFG_PROF_FIELD(gp_preset_x);
+    CFG_PROF_FIELD(rid);                  // carries its own rid_crc32 (spec 8.8.9)
+    uint32_t crc32;                       // over [magic .. rid]
+} cfg_profile_t;
+
+// Pure helpers (cfg_profile.c, host-tested). extract: head fields -> profile (sealed, with CRC).
+// apply: profile -> head fields; false (and *c untouched) if the profile does not validate.
+void cfg_profile_extract(const cfg_t *c, cfg_profile_t *p);
+bool cfg_profile_apply(cfg_t *c, const cfg_profile_t *p);
+bool cfg_profile_valid(const cfg_profile_t *p);
+
 // ---- zone accessors (hide the head/tail split) -----------------------------------
 static inline int cfg_zones(const cfg_t *c)
 {
@@ -296,8 +331,20 @@ enum {
     OSD_TOK_RP,          // Remote ID proximity warning (spec 8.8.7). NOT OR-ed back in by
                          // cfg_validate (that would make it impossible to switch off): set once
                          // by migrate_6_to_7 and in the factory defaults.
+    // GoPro Protune settings (video presets only; blank when the camera has not confirmed them).
+    // cfg_validate turns the whole group on once, for a blob that has every older token on and
+    // none of these (an upgrade); a blob with any of them on is left alone.
+    OSD_TOK_IX,          // %ix  ISO max      (setting 13)
+    OSD_TOK_IN,          // %in  ISO min      (setting 102)
+    OSD_TOK_SH,          // %sh  shutter      (setting 145)
+    OSD_TOK_WB,          // %wb  white balance(setting 115)
+    OSD_TOK_CO,          // %co  colour       (setting 116)
+    OSD_TOK_SA,          // %sa  sharpness    (setting 117)
+    OSD_TOK_EV,          // %ev  EV comp      (setting 118)
+    OSD_TOK_PT,          // %pt  Protune ON/OFF (setting 114)
     OSD_TOK_COUNT
 };
+#define OSD_TOK_PROTUNE_MASK (((1u << OSD_TOK_COUNT) - 1u) & ~((1u << OSD_TOK_IX) - 1u))
 
 // ---------------------------------------------------------------------------
 // API. cfg_init() must run first in app_main (spec 3.6 step 1).
@@ -340,6 +387,14 @@ esp_err_t cfg_set_active_camera(const uint8_t addr[6]);
 // Set the BLE telemetry poll interval (deciseconds) for a bonded camera. Clamped
 // to [CAM_POLL_DS_MIN, CAM_POLL_DS_MAX]. ESP_ERR_NOT_FOUND if addr is not bonded.
 esp_err_t cfg_cam_set_poll(const uint8_t addr[6], uint8_t poll_ds);
+// User-given camera names (nicknames). Stored apart from the main blob (NVS key "nicks", one small
+// blob for all bonded cameras) so no layout changes: a camera without one shows its own name.
+// Printable ASCII, trimmed, at most CAM_NICK_LEN-1 chars; "" clears it. ESP_ERR_NOT_FOUND if addr is
+// not bonded. Forgetting a camera drops its nickname.
+#define CAM_NICK_LEN 24
+esp_err_t cfg_cam_nick_set(const uint8_t addr[6], const char *nick);
+bool      cfg_cam_nick_get(const uint8_t addr[6], char out[CAM_NICK_LEN]);   // false: none set
+
 // Poll interval (ms) for the *active* camera, always clamped/defaulted. For drivers.
 uint16_t  cfg_active_poll_ms(void);
 
@@ -347,6 +402,22 @@ uint16_t  cfg_active_poll_ms(void);
 // false if oob/empty.
 int  cfg_cam_count(void);                         // number of non-empty slots
 bool cfg_cam_at(int i, cam_bond_t *out, uint8_t *poll_ds);
+
+// ---- per-camera settings API (NVS-backed; see the cfg_profile_t comment above) ----------
+// Fill *out with the full config as it would be for camera `addr`: the live config with that
+// camera's Cam control / OSD / Remote ID / Clock settings in place. For the active camera that is
+// just the live config. *stored = whether the camera has its own saved copy (false: it inherits
+// the active camera's settings until its first save). ESP_ERR_NOT_FOUND if addr is not bonded.
+esp_err_t cfg_cam_settings_get(const uint8_t addr[6], cfg_t *out, bool *stored);
+// Commit an edited config on behalf of camera `addr`. The camera-specific sections of cand are
+// stored for that camera; everything else in cand (Wi-Fi, MSP, LED, ...) is global and is
+// committed to the live config. When addr is the active camera this is exactly cfg_commit().
+// ESP_ERR_NOT_FOUND if addr is not bonded.
+esp_err_t cfg_cam_settings_commit(const uint8_t addr[6], const cfg_t *cand);
+// True if Remote ID is enabled in the live config or in ANY bonded camera's stored settings:
+// the Remote ID RAM is allocated at boot only then, so a camera that is switched to later can
+// start it without a reboot (spec 8.8.8).
+bool cfg_rid_any_enabled(void);
 
 // Factory reset: erase cfg + caller erases nimble_bond, then reboot.
 esp_err_t cfg_factory_erase(void);

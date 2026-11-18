@@ -11,11 +11,11 @@ function showTab(name) {
   $$('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.t === name));
   $$('.tab').forEach(x => x.classList.toggle('on', x.id === name));
   if (name === 'rid') ridNearPoll();
+  camselUi();
 }
 $$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
 
-// ---- portal prefs: cfg.ui_flags (bit0 advanced mode, bit1 suppress pw nag) ----
-// Device-persisted (captive-portal webviews clear localStorage, which is only a paint cache).
+// portal prefs: cfg.ui_flags (bit0 advanced, bit1 no pw nag); device-persisted, localStorage is a paint cache
 let uiFlags = 0;
 const advmode = $('#advmode');
 function persistFlags() {
@@ -40,7 +40,7 @@ setAdv(localStorage.getItem('advmode') === '1', false);
 advmode.onchange = () => setAdv(advmode.checked, true);
 
 // ============ Cam control tab: AUX range bars ============
-// name= maps 1:1 to /api/config (record.switch.*, preset.*, hilight.channel); the last zone's max_us is fixed at 2100 us, not a control.
+// name= maps 1:1 to /api/config; the last zone's max_us is fixed at 2100 us
 const US_MIN = 900, US_MAX = 2100, US_SPAN = US_MAX - US_MIN;
 const clampUs = u => u < US_MIN ? US_MIN : u > US_MAX ? US_MAX : u;
 const snapUs  = u => Math.round(clampUs(u) / 25) * 25;
@@ -224,7 +224,7 @@ function updateCursors(m) {
 }
 $$('.rangebar').forEach(buildBar);
 
-// ---- add / remove zones: rebuilds rows, bar and tabs keeping entered values; adding splits the space above the top edge ----
+// ---- add / remove zones: rebuilds rows, bar and tabs, keeping values ----
 function setZoneCount(n) {
   const snap = [];
   for (let i = 0; i < presetN; i++) snap.push({ max: numAt('preset.bands.' + i + '.max_us'), id: numAt('preset.bands.' + i + '.id') });
@@ -266,7 +266,7 @@ $('#zone-del').onclick = () => {
   if (/\.channel$/.test(n) && lastStatus) updateCursors(lastStatus.msp);
 }));
 
-// ---- "Set AUX": snapshot live AUX when armed; the channel that moves most past a threshold wins ----
+// ---- "Set AUX": the channel that moves most past a threshold wins ----
 const AUX_MOVE_US = 200;      // minimum swing to count as a deliberate move
 const AUX_TIMEOUT_MS = 15000;
 const auxDetect = {};          // select name -> {btn, sel, baseline, startedAt}
@@ -280,7 +280,7 @@ function auxDetectStop(name, note) {
   if (note) msg(note);
 }
 function auxDetectStart(btn, sel) {
-  // gate() can't reach other buttons in the fieldset (they have their own guards): check the select itself.
+  // gate() can't reach other buttons: check the select itself.
   if (sel.disabled) { msg('enable this section first'); return; }
   const name = sel.name;
   if (auxDetect[name]) { auxDetectStop(name, 'AUX detect cancelled'); return; }
@@ -323,12 +323,13 @@ $$('.auxdetect').forEach(btn => {
   if (sel) { btn.onclick = () => auxDetectStart(btn, sel); }
 });
 
-// ================= OSD tab: chip line editor + live preview =================
+// ==== OSD tab: chip editor + live preview ====
 const TOKLIST = [
   ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bb','batt bar'],['bi','batt icon'],
   ['rs','resolution'],['fp','fps'],['ar','aspect'],['ln','lens'],['pr','profile'],['bd','bit depth'],
   ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],['gs','GPS sats'],['gf','GPS fix'],
-  ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning'],['rp','Remote ID proximity warning']
+  ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning'],['rp','Remote ID proximity warning'],
+  ['ix','ISO max'],['in','ISO min'],['sh','shutter'],['wb','white bal'],['co','colour'],['sa','sharpness'],['ev','EV comp'],['pt','Protune']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
 
@@ -432,6 +433,10 @@ function activeWarning(d) {
   if (d.clock_fail) return 'CLK FAIL';
   return '';
 }
+const pv = x => x && x.valid ? x.v : '';
+// Protune tokens: cam_state key + sample value
+const PROT = {ix: ['iso_max', '1600'], in: ['iso_min', '100'], sh: ['shutter', '1/60'], wb: ['wb', '5500K'],
+  co: ['color', 'Flat'], sa: ['sharpness', 'Medium'], ev: ['ev', '0.0'], pt: ['protune', 'ON']};
 function tokVal(pair, d) {
   switch (pair) {
     case 'st': if (!d.link) return ''; if (d.pre_record) return 'PRE';
@@ -471,7 +476,7 @@ function tokVal(pair, d) {
     case 'sp': if (!d.gps_present || d.gps_fix < 2) return '';
       return d.units ? Math.floor((d.gps_spd * 224 + 5000) / 10000) + 'MPH'
                      : Math.floor((d.gps_spd * 36 + 500) / 1000) + 'KMH';
-    default: return null;
+    default: return PROT[pair] ? pv(d[PROT[pair][0]]) : null;
   }
 }
 function expandTmpl(tmpl, d) {
@@ -513,6 +518,7 @@ function sampleData() {
     resolution: {v: '5.3K', valid: true}, fps: {v: '30', valid: true}, aspect: {v: '16:9', valid: true},
     lens: {v: 'Wide', valid: true}, profile: {v: 'HDR', valid: true}, bit_depth: {v: 10, valid: true},
     mode: {v: 'Video', valid: true},
+    ...Object.fromEntries(Object.values(PROT).map(([k, v]) => [k, {v, valid: true}])),
     sd_missing: false, sd_full: false, sd_remaining_kb: {v: 60 * 1024 * 1024, valid: true},
     rssi: -52, gps_present: true, gps_fix: 3, gps_sats: 11, gps_spd: 850,
     fc_batt_state: 0, craft_name: 'QUAD', hot: false, rec_fail: false, clock_fail: false
@@ -528,6 +534,7 @@ function liveData(s) {
     resolution: cs.resolution, fps: cs.fps, aspect: cs.aspect,
     lens: {v: 'Wide', valid: true},        // not in /api/status -- sample fallback
     profile: cs.profile, bit_depth: cs.bit_depth, mode: cs.mode,
+    ...cs,
     sd_missing: cs.sd_missing, sd_full: cs.sd_full, sd_remaining_kb: cs.sd_remaining_kb,
     rssi: s.camera.rssi,
     gps_present: !!g.present, gps_fix: g.fix || 0, gps_sats: g.sats || 0,
@@ -587,8 +594,7 @@ function renderPreview() {
 }));
 
 // ============ GoPro zone settings builder ============
-// A GoPro zone pushes these settings to the active video preset: preset.bands[N].gp = {settingId: value}
-// (gp_preset.h). Unticked rows are left alone. Options are the camera's enum values; the Status tab shows what it accepted.
+// A GoPro zone pushes these to the active video preset: preset.bands[N].gp = {settingId: value} (gp_preset.h).
 const GP_SET = {
   2: ["Resolution", [[1,"4K"],[4,"2.7K"],[6,"2.7K 4:3"],[7,"1440"],[9,"1080"],[12,"720"],[18,"4K 4:3"],[21,"5.6K"],[24,"5K"],[25,"5K 4:3"],[26,"5.3K 8:7"],[27,"5.3K 4:3"],[28,"4K 8:7"],[31,"8K"],[35,"5.3K 21:9"],[36,"4K 21:9"],[37,"4K 1:1"],[38,"900"],[39,"4K SPH"],[40,"8K 4:3"],[44,"1440 4:3"],[100,"5.3K"],[107,"5.3K 8:7 V2"],[108,"4K 8:7 V2"],[109,"4K 9:16 V2"],[110,"1080 9:16 V2"],[111,"2.7K 4:3 V2"],[112,"4K 4:3 V2"],[113,"5.3K 4:3 V2"]]],
   108: ["Aspect ratio", [[0,"4:3"],[1,"16:9"],[3,"8:7"],[4,"9:16"],[5,"21:9"],[6,"1:1"]], ["HERO12 Black", "HERO13 Black", "MAX 2", "Mission 1 Pro", "Mission 1", "LIT HERO"]],
@@ -626,15 +632,14 @@ const gpAngleOf = (v, fps) => { const d = gpDenom(v); return d ? Math.round(360 
 const gpShutterFor = (angle, fps) => { const d = Math.round(fps * 360 / angle);
   const o = GP_SET[145][1].find(x => gpDenom(x[0]) === d); return o ? o[0] : undefined; };
 const fmtAngle = a => String(a) + '\u00b0';
-// Frame rate the angles refer to: this zone's own, else what the camera has right now.
+// Frame rate for the angles: the zone's own, else the camera's.
 function gpFpsNum(z) {
   if (z[3] !== undefined) return GP_FPS[z[3]] || 0;
   const gs = lastStatus && lastStatus.cam_state && lastStatus.cam_state.gp_set;
   return gs && gs[3] !== undefined ? GP_FPS[gs[3]] || 0 : 0;
 }
 // ---- capabilities (what the camera offers right now) ----
-// /api/camera/caps: the options the camera accepts right now (depend on its other settings). Trusted only
-// while connected in a video preset; else the full tables above. 'Keep in step' writes edits to the camera.
+// /api/camera/caps: the options the camera accepts now; trusted only while connected in a video preset.
 let gpCaps = null, gpCapsGen = -1, gpCamReady = false, gpSyncing = false;
 let gpLive = true;
 try { gpLive = localStorage.getItem('gplive') !== '0'; } catch (e) {}
@@ -675,7 +680,7 @@ function gpRank(id, o) {
     default: return v;
   }
 }
-// Options to offer: the camera's current list if known, else all; sorted.
+// Options to offer: the camera's list if known, else all; sorted.
 function gpOpts(id) {
   const all = GP_SET[id][1];
   let o = all.slice();
@@ -686,7 +691,7 @@ function gpOpts(id) {
   }
   return o.sort((a, b) => gpRank(id, a) - gpRank(id, b) || a[0] - b[0]);
 }
-// Show a setting? Ticked ones always; with live caps only what the camera lists.
+// Show a setting? Ticked always; with live caps only what the camera lists.
 const gpShown = (id, v) => v !== undefined || (gpCapsOn() ? !!gpCaps[id] : gpSupported(id));
 
 function gpFillShutter(sel, z) {
@@ -763,7 +768,7 @@ function gpRender() {
     b.textContent = 'Zone ' + (i + 1) + (Object.keys(gpz[i] || {}).length ? ' \u00b7 ' + Object.keys(gpz[i]).length : '');
   });
 }
-// Write these settings to the camera in order (server: disarmed, not recording).
+// Write these to the camera in order (disarmed, not recording).
 async function gpPushLive(ids, gapMs) {
   const z = gpz[gpSel];
   gpSyncing = true; gpRender();
@@ -793,7 +798,7 @@ $('#gp-rows').addEventListener('change', e => {
   const row = e.target.closest('.gpr'); if (!row) return;
   gpEdit(row, e.target.type === 'checkbox' ? e.target.checked : true);
 });
-// Selecting a zone shows it and, with 'keep in step' on, applies it to the camera. `quiet` = show only.
+// Select a zone; with 'keep in step' it is applied to the camera. `quiet` = show only.
 function gpSelectZone(i, quiet) {
   gpSel = i; gpRender();
   const z = gpz[i], ids = GP_GROUPS.flatMap(g => g[1]).filter(id => z[id] !== undefined);
@@ -881,8 +886,53 @@ function collectConfig() {
 let cfgBrand = '';            // paired camera brand, drives field gating
 let rebootBaseline = '';      // msp.baud + swap_pins at last load, to detect reboot-needed
 
-async function loadConfig() {
-  const c = await fetch('/api/config').then(r => r.json());
+// ---- per-camera settings: Cam control, OSD, Remote ID and Clock belong to one paired camera ----
+let viewCam = '', camStored = true, camSig = '', camAuto = false;   // viewCam: 12 hex digits of the camera on screen ('' = none chosen)
+const camHex = a => (a || '').replace(/:/g, '').toLowerCase();
+const camList = () => (lastStatus && lastStatus.camera && lastStatus.camera.cameras) || [];
+const camAct = () => camList().find(c => c.active);
+const viewIsActive = () => !camAct() || camHex(camAct().addr) === viewCam;
+const camQ = () => viewCam && camList().length ? '?cam=' + viewCam : '';
+function camselUi() {
+  const L = camList(), t = $('#tabs .on'), s = $('#camsel-s');
+  const inTab = !!(t && ['cam-control', 'osd', 'rid', 'clock'].includes(t.dataset.t));
+  const none = !!lastStatus && !L.length && inTab;
+  $('#nocam').hidden = !none;                         // nothing paired: only the pairing message
+  $$('.tab').forEach(x => x.classList.toggle('nocam-hide', none && x.classList.contains('on')));
+  $('#camsel').hidden = !(L.length > 0 && inTab);
+  const sig = L.map(c => camHex(c.addr) + c.name + (c.connected ? 1 : c.active ? 2 : 0)).join();
+  if (sig !== camSig) {                               // rebuild only on a change: it would close an open list
+    camSig = sig; s.textContent = '';
+    const o0 = el('option'); o0.value = ''; o0.textContent = 'Select a camera…'; s.appendChild(o0);
+    L.forEach(c => { const o = el('option'); o.value = camHex(c.addr);
+      o.textContent = c.name + (c.connected ? ' (connected)' : c.active ? ' (active)' : ''); s.appendChild(o); });
+  }
+  if (viewCam && !L.some(c => camHex(c.addr) === viewCam)) viewCam = '';      // the chosen camera is gone
+  s.value = viewCam;
+  if (L.length && !viewCam && !camAuto) {              // reload: go back to the camera chosen last time
+    camAuto = true;
+    let m = ''; try { m = localStorage.getItem('camsel') || ''; } catch (e) {}
+    if (L.some(c => camHex(c.addr) === m)) loadConfig(m);
+  }
+  const lock = L.length > 0 && !viewCam;              // no camera chosen: the camera pages are grayed out
+  ['cam-control', 'osd', 'rid', 'clock'].forEach(id => { const x = $('#' + id); x.inert = lock; x.classList.toggle('camlock', lock); });
+  $('#camsel-n').textContent = lock ? ''
+    : !viewIsActive() ? 'Not connected: applies when it connects. Zone camera settings need it connected.'
+    : camStored ? '' : 'No saved settings yet: starts as a copy of these.';
+  $('#syncnow').disabled = !viewIsActive();
+}
+$('#nocam-go').onclick = () => showTab('camera');
+$('#camsel-s').onchange = e => {
+  if (document.body.classList.contains('dirty') && !confirm('Discard unsaved changes?')) { e.target.value = viewCam; return; }
+  loadConfig(e.target.value);
+};
+
+async function loadConfig(cam) {
+  if (cam != null) { viewCam = cam; try { localStorage.setItem('camsel', cam); } catch (e) {} }
+  const r = await fetch('/api/config' + camQ());
+  if (r.status === 404) { viewCam = ''; return loadConfig(); }       // that camera was forgotten
+  const c = await r.json();
+  camStored = r.headers.get('X-Cam-Stored') !== '0';
   const nz = (c.preset && c.preset.n_zones) || 3;
   if (nz !== presetN) { presetN = nz; buildZoneRows(); buildBar($('#rb-preset')); }
   $$('[name^="rid.ignore."]').forEach(e => { e.value = ''; });   // the list may have shrunk
@@ -893,7 +943,9 @@ async function loadConfig() {
   gpRender();
   osdLoad();
   if (c.ui_flags != null) { uiFlags = c.ui_flags | 0; setAdv(!!(uiFlags & 1), false); }
-  cfgBrand = (c.camera && c.camera.brand) || '';
+  const vc = camList().find(x => camHex(x.addr) === viewCam);
+  cfgBrand = vc ? vc.brand : (c.camera && c.camera.brand) || '';
+  camselUi();
   rebootBaseline = getField('msp.baud') + '/' + getField('msp.swap_pins');
   applyGates();
   ridUi();
@@ -949,7 +1001,7 @@ $('#save').onclick = async () => {
   const re = ridCheck();
   if (re) { showTab('rid'); re.el.focus(); return msg('Not saved: ' + re.t); }
   msg('saving…');
-  const r = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'},
+  const r = await fetch('/api/config' + camQ(), {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(collectConfig())}).then(r => r.json()).catch(() => ({ok:false}));
   if (!r.ok) { msg('save failed: ' + (r.errors ? r.errors.join(', ') : 'server rejected it')); return; }
   const changedReboot = (getField('msp.baud') + '/' + getField('msp.swap_pins')) !== rebootBaseline;
@@ -975,7 +1027,7 @@ $$('.reveal').forEach(b => b.onclick = () => {
 const post = (u, body) => fetch(u, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}
                                         : {method:'POST'}).then(r => r.json()).catch(()=>({ok:false}));
 
-// ---- default-password modal (from poll() while the default AP password is in use) ----
+// ---- default-password modal ----
 let setupDismissed = false;   // per-session: don't re-pop after a plain dismiss
 function setupClose() {
   $('#setup').hidden = true;
@@ -1021,7 +1073,7 @@ $('#ask-cancel').onclick = askClose;
 $('#ask').onclick = e => { if (e.target.id === 'ask') askClose(); };
 $('#ask-yes').onclick = () => { const cb = askCb; askClose(); if (cb) cb(); };
 
-// GoPro: guided pairing modal with a discovered-camera list. DJI: inline request.
+// GoPro: guided pairing modal. DJI: inline request.
 let pairPhase = '';       // '' | 'discover' | 'bonding'
 let pairStart = 0, pairPicked = '';
 const pairCardHTML = $('#pair .modal-card').innerHTML;   // restored on reopen (success panel replaces it)
@@ -1093,7 +1145,7 @@ function renderFound(list) {
   });
 }
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera…' : 'failed');
-$('#camtest').onclick = async () => msg((await post('/api/camera/test')).ok ? 'recording 3 s…' : 'failed');
+$('#camtest').onclick = $('#rectest').onclick = async () => msg((await post('/api/camera/test')).ok ? 'recording 3 s…' : 'failed');
 
 // ---- Binding tab: paired-camera list ----
 const brandTag = b => b === 'gopro' ? 'GoPro' : b === 'dji' ? 'DJI' : (b || 'Camera');
@@ -1110,6 +1162,32 @@ function askForget(cam) {
         poll();
       }, true);
 }
+// ---- camera names: asked right after pairing, changeable from the Binding tab ----
+let nickAddr = '', nickQueue = null, knownCams = null;
+function nickOpen(cam, first) {
+  nickAddr = cam.addr;
+  $('#nick-h').textContent = first ? 'Name your camera' : 'Rename camera';
+  $('#nick-b').textContent = first ? 'Give ' + (cam.model || 'the new camera') + ' a name. It is used in the camera selector and the Binding tab.' : '';
+  $('#nick-in').value = cam.name;
+  $('#nick').hidden = false;
+  $('#nick-in').select();
+}
+const nickClose = () => { $('#nick').hidden = true; };
+async function nickSave() {
+  const r = await post('/api/camera/name', {addr: nickAddr, name: $('#nick-in').value});
+  nickClose(); msg(r.ok ? 'name saved' : 'could not save the name'); poll();
+}
+$('#nick-save').onclick = nickSave;
+$('#nick-skip').onclick = nickClose;
+$('#nick-in').onkeydown = e => { if (e.key === 'Enter') nickSave(); };
+function nickWatch(cams) {                  // a camera that was not there before = just paired: ask for a name
+  if (knownCams) cams.forEach(c => { if (!knownCams.has(c.addr)) nickQueue = c; });
+  knownCams = new Set(cams.map(c => c.addr));
+  if (nickQueue && $('#pair').hidden && $('#nick').hidden) {   // wait for the GoPro pairing panel to finish
+    const c = cams.find(x => x.addr === nickQueue.addr); nickQueue = null;
+    if (c) nickOpen(c, true);
+  }
+}
 $('#forgetall').onclick = () => ask('Forget all cameras?',
   'Erases every pairing. The bridge has no camera until you pair one again.',
   'Forget all', async () => {
@@ -1124,7 +1202,7 @@ function renderCams(c) {
   const count = c ? (c.count | 0) : cams.length;
   $$('#pairrow [data-pair]').forEach(b => b.disabled = count >= 4);
   $('#pairfull').hidden = count < 4;
-  $('#camtest').disabled = !cams.some(x => x.connected);
+  $('#camtest').disabled = $('#rectest').disabled = !cams.some(x => x.connected);
   $('#forgetall').hidden = count < 2;
 
   const wrap = $('#camlist');
@@ -1149,6 +1227,7 @@ function renderCams(c) {
         + '<b class="camname"></b><span class="tag"></span></div>'
         + '<div class="cammeta mono"></div></div>'
         + '<div class="camright"><span class="badge"></span>'
+        + '<button type="button" class="ghost rename">Rename</button>'
         + '<button type="button" class="forget">Forget</button></div></div>'
         + '<div class="camadv adv-only"><span>Telemetry poll</span>'
         + '<select class="pollsel" aria-label="Telemetry poll interval">' + opts + '</select></div>';
@@ -1159,9 +1238,10 @@ function renderCams(c) {
       };
     }
     r.querySelector('.forget').onclick = () => askForget(cam);
+    r.querySelector('.rename').onclick = () => nickOpen(cam, false);
     setText(r.querySelector('.camname'), camLabel(cam));
     setText(r.querySelector('.tag'), brandTag(cam.brand));
-    setText(r.querySelector('.cammeta'), cam.addr);
+    setText(r.querySelector('.cammeta'), (cam.model && cam.model !== cam.name ? cam.model + ' · ' : '') + cam.addr);
     const badge = r.querySelector('.badge');
     let txt = 'Standby', cls = 'badge';
     if (cam.connected) { txt = 'Connected · ' + c.rssi + ' dBm'; cls = 'badge ok'; }
@@ -1236,7 +1316,7 @@ $('#flash-go').onclick = () => {
       $('#flash .modal-card').innerHTML = '<h3>Flashed</h3><p id="flash-done">'
         + (r.erased ? 'Settings erased. ' : '')
         + 'Rebooting on the new firmware…</p>';
-      // After the reboot, hard-reload so the new files replace cached ones (?v= is the fallback to Clear-Site-Data).
+      // After the reboot, hard-reload to replace cached files.
       const reloadFresh = () => location.replace(
         location.pathname + '?v=' + Date.now());
       let tries = 0;
@@ -1316,6 +1396,7 @@ async function poll() {
   const m = s.msp, c = s.camera, cs = s.cam_state;
   const fcUp = m && m.connected;
   const paired = !!(c && c.brand);
+  if (c && c.cameras) nickWatch(c.cameras);
 
   // GoPro pairing modal
   if (pairPhase && !$('#pair').hidden) {
@@ -1400,7 +1481,7 @@ async function poll() {
     put('shut', !paired || !sh || !sh.valid ? '\u2014'
         : m && fpsN ? fmtAngle(Math.round(360 * fpsN / +m[1] * 10) / 10) + ' (' + sh.v + ')' : sh.v); }
 
-  { const rdy = !!(c && c.link === 'READY');                 // capabilities only mean something while connected
+  { const rdy = !!(c && c.link === 'READY') && viewIsActive();                 // capabilities only mean something while connected
     if (rdy !== gpCamReady) { gpCamReady = rdy; gpRender(); }
     if (cs && cs.caps_gen !== undefined && cs.caps_gen !== gpCapsGen) { gpCapsGen = cs.caps_gen; gpLoadCaps(); } }
   if (cs && cs.model && cs.model !== gpModel) {        // learn the model once the camera reports it
@@ -1519,7 +1600,7 @@ async function poll() {
   }
   renderPreview();
   renderCams(c);
-  try { ridStatus(s); ridNearPoll(); } catch (e) {}
+  try { ridStatus(s); ridNearPoll(); camselUi(); } catch (e) {}
 }
 
 async function pollLog() {
@@ -1527,7 +1608,7 @@ async function pollLog() {
 }
 
 // ============ Remote ID tab ============
-// Distance inputs show ft when imperial; exact metres live in dataset.m (getField).
+// Distance inputs show ft when imperial; metres live in dataset.m.
 const FT = 3.28084, MI = 1609.344, DMIN = 20, DMAX = 5000;
 const imp = () => +getField('osd.units') === 1;
 const DIST = ['notice_m', 'warn_m', 'alert_m'].map(k => $(`[name="rid.warn.${k}"]`));
@@ -1604,7 +1685,7 @@ document.addEventListener('change', e => {
   if (n === 'osd.units' || n.startsWith('rid.')) ridUi();
 });
 
-// ---- OSD preview: the RID message replaces the %rp line, alternating with the normal line ----
+// ---- OSD preview: the RID message replaces the %rp line ----
 const RID_TICK = 250, REDUCED = matchMedia('(prefers-reduced-motion: reduce)'), RTAG = ['', 'RID notice', 'RID warn', 'RID alert', 'RID alert'];
 let ridPh = 0;
 // 2 s steps: normal line, NOTICE, WARN (each alternating with the normal line), then two ALERTs one after the

@@ -128,6 +128,15 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     if ((c->osd.fields_mask & 0xFFFu) == 0xFFFu) {
         c->osd.fields_mask |= ((1u << OSD_TOK_RP) - 1u);
     }
+    // The Protune group (OSD_TOK_IX..OSD_TOK_PT) arrived after %rp: a blob that has every older
+    // token on (bits below OSD_TOK_IX, %rp included) and none of the group is an upgrade, so
+    // turn the group on once. Any one of them on means the blob already knows about them.
+    {
+        const uint32_t older = (1u << OSD_TOK_IX) - 1u;
+        if ((c->osd.fields_mask & older) == older && !(c->osd.fields_mask & OSD_TOK_PROTUNE_MASK)) {
+            c->osd.fields_mask |= OSD_TOK_PROTUNE_MASK;
+        }
+    }
     for (int i = 0; i < 4; i++) { c->osd.line[i][sizeof(c->osd.line[i]) - 1] = '\0'; }
     CLAMP(c->osd.warn.batt_pct, 0, 100);
     CLAMP(c->osd.warn.sd_low_min, 0, 60);
@@ -220,6 +229,155 @@ static void publish_locked(const cfg_t *src)
     s_cur = next;
 }
 
+static int bond_index_of(const cfg_t *c, const uint8_t addr[6]);
+
+// ---- camera nicknames: one blob under "nicks", cached in RAM (read lock-free, written under the writer lock)
+#define KEY_NICKS "nicks"
+typedef struct __attribute__((packed)) { uint8_t addr[6]; char nick[CAM_NICK_LEN]; } cam_nick_t;
+static cam_nick_t s_nick[CAM_MAX_BONDS];
+
+static esp_err_t nick_store(void)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NS_CFG, NVS_READWRITE, &h);
+    if (err != ESP_OK) { return err; }
+    err = nvs_set_blob(h, KEY_NICKS, s_nick, sizeof(s_nick));
+    if (err == ESP_OK) { err = nvs_commit(h); }
+    nvs_close(h);
+    return err;
+}
+
+static void nick_load(void)
+{
+    memset(s_nick, 0, sizeof(s_nick));
+    nvs_handle_t h;
+    if (nvs_open(NS_CFG, NVS_READONLY, &h) != ESP_OK) { return; }
+    size_t sz = sizeof(s_nick);
+    cam_nick_t tmp[CAM_MAX_BONDS];
+    if (nvs_get_blob(h, KEY_NICKS, tmp, &sz) == ESP_OK && sz == sizeof(tmp)) {
+        for (int i = 0; i < CAM_MAX_BONDS; i++) {
+            tmp[i].nick[CAM_NICK_LEN - 1] = '\0';
+            if (bond_index_of(&s_live, tmp[i].addr) >= 0) { s_nick[i] = tmp[i]; }   // drop orphans
+            else { memset(&s_nick[i], 0, sizeof(s_nick[i])); }
+        }
+    }
+    nvs_close(h);
+}
+
+static int nick_slot(const uint8_t a[6])
+{
+    for (int i = 0; i < CAM_MAX_BONDS; i++) { if (s_nick[i].nick[0] && !memcmp(s_nick[i].addr, a, 6)) { return i; } }
+    return -1;
+}
+
+static void nick_clear_locked(const uint8_t a[6])              // RAM only; the caller stores
+{
+    int i = nick_slot(a);
+    if (i >= 0) { memset(&s_nick[i], 0, sizeof(s_nick[i])); }
+}
+
+bool cfg_cam_nick_get(const uint8_t addr[6], char out[CAM_NICK_LEN])
+{
+    int i = nick_slot(addr);
+    if (i < 0) { return false; }
+    memcpy(out, s_nick[i].nick, CAM_NICK_LEN);
+    out[CAM_NICK_LEN - 1] = '\0';
+    return true;
+}
+
+esp_err_t cfg_cam_nick_set(const uint8_t addr[6], const char *nick)
+{
+    wlock();
+    esp_err_t e = ESP_OK;
+    if (bond_index_of(&s_live, addr) < 0) {
+        e = ESP_ERR_NOT_FOUND;
+    } else {
+        char clean[CAM_NICK_LEN]; int n = 0;
+        for (const char *p = nick ? nick : ""; *p && n < CAM_NICK_LEN - 1; p++) {
+            unsigned char ch = (unsigned char)*p;
+            if (ch >= 0x20 && ch <= 0x7e && !(n == 0 && ch == ' ')) { clean[n++] = (char)ch; }   // printable, no leading blanks
+        }
+        while (n > 0 && clean[n - 1] == ' ') { n--; }
+        clean[n] = '\0';
+        nick_clear_locked(addr);
+        if (n > 0) {
+            int slot = -1;
+            for (int i = 0; i < CAM_MAX_BONDS; i++) { if (!s_nick[i].nick[0]) { slot = i; break; } }
+            if (slot < 0) { e = ESP_ERR_NO_MEM; }
+            else { memcpy(s_nick[slot].addr, addr, 6); memcpy(s_nick[slot].nick, clean, sizeof(clean)); }
+        }
+        if (e == ESP_OK) { e = nick_store(); }
+    }
+    wunlock();
+    return e;
+}
+
+// ---- per-camera settings storage (cfg_profile_t, see cfg.h) -------------------------------
+// One NVS blob per bonded camera, key "p<12 hex digits of the address>" (13 chars, under the
+// 15-char NVS key limit). Written BEFORE the main blob on a camera switch: a crash in between
+// leaves the main blob still naming the outgoing camera with its own (identical) settings.
+static void prof_key(char key[16], const uint8_t a[6])
+{
+    snprintf(key, 16, "p%02x%02x%02x%02x%02x%02x", a[0], a[1], a[2], a[3], a[4], a[5]);
+}
+
+static esp_err_t prof_store(const uint8_t a[6], const cfg_profile_t *p)
+{
+    char key[16]; prof_key(key, a);
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NS_CFG, NVS_READWRITE, &h);
+    if (err != ESP_OK) { return err; }
+    err = nvs_set_blob(h, key, p, sizeof(*p));
+    if (err == ESP_OK) { err = nvs_commit(h); }
+    nvs_close(h);
+    if (err != ESP_OK) { ESP_LOGE(TAG, "camera settings write failed: %s", esp_err_to_name(err)); }
+    return err;
+}
+
+static bool prof_load(const uint8_t a[6], cfg_profile_t *p)
+{
+    char key[16]; prof_key(key, a);
+    nvs_handle_t h;
+    if (nvs_open(NS_CFG, NVS_READONLY, &h) != ESP_OK) { return false; }
+    size_t sz = sizeof(*p);
+    memset(p, 0, sizeof(*p));
+    bool ok = nvs_get_blob(h, key, p, &sz) == ESP_OK && sz == sizeof(*p) && cfg_profile_valid(p);
+    nvs_close(h);
+    return ok;
+}
+
+static void prof_erase(const uint8_t a[6])
+{
+    char key[16]; prof_key(key, a);
+    nvs_handle_t h;
+    if (nvs_open(NS_CFG, NVS_READWRITE, &h) != ESP_OK) { return; }
+    nvs_erase_key(h, key);                       // ESP_ERR_NVS_NOT_FOUND is fine
+    nvs_commit(h);
+    nvs_close(h);
+}
+
+// Camera switch: save the outgoing camera's settings (the live head fields) under its own key, and
+// load the incoming camera's into the working copy c. A camera with no stored profile (or a
+// freshly paired one) keeps what c already has, i.e. inherits. Called with the writer lock held,
+// before the main blob is committed.
+static esp_err_t switch_settings_locked(cfg_t *c, bool had_old, const uint8_t old_addr[6],
+                                        const uint8_t new_addr[6], bool fresh)
+{
+    if (had_old) {
+        cfg_profile_t out; cfg_profile_extract(&s_live, &out);
+        esp_err_t e = prof_store(old_addr, &out);
+        if (e != ESP_OK) { return e; }
+    }
+    if (!fresh) {
+        cfg_profile_t in;
+        if (prof_load(new_addr, &in) && cfg_profile_apply(c, &in)) {
+            ESP_LOGI(TAG, "camera settings loaded for %02x:%02x:%02x:%02x:%02x:%02x",
+                     new_addr[0], new_addr[1], new_addr[2], new_addr[3], new_addr[4], new_addr[5]);
+        }
+    }
+    return ESP_OK;
+}
+
 // keep_bonds: the camera bond fields (camera, cams, cam_poll_ds) belong to the camera task and its
 // helpers below. A candidate built from an older snapshot (the portal's POST /api/config) must not
 // roll them back, so the public commit takes them from the live config.
@@ -284,6 +442,7 @@ static esp_err_t set_camera_bond_impl(const char *brand, const uint8_t addr[6],
 {
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
+    const bool fresh = i < 0;                       // a brand-new bond inherits the live settings
     if (i < 0) {
         for (i = 0; i < CAM_MAX_BONDS && c.cams[i].brand[0]; i++) { }
         if (i >= CAM_MAX_BONDS) { return ESP_ERR_NO_MEM; }
@@ -299,7 +458,14 @@ static esp_err_t set_camera_bond_impl(const char *brand, const uint8_t addr[6],
              memcmp(s_live.camera.addr, addr, 6) == 0) {
         b->dji_device_id = s_live.camera.dji_device_id;
     }
+    const bool had_old = s_live.camera.bonded;
+    uint8_t old_addr[6]; memcpy(old_addr, s_live.camera.addr, 6);
+    const bool changed = !had_old || memcmp(old_addr, addr, 6) != 0;
     set_active_from(&c, b);            // newly paired camera becomes active
+    if (changed) {
+        esp_err_t e = switch_settings_locked(&c, had_old, old_addr, addr, fresh);
+        if (e != ESP_OK) { return e; }
+    }
     return commit_locked(&c, false);
 }
 
@@ -318,7 +484,11 @@ static esp_err_t set_active_camera_impl(const uint8_t addr[6])
     int i = bond_index_of(&c, addr);
     if (i < 0) { return ESP_ERR_NOT_FOUND; }
     if (memcmp(c.camera.addr, addr, 6) == 0 && c.camera.bonded) { return ESP_OK; }
+    const bool had_old = c.camera.bonded;
+    uint8_t old_addr[6]; memcpy(old_addr, c.camera.addr, 6);
     set_active_from(&c, &c.cams[i]);
+    esp_err_t e = switch_settings_locked(&c, had_old, old_addr, addr, false);
+    if (e != ESP_OK) { return e; }
     return commit_locked(&c, false);
 }
 
@@ -334,6 +504,7 @@ static esp_err_t forget_camera_impl(const uint8_t addr[6])
 {
     cfg_t c = s_live;
     int i = bond_index_of(&c, addr);
+    if (i >= 0) { prof_erase(addr); nick_clear_locked(addr); nick_store(); }   // its settings and name go with it
     if (i >= 0) {
         for (int k = i; k + 1 < CAM_MAX_BONDS; k++) {
             c.cams[k] = c.cams[k + 1];
@@ -343,8 +514,12 @@ static esp_err_t forget_camera_impl(const uint8_t addr[6])
         c.cam_poll_ds[CAM_MAX_BONDS - 1] = 0;
     }
     if (memcmp(c.camera.addr, addr, 6) == 0) {
-        if (c.cams[0].brand[0]) { set_active_from(&c, &c.cams[0]); }
-        else                    { memset(&c.camera, 0, sizeof(c.camera)); }
+        if (c.cams[0].brand[0]) {
+            set_active_from(&c, &c.cams[0]);
+            switch_settings_locked(&c, false, NULL, c.cams[0].addr, false);   // the new active camera's own settings
+        } else {
+            memset(&c.camera, 0, sizeof(c.camera));
+        }
     }
     return commit_locked(&c, false);
 }
@@ -360,6 +535,8 @@ esp_err_t cfg_forget_camera(const uint8_t addr[6])
 static esp_err_t clear_camera_impl(void)
 {
     cfg_t c = s_live;
+    for (int i = 0; i < CAM_MAX_BONDS; i++) { if (c.cams[i].brand[0]) { prof_erase(c.cams[i].addr); } }
+    memset(s_nick, 0, sizeof(s_nick)); nick_store();
     memset(&c.camera, 0, sizeof(c.camera));
     memset(c.cams, 0, sizeof(c.cams));
     memset(c.cam_poll_ds, 0, sizeof(c.cam_poll_ds));
@@ -419,6 +596,73 @@ bool cfg_cam_at(int i, cam_bond_t *out, uint8_t *poll_ds)
         *poll_ds = (p >= CAM_POLL_DS_MIN && p <= CAM_POLL_DS_MAX) ? p : CAM_POLL_DS_DEFAULT;
     }
     return true;
+}
+
+esp_err_t cfg_cam_settings_get(const uint8_t addr[6], cfg_t *out, bool *stored)
+{
+    wlock();
+    esp_err_t e = ESP_OK;
+    if (bond_index_of(&s_live, addr) < 0) {
+        e = ESP_ERR_NOT_FOUND;
+    } else {
+        *out = s_live;
+        bool st = true;
+        if (!(s_live.camera.bonded && memcmp(s_live.camera.addr, addr, 6) == 0)) {
+            cfg_profile_t p;
+            st = prof_load(addr, &p) && cfg_profile_apply(out, &p);   // else: inherits the live settings
+        }
+        if (stored) { *stored = st; }
+    }
+    wunlock();
+    return e;
+}
+
+static esp_err_t cam_settings_commit_impl(const uint8_t addr[6], const cfg_t *cand)
+{
+    if (bond_index_of(&s_live, addr) < 0) { return ESP_ERR_NOT_FOUND; }
+    if (s_live.camera.bonded && memcmp(s_live.camera.addr, addr, 6) == 0) {
+        return commit_locked(cand, true);                  // the active camera: the ordinary commit
+    }
+    // Another camera: its sections go to its own key; the rest of cand (Wi-Fi, MSP, LED, ...) is
+    // global and is committed to the live config, which keeps the ACTIVE camera's own sections.
+    cfg_t tmp = *cand;
+    tmp.camera = s_live.camera;
+    memcpy(tmp.cams, s_live.cams, sizeof(tmp.cams));
+    memcpy(tmp.cam_poll_ds, s_live.cam_poll_ds, sizeof(tmp.cam_poll_ds));
+    char msg[64];
+    esp_err_t e = cfg_validate(&tmp, msg, sizeof(msg));
+    if (e != ESP_OK) { ESP_LOGE(TAG, "commit rejected: %s", msg); return e; }
+    cfg_rid_seal(&tmp);
+    cfg_profile_t p; cfg_profile_extract(&tmp, &p);
+    e = prof_store(addr, &p);
+    if (e != ESP_OK) { return e; }
+    cfg_profile_t live_p; cfg_profile_extract(&s_live, &live_p);
+    cfg_profile_apply(&tmp, &live_p);                      // back to the active camera's own sections
+    cfg_t norm = tmp;                                      // skip the NVS write when no global field changed
+    norm.magic = CFG_MAGIC; norm.version = CFG_VERSION; norm.size = sizeof(cfg_t);
+    norm.crc32 = blob_crc(&norm); cfg_rid_seal(&norm);
+    if (memcmp(&norm, &s_live, sizeof(norm)) == 0) { return ESP_OK; }
+    return commit_locked(&tmp, true);
+}
+
+esp_err_t cfg_cam_settings_commit(const uint8_t addr[6], const cfg_t *cand)
+{
+    wlock();
+    esp_err_t e = cam_settings_commit_impl(addr, cand);
+    wunlock();
+    return e;
+}
+
+bool cfg_rid_any_enabled(void)
+{
+    if (s_live.rid.enabled) { return true; }
+    cfg_t t = s_live;
+    for (int i = 0; i < CAM_MAX_BONDS; i++) {
+        if (!s_live.cams[i].brand[0]) { continue; }
+        cfg_profile_t p;
+        if (prof_load(s_live.cams[i].addr, &p) && cfg_profile_apply(&t, &p) && t.rid.enabled) { return true; }
+    }
+    return false;
 }
 
 esp_err_t cfg_factory_erase(void)
@@ -508,6 +752,7 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
         if (out_erase_orphan_bond) { *out_erase_orphan_bond = true; }  // spec 11.0
     }
 
+    nick_load();
     ESP_LOGI(TAG, "cfg ready: brand=%s bonded=%u mode=%u baud=%lu",
              s_live.camera.brand[0] ? s_live.camera.brand : "-",
              s_live.camera.bonded, s_live.record.mode,

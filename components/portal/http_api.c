@@ -185,7 +185,10 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddStringToObject(c, "brand", cfg->camera.brand);
     const char *ls_names[] = { "IDLE","SCAN","CONNECTING","BONDING","SYNCING","READY","LOST" };
     cJSON_AddStringToObject(c, "link", ls_names[cam.link <= CAM_LINK_LOST ? cam.link : 0]);
-    cJSON_AddStringToObject(c, "name", cam.name);
+    {   // the user's name for the camera if it has one
+        char nick[CAM_NICK_LEN];
+        cJSON_AddStringToObject(c, "name", cfg_cam_nick_get(cam.addr, nick) ? nick : cam.name);
+    }
     char maddr[20]; snprintf(maddr, sizeof(maddr), "%02X:%02X:%02X:%02X:%02X:%02X",
                              cam.addr[0],cam.addr[1],cam.addr[2],cam.addr[3],cam.addr[4],cam.addr[5]);
     cJSON_AddStringToObject(c, "addr", maddr);
@@ -203,7 +206,9 @@ static esp_err_t h_status(httpd_req_t *r)
         if (!cfg_cam_at(i, &b, &poll_ds)) { continue; }
         cJSON *ce = cJSON_CreateObject();
         cJSON_AddStringToObject(ce, "brand", b.brand);
-        cJSON_AddStringToObject(ce, "name", b.name);
+        char nick[CAM_NICK_LEN];
+        cJSON_AddStringToObject(ce, "name", cfg_cam_nick_get(b.addr, nick) ? nick : b.name);   // display name
+        cJSON_AddStringToObject(ce, "model", b.name);                                          // the camera's own name
         char bad[20]; snprintf(bad, sizeof(bad), "%02X:%02X:%02X:%02X:%02X:%02X",
                                b.addr[0],b.addr[1],b.addr[2],b.addr[3],b.addr[4],b.addr[5]);
         cJSON_AddStringToObject(ce, "addr", bad);
@@ -425,9 +430,40 @@ static esp_err_t h_status(httpd_req_t *r)
 }
 
 // ---- GET/POST /api/config --------------------------------------
+// Optional ?cam=<12 hex digits of a bonded camera's address, colons allowed>: the Cam control, OSD,
+// Remote ID and Clock settings are per camera (cfg.h). Without it the request is about the active
+// camera, as before. Returns 1 = a valid cam was given (a[] filled), 0 = none, -1 = malformed.
+static int cam_query(httpd_req_t *r, uint8_t a[6])
+{
+    char q[64], v[24];
+    if (httpd_req_get_url_query_str(r, q, sizeof(q)) != ESP_OK ||
+        httpd_query_key_value(q, "cam", v, sizeof(v)) != ESP_OK) { return 0; }
+    int n = 0;
+    for (const char *p = v; *p; p++) {
+        if (*p == ':') { continue; }
+        int d = (*p >= '0' && *p <= '9') ? *p - '0' : (*p >= 'a' && *p <= 'f') ? *p - 'a' + 10
+              : (*p >= 'A' && *p <= 'F') ? *p - 'A' + 10 : -1;
+        if (d < 0 || n >= 12) { return -1; }
+        if (n & 1) { a[n >> 1] |= (uint8_t)d; } else { a[n >> 1] = (uint8_t)(d << 4); }
+        n++;
+    }
+    return n == 12 ? 1 : -1;
+}
+
 static esp_err_t h_config_get(httpd_req_t *r)
 {
     portal_note_client_activity();
+    uint8_t a[6];
+    int cq = cam_query(r, a);
+    if (cq < 0) { httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"bad cam\"}"); return ESP_OK; }
+    if (cq > 0) {
+        cfg_t tmp; bool stored = false;
+        if (cfg_cam_settings_get(a, &tmp, &stored) != ESP_OK) {
+            httpd_resp_set_status(r, "404 Not Found"); httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"no such camera\"}"); return ESP_OK;
+        }
+        httpd_resp_set_hdr(r, "X-Cam-Stored", stored ? "1" : "0");   // 0: showing the active camera's settings until its first save
+        return cfg_to_json_stream(&tmp, r);
+    }
     return cfg_to_json_stream(cfg_get(), r);
 }
 
@@ -451,7 +487,23 @@ static esp_err_t h_config_post(httpd_req_t *r)
     free(body);
     if (!j) { httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"bad json\"}"); return ESP_OK; }
 
-    cfg_t cand; cfg_snapshot(&cand);
+    uint8_t cam[6];
+    int cq = cam_query(r, cam);
+    cfg_t cand;
+    if (cq > 0) {
+        bool st;
+        if (cfg_cam_settings_get(cam, &cand, &st) != ESP_OK) {       // the camera's own sections + the live globals
+            cJSON_Delete(j);
+            httpd_resp_set_status(r, "404 Not Found"); httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"no such camera\"}");
+            return ESP_OK;
+        }
+    } else if (cq < 0) {
+        cJSON_Delete(j);
+        httpd_resp_set_status(r, "400 Bad Request"); httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"bad cam\"}");
+        return ESP_OK;
+    } else {
+        cfg_snapshot(&cand);
+    }
     char err[80];
     json_merge_cfg(j, &cand, err, sizeof(err));
     cJSON_Delete(j);
@@ -464,14 +516,15 @@ static esp_err_t h_config_post(httpd_req_t *r)
         cJSON_AddItemToArray(ea, cJSON_CreateString(err));
         return send_json(r, resp, "400 Bad Request");
     }
-    e = cfg_commit(&cand);      // synchronous NVS commit (spec 11.0)
+    e = cq > 0 ? cfg_cam_settings_commit(cam, &cand)      // that camera's sections + the globals
+               : cfg_commit(&cand);                       // synchronous NVS commit (spec 11.0)
 
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
     cJSON_AddBoolToObject(resp, "applied", e == ESP_OK);
     // Remote ID RAM is allocated only at boot: rid.enabled 0 -> 1 is persisted but takes effect at
     // the next reboot (1 -> 0 applies at once).
-    if (e == ESP_OK && cfg_get()->rid.enabled && !rid_available()) {
+    if (e == ESP_OK && cand.rid.enabled && !rid_available()) {
         cJSON_AddBoolToObject(resp, "reboot_required", true);
     }
     return send_json(r, resp, e == ESP_OK ? NULL : "500 Internal Server Error");
@@ -533,6 +586,28 @@ static esp_err_t h_cam_refresh(httpd_req_t *r)
 }
 
 // {"addr":"AA:BB:..","poll_ds":N} -> per-camera BLE telemetry poll interval (deciseconds).
+// {"addr":"AA:BB:..","name":"..."} -> give a paired camera a name ("" clears it).
+static esp_err_t h_cam_name(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    char *body = read_body(r, 160);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *ad = j ? cJSON_GetObjectItem(j, "addr") : NULL;
+    const cJSON *nm = j ? cJSON_GetObjectItem(j, "name") : NULL;
+    esp_err_t e = ESP_ERR_INVALID_ARG;
+    uint8_t a[6];
+    if (cJSON_IsString(ad) && cJSON_IsString(nm) &&
+        sscanf(ad->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) == 6) {
+        e = cfg_cam_nick_set(a, nm->valuestring);
+    }
+    cJSON_Delete(j);
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
+    return send_json(r, resp, e == ESP_OK ? NULL : e == ESP_ERR_NOT_FOUND ? "404 Not Found" : "400 Bad Request");
+}
+
 static esp_err_t h_cam_poll(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
@@ -1020,6 +1095,7 @@ void http_api_register(httpd_handle_t s)
         { "/api/camera/forget", HTTP_POST, h_cam_forget,  NULL },
         { "/api/camera/refresh", HTTP_POST, h_cam_refresh, NULL },
         { "/api/camera/poll",   HTTP_POST, h_cam_poll,    NULL },
+        { "/api/camera/name",   HTTP_POST, h_cam_name,    NULL },
         { "/api/camera/preset", HTTP_POST, h_cam_preset,  NULL },
         { "/api/camera/caps",   HTTP_GET,  h_cam_caps,    NULL },
         { "/api/camera/set",    HTTP_POST, h_cam_set,     NULL },
