@@ -1,6 +1,5 @@
 'use strict';
-// Drop the ?v=<ts> cache-buster the post-flash reload adds (see #flash handler)
-// so it doesn't linger in the address bar.
+// Drop the post-flash ?v=<ts> cache-buster from the address bar.
 if (location.search) { try { history.replaceState({}, '', location.pathname); } catch (e) {} }
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -11,12 +10,12 @@ const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.cla
 function showTab(name) {
   $$('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.t === name));
   $$('.tab').forEach(x => x.classList.toggle('on', x.id === name));
+  if (name === 'rid') ridNearPoll();
 }
 $$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
 
 // ---- portal prefs: cfg.ui_flags (bit0 advanced mode, bit1 suppress pw nag) ----
-// Device-persisted so it survives the captive-portal webview clearing
-// localStorage; localStorage is just a fast local cache for the paint.
+// Device-persisted (captive-portal webviews clear localStorage, which is only a paint cache).
 let uiFlags = 0;
 const advmode = $('#advmode');
 function persistFlags() {
@@ -40,12 +39,8 @@ function setAdv(on, persist) {
 setAdv(localStorage.getItem('advmode') === '1', false);
 advmode.onchange = () => setAdv(advmode.checked, true);
 
-// ============ Cam control tab: Betaflight-style AUX range bars =============
-// name= attributes still map 1:1 to /api/config: record.switch.threshold_us,
-// preset.bands.N.max_us / .id, record.switch.channel, preset.channel,
-// hilight.channel. The LAST zone's upper edge is fixed at 2100 us in firmware, so
-// its max_us is deliberately NOT a control. Zones can be added/removed (2..6):
-// preset.n_zones + preset.bands[0..n-1].
+// ============ Cam control tab: AUX range bars ============
+// name= maps 1:1 to /api/config (record.switch.*, preset.*, hilight.channel); the last zone's max_us is fixed at 2100 us, not a control.
 const US_MIN = 900, US_MAX = 2100, US_SPAN = US_MAX - US_MIN;
 const clampUs = u => u < US_MIN ? US_MIN : u > US_MAX ? US_MAX : u;
 const snapUs  = u => Math.round(clampUs(u) / 25) * 25;
@@ -64,12 +59,10 @@ function buildZoneRows() {
   zwrap.innerHTML = '';
   for (let i = 0; i < presetN; i++) {
     zwrap.insertAdjacentHTML('beforeend',
-      `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>
-         <label>up to &micro;s ${i < presetN - 1
-           ? `<input type="number" inputmode="numeric" name="preset.bands.${i}.max_us" min="900" max="2100" step="25">`
-           : `<span class="ro">2100 (fixed)</span>`}</label>
-         <label class="zid">Mode ID
-           <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></div>`);
+      `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>` +
+      (i < presetN - 1 ? `<input type="hidden" name="preset.bands.${i}.max_us">` : '') +
+      `<label class="zid">Mode ID
+         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></div>`);
   }
   $('#zone-add').disabled = presetN >= ZONES_MAX;
   $('#zone-del').disabled = presetN <= ZONES_MIN;
@@ -231,10 +224,7 @@ function updateCursors(m) {
 }
 $$('.rangebar').forEach(buildBar);
 
-// ---- add / remove zones ----
-// Rebuilds the zone rows, the range bar and the builder tabs for n zones, keeping
-// every value already entered. Adding splits the space above the current top edge
-// (the old last zone gets an editable edge); removing drops the last zone.
+// ---- add / remove zones: rebuilds rows, bar and tabs keeping entered values; adding splits the space above the top edge ----
 function setZoneCount(n) {
   const snap = [];
   for (let i = 0; i < presetN; i++) snap.push({ max: numAt('preset.bands.' + i + '.max_us'), id: numAt('preset.bands.' + i + '.id') });
@@ -276,10 +266,7 @@ $('#zone-del').onclick = () => {
   if (/\.channel$/.test(n) && lastStatus) updateCursors(lastStatus.msp);
 }));
 
-// ---- "Set AUX" -- wiggle-to-find the channel a switch/knob is wired to ----
-// Snapshots the live AUX values when armed, then on each poll compares
-// against that baseline; whichever channel has moved the most (past a
-// noise-floor threshold) wins and gets written into the paired select.
+// ---- "Set AUX": snapshot live AUX when armed; the channel that moves most past a threshold wins ----
 const AUX_MOVE_US = 200;      // minimum swing to count as a deliberate move
 const AUX_TIMEOUT_MS = 15000;
 const auxDetect = {};          // select name -> {btn, sel, baseline, startedAt}
@@ -293,10 +280,7 @@ function auxDetectStop(name, note) {
   if (note) msg(note);
 }
 function auxDetectStart(btn, sel) {
-  // gate() greys out the enclosing fieldset's inputs/selects but can't reach
-  // into every button inside it (other gated buttons, e.g. the preset "Test
-  // now" row, have their own disarmed-only guard elsewhere) -- check the
-  // select's own disabled state rather than widen gate()'s reach.
+  // gate() can't reach other buttons in the fieldset (they have their own guards): check the select itself.
   if (sel.disabled) { msg('enable this section first'); return; }
   const name = sel.name;
   if (auxDetect[name]) { auxDetectStop(name, 'AUX detect cancelled'); return; }
@@ -306,8 +290,7 @@ function auxDetectStart(btn, sel) {
     return;
   }
   auxDetect[name] = { btn, sel, baseline: m.aux.slice(), startedAt: Date.now() };
-  // Status polls every 1.5 s, so a brief momentary-button tap can land
-  // between two polls and go undetected -- ask for a hold, not a tap.
+  // Polls are 1.5 s apart and can miss a tap: ask for a hold.
   btn.textContent = 'hold switch/button ~1s';
   btn.classList.add('active');
 }
@@ -345,7 +328,7 @@ const TOKLIST = [
   ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bb','batt bar'],['bi','batt icon'],
   ['rs','resolution'],['fp','fps'],['ar','aspect'],['ln','lens'],['pr','profile'],['bd','bit depth'],
   ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],['gs','GPS sats'],['gf','GPS fix'],
-  ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning']
+  ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning'],['rp','Remote ID proximity warning']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
 
@@ -370,7 +353,6 @@ const serialTmpl = toks => toks.map(x => x.t ? '%' + x.t : x.lit).join('');
 function commitLine(i) {
   const s = serialTmpl(model[i]);
   $(`[name="osd.lines.${i}"]`).value = s;
-  $('#raw-' + i).value = s;
   setDirty(true);
   renderPreview();
 }
@@ -389,6 +371,7 @@ function renderChips(i) {
       const b = el('b'); b.textContent = TOKS[x.t]; const s = el('i'); s.textContent = '%' + x.t;
       c.appendChild(b); c.appendChild(s);
     } else {
+      const lb = el('i'); lb.textContent = 'text'; c.appendChild(lb);
       const inp = el('input'); inp.value = x.lit; inp.size = Math.max(2, x.lit.length);
       inp.oninput = () => { model[i][j].lit = inp.value; inp.size = Math.max(2, inp.value.length); commitLine(i); };
       c.appendChild(inp);
@@ -423,30 +406,18 @@ function setFocusLine(i) {
   pal.appendChild(tb);
 })();
 $$('.oline').forEach(o => o.addEventListener('click', () => setFocusLine(+o.dataset.i)));
-$$('.rawtog').forEach(b => b.onclick = e => {
-  e.stopPropagation();
-  const r = b.closest('.oline').querySelector('.rawrow'); r.hidden = !r.hidden;
-});
-$$('#olines .rawrow input').forEach(inp => {
-  const i = +inp.closest('.oline').dataset.i;
-  inp.oninput = () => {
-    model[i] = parseTmpl(inp.value);
-    $(`[name="osd.lines.${i}"]`).value = inp.value;
-    renderChips(i); setDirty(true); renderPreview();
-  };
-});
 $('#osdsim').onclick = renderPreview;
 
 function osdLoad() {
   for (let i = 0; i < 4; i++) {
     const v = $(`[name="osd.lines.${i}"]`).value || '';
-    model[i] = parseTmpl(v); $('#raw-' + i).value = v; renderChips(i);
+    model[i] = parseTmpl(v); renderChips(i);
   }
   setFocusLine(0);
   renderPreview();
 }
 
-// ---- faithful token expander (mirrors components/osd/osd_format.c) ----
+// ---- token expander (mirrors osd_format.c) ----
 const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const remainStr = s => s >= 3600 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 60) + 'm';
 
@@ -472,11 +443,8 @@ function tokVal(pair, d) {
       if (b > 4) b = 4;
       return d.digital ? '#'.repeat(b) + '-'.repeat(4 - b) : '█'.repeat(b) + '░'.repeat(4 - b); }
     case 'bi':
-      // digital: no icon glyph in the DJI font -- same 4-char bar as %bb, so
-      // route through it rather than repeat the bar formula here.
-      // analog: single glyph -- real hardware shows the verified MAX7456
-      // SYM_BATT_FULL..EMPTY icon (osd_format.c); a single shaded block is
-      // the closest a browser can approximate that here.
+      // digital: same 4-char bar as %bb. analog: real hardware shows a MAX7456 battery icon;
+      // a shaded block is the closest approximation here.
       if (d.digital) return tokVal('bb', d);
       if (!d.battery.valid) return '';
       { let b = Math.floor((d.battery.v + 12) / 25); if (b > 4) b = 4;
@@ -492,6 +460,7 @@ function tokVal(pair, d) {
     case 'md': return d.mode.valid ? d.mode.v : '';
     case 'cn': return d.craft_name || '';
     case 'wr': { const w = activeWarning(d); return (w && !(d.warn_blink && d.blinkOn)) ? w : ''; }
+    case 'rp': return '';                    // the alert text replaces the whole line (simulated below)
     case 'ar': return d.aspect.valid ? d.aspect.v : '';
     case 'pr': return d.profile.valid ? d.profile.v : '';
     case 'bd': return d.bit_depth.valid ? d.bit_depth.v + 'b' : '';
@@ -571,7 +540,6 @@ function liveData(s) {
 function renderPreview() {
   const scr = $('#osdscreen'); if (!scr) return;
   const box = $('#osdlines');
-  while (box.children.length < 4) box.appendChild(el('div', 'osdline'));
 
   const connected = !!(lastStatus && lastStatus.camera && lastStatus.camera.link === 'READY');
   const sim = $('#osdsim');
@@ -594,10 +562,20 @@ function renderPreview() {
   const clipped = [];
   lines = lines.map((t, i) => { if (t.length > 16) { clipped.push({n: i + 1, full: t}); return t.slice(0, 16); } return t; });
 
-  for (let i = 0; i < 4; i++) {
-    const txt = lines[i] || "";
-    if (box.children[i].textContent !== txt) box.children[i].textContent = txt;
+  // simulate the Remote ID messages on the line that holds %rp (script in ridDemo)
+  const ri = sim.checked ? ridRpLine() : -1, lab = [];
+  ridNol();
+  if (ri >= 0) {
+    if (REDUCED.matches) [1, 2, 3].forEach(k => { lines.splice(ri + k, 0, ridDemo(k << 3)); lab[ri + k] = RTAG[k]; });
+    else { const d = ridDemo(ridPh); if (d) { lines[ri] = d; lab[ri] = RTAG[ridPh >> 3]; } }
   }
+  while (box.children.length < lines.length) box.appendChild(el('div', 'osdline'));
+  while (box.children.length > lines.length) box.lastChild.remove();
+  lines.forEach((t, i) => {
+    const c = box.children[i];
+    if (c.textContent !== t) c.textContent = t;
+    if (lab[i]) c.dataset.l = lab[i]; else delete c.dataset.l;
+  });
 
   const clipEl = $('#osdclip');
   clipEl.textContent = clipped.length
@@ -609,12 +587,8 @@ function renderPreview() {
 }));
 
 // ============ GoPro zone settings builder ============
-// On a GoPro a zone does not load a camera preset: it pushes these settings to the
-// camera's active (video) preset. Stored as preset.bands[N].gp = {settingId: value}
-// (firmware: gp_preset.h). Rows that are not ticked are left as the camera has them.
-// Option lists are the camera's own enum values (Open GoPro spec / HERO11 gpControl
-// dump); unofficial settings may be refused by some models -- the Status tab and
-// the line under the editor show what the camera actually accepted.
+// A GoPro zone pushes these settings to the active video preset: preset.bands[N].gp = {settingId: value}
+// (gp_preset.h). Unticked rows are left alone. Options are the camera's enum values; the Status tab shows what it accepted.
 const GP_SET = {
   2: ["Resolution", [[1,"4K"],[4,"2.7K"],[6,"2.7K 4:3"],[7,"1440"],[9,"1080"],[12,"720"],[18,"4K 4:3"],[21,"5.6K"],[24,"5K"],[25,"5K 4:3"],[26,"5.3K 8:7"],[27,"5.3K 4:3"],[28,"4K 8:7"],[31,"8K"],[35,"5.3K 21:9"],[36,"4K 21:9"],[37,"4K 1:1"],[38,"900"],[39,"4K SPH"],[40,"8K 4:3"],[44,"1440 4:3"],[100,"5.3K"],[107,"5.3K 8:7 V2"],[108,"4K 8:7 V2"],[109,"4K 9:16 V2"],[110,"1080 9:16 V2"],[111,"2.7K 4:3 V2"],[112,"4K 4:3 V2"],[113,"5.3K 4:3 V2"]]],
   108: ["Aspect ratio", [[0,"4:3"],[1,"16:9"],[3,"8:7"],[4,"9:16"],[5,"21:9"],[6,"1:1"]], ["HERO12 Black", "HERO13 Black", "MAX 2", "Mission 1 Pro", "Mission 1", "LIT HERO"]],
@@ -633,10 +607,8 @@ const GP_SET = {
   118: ["EV comp", [[0,"+2.0"],[1,"+1.5"],[2,"+1.0"],[3,"+0.5"],[4,"0.0"],[5,"-0.5"],[6,"-1.0"],[7,"-1.5"],[8,"-2.0"]]],
   174: ["10-bit", [[0,"Off"],[1,"On"]]],
 };
-// GP_SET[id] = [label, options, models?]. `models` (from the Open GoPro settings
-// database) lists the cameras that have the setting; the builder hides it for any
-// other connected model. Settings without a list (incl. the unofficial ones) are
-// always shown -- we only hide what is known to be missing.
+// GP_SET[id] = [label, options, models?]. `models` lists cameras that have the setting (others hide it);
+// settings without a list are always shown.
 const GP_GROUPS = [['Video', [2,108,3,121,135,183,184]],
                    ['Protune', [114,13,102,145,115,116,117,118,174]]];
 let gpz = [{}, {}, {}], gpSel = 0, gpModel = '';
@@ -644,10 +616,8 @@ try { gpModel = localStorage.getItem('gpmodel') || ''; } catch (e) {}
 const gpSupported = id => { const m = GP_SET[id][2]; return !m || !gpModel || m.includes(gpModel); };
 
 // ---- shutter angle ----
-// Setting 145's options are fractions of a second (1/60...), but what a filmmaker
-// wants is the ANGLE: 180 deg = exposure of 1/(2 x fps). The angle -> option mapping
-// depends on the frame rate, so it is derived here from the option names: the zone
-// still stores the camera's raw option, the UI shows and edits it as an angle.
+// Setting 145 is stored as the camera's raw option (1/60...); the UI shows/edits it as an ANGLE (180 deg = 1/(2 x fps)),
+// derived from the option names and the frame rate.
 const GP_FPS = {0:240,1:120,2:100,3:90,5:60,6:50,8:30,9:25,10:24,13:200,15:400,16:360,17:300,18:480,19:960,20:800};
 const GP_ANGLES = [360, 180, 90, 45, 22.5];
 const gpDenom = v => { const o = GP_SET[145][1].find(x => x[0] === v), m = o && /^1\/(\d+)$/.exec(o[1]);
@@ -663,12 +633,8 @@ function gpFpsNum(z) {
   return gs && gs[3] !== undefined ? GP_FPS[gs[3]] || 0 : 0;
 }
 // ---- capabilities (what the camera offers right now) ----
-// /api/camera/caps lists, per setting, the options the camera currently accepts --
-// which depend on its other settings (the fps list on the current resolution, ...).
-// Only trusted while the camera is connected and in a video preset (it then lists
-// resolution); otherwise the full option tables above are shown. With "keep the
-// camera in step" on, edits are also written to the camera so the dependent lists
-// (fps for the chosen resolution, ...) follow the zone being built.
+// /api/camera/caps: the options the camera accepts right now (depend on its other settings). Trusted only
+// while connected in a video preset; else the full tables above. 'Keep in step' writes edits to the camera.
 let gpCaps = null, gpCapsGen = -1, gpCamReady = false, gpSyncing = false;
 let gpLive = true;
 try { gpLive = localStorage.getItem('gplive') !== '0'; } catch (e) {}
@@ -682,7 +648,7 @@ async function gpLoadCaps() {
   gpRender();
 }
 
-// ---- option order: the camera's enum order is arbitrary, so sort for reading ----
+// ---- option order: sorted for reading ----
 const GP_ORD = {                       // explicit order by option value
   121: [0, 4, 8, 10, 2, 3, 7, 12, 9, 11, 104, 13, 14],   // Wide, Linear(+HL), Narrow, Superview..., HyperView..., Ultra
   135: [0, 1, 2, 3, 4, 100],
@@ -709,8 +675,7 @@ function gpRank(id, o) {
     default: return v;
   }
 }
-// The options to offer for a setting: the camera's current list if known, else all
-// of them; sorted for reading.
+// Options to offer: the camera's current list if known, else all; sorted.
 function gpOpts(id) {
   const all = GP_SET[id][1];
   let o = all.slice();
@@ -721,7 +686,7 @@ function gpOpts(id) {
   }
   return o.sort((a, b) => gpRank(id, a) - gpRank(id, b) || a[0] - b[0]);
 }
-// Show a setting? Never one already ticked; with live caps, only what the camera lists.
+// Show a setting? Ticked ones always; with live caps only what the camera lists.
 const gpShown = (id, v) => v !== undefined || (gpCapsOn() ? !!gpCaps[id] : gpSupported(id));
 
 function gpFillShutter(sel, z) {
@@ -749,6 +714,11 @@ function gpBuild() {
       `<div class="gpr" data-id="${id}"><input type="checkbox" aria-label="Push ${GP_SET[id][0]}">` +
       `<span>${GP_SET[id][0]}</span><select></select></div>`).join('')).join('');
 }
+function gpGate() {
+  const on = gpCamReady && !!getField('preset.enabled');
+  gate($('#gp-builder'), on, 'connect the camera to edit zone settings');
+  $$('#gp-builder button').forEach(b => { b.disabled = !on; });
+}
 function gpRender() {
   if (!$('#gp-rows').firstChild) gpBuild();
   const z = gpz[gpSel], capsOn = gpCapsOn();
@@ -774,7 +744,8 @@ function gpRender() {
       r.title = (r.title ? r.title + '. ' : '') + 'Angles use the camera’s current frame rate; tick Frame rate in this zone to fix it.';
     }
   });
-  $('#gp-model').textContent = gpSyncing ? 'Syncing with the camera…'
+  gpGate();
+  $('#gp-model').textContent = !gpCamReady ? 'Connect the camera to edit zone settings.' : gpSyncing ? 'Syncing with the camera…'
     : capsOn ? 'Showing what ' + (gpModel || 'the camera') + ' offers right now' +
         (gpLive ? ' — edits are also sent to the camera so dependent lists stay correct.' : '.')
     : gpModel ? 'Showing the settings ' + gpModel + ' supports. Connect the camera (in a video preset) to filter the options too.'
@@ -792,8 +763,7 @@ function gpRender() {
     b.textContent = 'Zone ' + (i + 1) + (Object.keys(gpz[i] || {}).length ? ' \u00b7 ' + Object.keys(gpz[i]).length : '');
   });
 }
-// Write the given settings of the current zone to the camera, in order, so its
-// capability lists follow what is being built. Disarmed + not recording only (server side).
+// Write these settings to the camera in order (server: disarmed, not recording).
 async function gpPushLive(ids, gapMs) {
   const z = gpz[gpSel];
   gpSyncing = true; gpRender();
@@ -823,9 +793,7 @@ $('#gp-rows').addEventListener('change', e => {
   const row = e.target.closest('.gpr'); if (!row) return;
   gpEdit(row, e.target.type === 'checkbox' ? e.target.checked : true);
 });
-// Selecting a zone shows it and -- with "keep the camera in step" on and the camera
-// connected -- applies it to the camera (disarmed, not recording), so the zone can be
-// checked on the spot and the option lists match it. `quiet` = show only (a new, empty zone).
+// Selecting a zone shows it and, with 'keep in step' on, applies it to the camera. `quiet` = show only.
 function gpSelectZone(i, quiet) {
   gpSel = i; gpRender();
   const z = gpz[i], ids = GP_GROUPS.flatMap(g => g[1]).filter(id => z[id] !== undefined);
@@ -861,6 +829,7 @@ function setField(name, val) {
 function getField(name) {
   const el = document.querySelector(`[name="${CSS.escape(name)}"]`);
   if (!el) return undefined;
+  if (el.dataset.m !== undefined) return Number(el.dataset.m);   // Remote ID distances: metres, whatever is shown
   if (el.type === 'checkbox') return el.checked;
   if (el.type === 'number') return el.value === '' ? 0 : Number(el.value);
   const v = el.value;
@@ -905,6 +874,7 @@ function collectConfig() {
   c.preset.n_zones = presetN;
   for (let i = 0; i < presetN; i++) { c.preset.bands[i] = c.preset.bands[i] || {}; c.preset.bands[i].gp = gpz[i] || {}; }
   c.msp.baud = Number(c.msp.baud);
+  c.rid.ignore = ridIgnore();            // replaces the whole stored list; blanks/duplicates dropped
   return c;
 }
 
@@ -915,7 +885,9 @@ async function loadConfig() {
   const c = await fetch('/api/config').then(r => r.json());
   const nz = (c.preset && c.preset.n_zones) || 3;
   if (nz !== presetN) { presetN = nz; buildZoneRows(); buildBar($('#rb-preset')); }
+  $$('[name^="rid.ignore."]').forEach(e => { e.value = ''; });   // the list may have shrunk
   fillConfig(c);
+  ridDistLoad();
   gpz = Array.from({ length: presetN }, (_, i) => Object.assign({}, (((c.preset || {}).bands || [])[i] || {}).gp || {}));
   if (gpSel >= presetN) gpSel = 0;
   gpRender();
@@ -924,10 +896,11 @@ async function loadConfig() {
   cfgBrand = (c.camera && c.camera.brand) || '';
   rebootBaseline = getField('msp.baud') + '/' + getField('msp.swap_pins');
   applyGates();
+  ridUi();
   setDirty(false);
 }
 
-// ---- field gating (state the control doesn't apply to) ----
+// ---- field gating ----
 function gate(el, on, reason) {
   if (!el) return;
   el.querySelectorAll ? el.querySelectorAll('input,select').forEach(i => i.disabled = !on)
@@ -945,10 +918,12 @@ function applyGates() {
   const pOn = getField('preset.enabled');
   gate($('#preset-setup'), pOn, 'turn on “Enable zone control” first');
   setBarEnabled('preset', pOn);
+  gpGate();
 
   const isGP = cfgBrand === 'gopro', isDJI = cfgBrand === 'dji';
   $('#gp-builder').hidden = isDJI;                       // DJI zones use a mode ID instead
   $$('#zone-ids .zid').forEach(e => { e.hidden = !isDJI; });
+  zwrap.hidden = !isDJI;
   $('#dji-zone-note').hidden = !isDJI;
   gate($('#lbl-check'),  isGP  || !cfgBrand, 'GoPro only');
   gate($('#lbl-resync'), isDJI || !cfgBrand, 'DJI only');
@@ -971,13 +946,17 @@ window.addEventListener('beforeunload', e => {
 $('#save').onclick = async () => {
   const pw = getField('wifi.password');
   if (pw && pw.length > 0 && pw.length < 8) return msg('Wi-Fi password must be at least 8 characters (or blank to keep).');
+  const re = ridCheck();
+  if (re) { showTab('rid'); re.el.focus(); return msg('Not saved: ' + re.t); }
   msg('saving…');
   const r = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(collectConfig())}).then(r => r.json()).catch(() => ({ok:false}));
   if (!r.ok) { msg('save failed: ' + (r.errors ? r.errors.join(', ') : 'server rejected it')); return; }
   const changedReboot = (getField('msp.baud') + '/' + getField('msp.swap_pins')) !== rebootBaseline;
   await loadConfig();
-  if (changedReboot) { msg('Saved. Baud / pin-swap changes need a reboot to take effect.'); $('#rebootnow').hidden = false; }
+  if (r.reboot_required) { ridRebootSaved = true; ridStatus(lastStatus); }
+  if (r.reboot_required) { msg('Saved. Remote ID starts after a reboot.'); $('#rebootnow').hidden = false; }
+  else if (changedReboot) { msg('Saved. Baud / pin-swap changes need a reboot to take effect.'); $('#rebootnow').hidden = false; }
   else { msg('Saved.'); }
 };
 $('#rebootnow').onclick = () => { if (confirm('Reboot the bridge now?')) post('/api/reboot'); };
@@ -996,8 +975,7 @@ $$('.reveal').forEach(b => b.onclick = () => {
 const post = (u, body) => fetch(u, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}
                                         : {method:'POST'}).then(r => r.json()).catch(()=>({ok:false}));
 
-// ---- default-password modal (shown from poll() while the AP password is still
-// the factory default and the nag hasn't been suppressed) ----
+// ---- default-password modal (from poll() while the default AP password is in use) ----
 let setupDismissed = false;   // per-session: don't re-pop after a plain dismiss
 function setupClose() {
   $('#setup').hidden = true;
@@ -1258,10 +1236,7 @@ $('#flash-go').onclick = () => {
       $('#flash .modal-card').innerHTML = '<h3>Flashed</h3><p id="flash-done">'
         + (r.erased ? 'Settings erased. ' : '')
         + 'Rebooting on the new firmware…</p>';
-      // Wait out the reboot, then hard-reload the portal so the browser fetches
-      // the new index.html/app.js/style.css instead of the cached ones. The
-      // server also sent Clear-Site-Data: "cache"; the query string below is the
-      // fallback for browsers that ignore it.
+      // After the reboot, hard-reload so the new files replace cached ones (?v= is the fallback to Clear-Site-Data).
       const reloadFresh = () => location.replace(
         location.pathname + '?v=' + Date.now());
       let tries = 0;
@@ -1335,6 +1310,7 @@ async function poll() {
   } catch (e) { setOffline(true); return; }
   setOffline(false);
   lastStatus = s;
+  $('#wifi-trig').hidden = !!s.reclink_board;
 
   $('#fw').textContent = 'fw ' + s.fw + ' · up ' + fmtUp(s.uptime_s);
   const m = s.msp, c = s.camera, cs = s.cam_state;
@@ -1447,7 +1423,7 @@ async function poll() {
     const names = {
       CFG_RESET:'Settings were reset to defaults', REPAIR_NEEDED:'Camera re-pair needed',
       OSD_UNSUPPORTED:'FC too old for custom OSD', FC_OFFLINE:'No FC link',
-      CLOCK_SYNC_FAIL:'Clock sync failed', WDT_RECOVERED:'Recovered from a watchdog reset'
+      CLOCK_SYNC_FAIL:'Clock sync failed', RID_FAULT:'Remote ID receiver stopped (RID RX FAIL) \u2014 reboot to restore', WDT_RECOVERED:'Recovered from a watchdog reset'
     };
     $('#flags').innerHTML = (s.flags || []).map(f =>
       f === 'WDT_RECOVERED'
@@ -1543,10 +1519,242 @@ async function poll() {
   }
   renderPreview();
   renderCams(c);
+  try { ridStatus(s); ridNearPoll(); } catch (e) {}
 }
 
 async function pollLog() {
   try { $('#log').textContent = await fetch('/api/logs').then(r => r.text()); } catch (e) {}
+}
+
+// ============ Remote ID tab ============
+// Distance inputs show ft when imperial; exact metres live in dataset.m (getField).
+const FT = 3.28084, MI = 1609.344, DMIN = 20, DMAX = 5000;
+const imp = () => +getField('osd.units') === 1;
+const DIST = ['notice_m', 'warn_m', 'alert_m'].map(k => $(`[name="rid.warn.${k}"]`));
+const DNAME = ['NOTICE', 'WARN', 'ALERT'];
+let ridRebootSaved = false, ridBusy = false;
+
+function ridDistLoad() { DIST.forEach(e => { e.dataset.m = e.value; }); ridDistShow(); }
+function ridDistShow() {
+  const f = imp(), lo = f ? Math.ceil(DMIN * FT) : DMIN, hi = f ? Math.floor(DMAX * FT) : DMAX;
+  DIST.forEach((e, i) => {
+    const m = e.dataset.m;
+    e.value = m === '' || !f ? m : Math.round(m * FT);
+    e.min = lo; e.max = hi;
+    e.previousElementSibling.textContent = DNAME[i] + ' when closer than — ' + (f ? 'ft' : 'm') + ' (' + lo + '–' + hi + ')';
+  });
+}
+function ridOsdDist(m) {
+  if (imp()) { const ft = Math.round(m * FT); return ft < 1000 ? ft + 'FT' : (m / MI).toFixed(1) + 'MI'; }
+  return m < 1000 ? m + 'M' : (m / 1000).toFixed(1) + 'KM';
+}
+function ridText(n, m, v, on) {      // n: aircraft id 1-9; v: 0 level, 1 above, 2 below; on: the leading ! is lit
+  return (on ? '!' : ' ') + 'RID' + n + ' ' + ridOsdDist(m) + ' ' + ['↗', '↗', 'NE', '045'][+getField('rid.warn.bearing')] + ['', '+', '-'][v | 0];
+}
+
+const ridIgn = () => $$('[name^="rid.ignore."]');
+function ridIgnore() {
+  const o = [];
+  ridIgn().forEach(e => { const v = e.value.trim(); if (v && !o.includes(v)) o.push(v); });
+  return o;
+}
+// mirror of cfg_validate(); returns the first {el,t}
+function ridCheck() {
+  $$('#rid .rerr').forEach(p => { p.textContent = ''; });
+  $$('#rid input.bad').forEach(e => e.classList.remove('bad'));
+  const errs = [], bad = (el, t) => { el.classList.add('bad'); errs.push({el, t}); };
+  const int = (n, lo, hi, w) => {
+    const e = $(`[name="${n}"]`);
+    if (!/^\d+$/.test(e.value) || e.value < lo || e.value > hi) bad(e, w + ' ' + lo + '–' + hi + '.');
+  };
+  int('rid.min_sats', 5, 12, 'Satellites:');
+  int('rid.stale_s', +getField('rid.ble_duty') ? 2 : 10, 30, 'Expiry s:');
+  const m = DIST.map(e => +e.dataset.m);
+  DIST.forEach((e, i) => { if (!(m[i] >= DMIN && m[i] <= DMAX)) bad(e, DNAME[i] + ' distance ' + DMIN + '–' + DMAX + ' m.'); });
+  if (!errs.some(x => DIST.includes(x.el))) {
+    if (m[0] < m[1]) bad(DIST[0], 'NOTICE must be ≥ WARN.');
+    if (m[1] < m[2]) bad(DIST[1], 'WARN must be ≥ ALERT.');
+  }
+  ridIgn().forEach(e => { if (/[^\x20-\x7e]/.test(e.value)) bad(e, 'ID: printable ASCII only.'); });
+  errs.forEach(x => { const p = x.el.closest('.card').querySelector('.rerr'); p.textContent += (p.textContent ? ' ' : '') + x.t; });
+  return errs[0];
+}
+
+function ridUi() {
+  const on = getField('rid.enabled'), w = on && getField('rid.warn.enabled');
+  gate($('#rid-recv'), on, 'turn on the receiver first');
+  gate($('#rid-warnsw'), on);
+  gate($('#rid-wopt'), w, 'turn on warnings first');
+  gate($('#rid-mine'), on);
+  const lo = +getField('rid.ble_duty') ? 2 : 10;
+  $('#rid-stale-l').textContent = 'Position expires after — s (' + lo + '–30)';
+  $('#rid-prev').textContent = [0, 1, 2].map(i => ridText(i + 1, DIST[i].dataset.m | 0, i, 1).padEnd(18) + DNAME[i] +
+    [' (! steady)', ' (! slow blink)', ' (! fast blink, whole line)'][i]).concat('RID RX FAIL'.padEnd(18) + 'receiver failed').join('\n');
+  ridNol(); ridCheck();
+}
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.m !== undefined) t.dataset.m = t.value === '' || !imp() ? t.value : Math.round(t.value / FT);
+  if (t.name && (t.name.startsWith('rid.') || t.name === 'osd.units')) ridUi();
+});
+document.addEventListener('change', e => {
+  const t = e.target, n = t.name || '';
+  if (n === 'osd.units') ridDistShow();
+  if (n === 'rid.ble_duty' && !+t.value && +getField('rid.stale_s') < 10) { setField('rid.stale_s', 10); setDirty(true); }
+  if (n === 'osd.units' || n.startsWith('rid.')) ridUi();
+});
+
+// ---- OSD preview: the RID message replaces the %rp line, alternating with the normal line ----
+const RID_TICK = 250, REDUCED = matchMedia('(prefers-reduced-motion: reduce)'), RTAG = ['', 'RID notice', 'RID warn', 'RID alert', 'RID alert'];
+let ridPh = 0;
+// 2 s steps: normal line, NOTICE, WARN (each alternating with the normal line), then two ALERTs one after the
+// other (alerts only, no normal line). The ! is the only part that blinks: slow at WARN, fast at ALERT.
+function ridDemo(ph) {
+  const k = ph >> 3, m = DIST.map(e => e.dataset.m | 0);
+  if (!k) return null;
+  return ridText(k, [0, m[0] * .9, m[1] * .8, m[2] * .7, m[2] * .4][k] | 0, k % 3,
+                 !getField('rid.warn.blink') || k === 1 || (k === 2 ? (ph >> 1 & 1) === 0 : (ph & 1) === 0));
+}
+const ridRpLine = () => [0, 1, 2, 3].findIndex(i => ($(`[name="osd.lines.${i}"]`).value || '').includes('%rp'));
+function ridNol() {
+  const none = ridRpLine() < 0;
+  $('#osd-nol').hidden = !none;
+  $('#rid-nol').hidden = !(none && getField('rid.enabled'));
+}
+setInterval(() => {
+  if (document.hidden || REDUCED.matches || !$('#osd').classList.contains('on') || ridRpLine() < 0) return;
+  ridPh = (ridPh + 1) % 40;
+  renderPreview();
+}, RID_TICK);
+
+// ---- /api/status.rid ----
+const fmtDist = m => imp() ? (m * FT < 1000 ? Math.round(m * FT) + ' ft' : (m / MI).toFixed(1) + ' mi')
+                           : (m < 1000 ? m + ' m' : (m / 1000).toFixed(1) + ' km');
+buildGrid($('#rid-health'), [['rh-state','Remote ID'],['rh-hdg','Heading'],['rh-ble','Bluetooth'],['rh-wifi','Wi-Fi'],['rh-fault','Faults']]);
+function ridTestText(t) {
+  if (!t || t.state === 'idle') return 'none since boot';
+  const n = t.ble_frames + ' BLE' + (t.wifi ? ', ' + t.wifi_frames + ' Wi-Fi (' + t.beacon + ' beacon, ' + t.nan + ' NAN)' : '') + ' frames, ' + t.aircraft + ' aircraft';
+  return t.state === 'run' ? 'running, ' + t.secs_left + ' s left, ' + n : (t.aborted ? 'stopped early (armed), ' : '') + n;
+}
+function ridStatus(s) {
+  const r = s && s.rid; if (!r) return;
+  if (!r.enabled || r.available === true || r.reboot_required === false) ridRebootSaved = false;
+  const need = ridRebootSaved || r.reboot_required === true || (r.enabled && r.inactive_reason === 'reboot required');
+  $('#rid-reboot').hidden = !need;
+  if (need) $('#rebootnow').hidden = false;
+  const f = r.fault || {}, b = r.ble || {}, w = r.wifi || {}, why = r.inactive_reason;
+  put('rh-state', !r.enabled ? 'off' : r.active ? 'active' : 'inactive: ' + why,
+      r.active ? 'ok' : why === 'memory allocation failed' ? 'bad' : r.enabled ? 'warn' : '');
+  put('rh-hdg', r.hdg === 'mag' ? 'FC compass' : r.hdg === 'gps' ? 'GPS-aligned' : 'none');
+  put('rh-ble', 'scan ' + b.scan + ', ' + b.rx + ' frames, ' + b.drops + ' dropped');
+  put('rh-wifi', w.state + ', ' + w.rx + ' frames, ' + w.drops + ' dropped, ' + w.frames_30s + '/30 s');
+  const fl = [f.subsystem && 'task stopped', f.ble && 'Bluetooth scan not running', f.wifi && 'Wi-Fi reception not running'].filter(Boolean).join(', ');
+  put('rh-fault', fl ? fl + ' (OSD: RID RX FAIL)' : 'none', fl ? 'bad' : r.enabled ? 'ok' : '');
+  ridTestPoll(r.test);
+  setText($('#rid-teststat'), r.enabled ? 'Last test: ' + ridTestText(r.test) : 'Turn on and Save to test.');
+  $('#rid-testbtn').disabled = !r.enabled || r.available === false || !!(r.test && r.test.state === 'run') || !!(s.msp && s.msp.armed);
+}
+$('#rid-reboot-btn').onclick = () => {
+  if (confirm((document.body.classList.contains('dirty') ? 'Unsaved edits are lost. ' : '') + 'Reboot now? The portal drops for ~10 s.')) { post('/api/reboot'); msg('rebooting…'); }
+};
+
+// ---- reception test ----
+$('#rid-testbtn').onclick = () => {
+  if (document.body.classList.contains('dirty')) return msg('Save first: the test uses saved settings.');
+  const w = +getField('rid.mode') !== 0;
+  ask('Test reception for 30 s?', w
+    ? 'Wi-Fi is included: the bridge\u2019s Wi-Fi drops for ~30 s and your phone disconnects. Reconnect after ~40 s and reopen this page.'
+    : 'Bluetooth only: this page stays connected.', w ? 'Start (drops Wi-Fi)' : 'Start', ridTest);
+};
+async function ridTest() {
+  msg('starting…');
+  let x, r = {};
+  try {
+    x = await fetch('/api/rid/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({secs: 30})});
+    r = await x.json().catch(() => ({}));
+  } catch (e) { return msg('No answer. If it started, reconnect in ~40 s.'); }
+  if (r.reboot_required) { ridRebootSaved = true; ridStatus(lastStatus); }
+  msg(x.status === 409 ? 'Not while armed.' : x.status === 503 ? 'Busy: try again.'
+    : x.status === 412 ? (r.reboot_required ? 'Reboot first.' : 'Turn on and Save first.')
+    : !r.ok ? 'Not started.' : r.started === false ? 'Already running.'
+    : r.wifi ? 'Wi-Fi dropping: reconnect in ~' + (r.secs + 10) + ' s, reopen this page.' : 'Test running\u2026');
+}
+
+// ---- test results: GET /api/rid/test (all fields optional) ----
+let ridTShown = false, ridTBusy = false, ridT404 = false;
+const CMP = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const SRC = {ble: 'BLE', wifi: 'Wi-Fi', both: 'BLE + Wi-Fi'};
+const VT = {above: '+ above', below: '- below', level: 'level'};
+const rngBrg = a => fmtDist(a.dist_m) + ' · ' + String(a.brg).padStart(3, '0') + '° ' + CMP[Math.round(a.brg / 45) % 8] +
+  (VT[a.vert] ? ' · ' + VT[a.vert] + (a.dv_m == null ? '' : ' ' + (a.dv_m > 0 ? '+' : '') + (imp() ? Math.round(a.dv_m * FT) + ' ft' : a.dv_m + ' m')) : '');
+function ridTestList(d) {
+  const box = $('#rid-tlist'), ac = d.ac || [];
+  box.textContent = '';
+  setText($('#rid-tempty'), ac.length ? (ac.some(a => a.dist_m != null) ? '' : 'Range/bearing need a GPS fix.')
+    : d.state === 'run' ? 'No aircraft heard yet.' : 'No aircraft heard in this test.');
+  ac.forEach(a => {
+    const c = el('div', 'tac'), h = el('b', 'mono'), g = el('div');
+    h.textContent = (a.n ? 'RID' + a.n + ' · ' : '') + a.id; g.textContent = [SRC[a.src] || a.src, a.age_ms / 1000 + ' s ago', a.dist_m != null && a.brg != null && rngBrg(a)].filter(Boolean).join(' · ');
+    c.appendChild(h); c.appendChild(g); box.appendChild(c);
+  });
+}
+async function ridTestPoll(t) {
+  if (ridT404 || ridTBusy || document.hidden || !t || !$('#rid').classList.contains('on')) return;
+  if (t.state === 'idle') { ridTShown = false; $('#rid-tlist').textContent = ''; setText($('#rid-tempty'), ''); return; }
+  if (t.state === 'run') ridTShown = false; else if (ridTShown) return;
+  ridTBusy = true;
+  try {
+    const r = await fetch('/api/rid/test');
+    if (r.status === 404) ridT404 = true;
+    else if (r.ok) { const d = await r.json(); ridTestList(d); ridTShown = d.state === 'done'; }   // 503: retry next tick
+  } catch (e) {} finally { ridTBusy = false; }
+}
+
+// ---- Nearby now: GET /api/rid while this tab shows ----
+const ridRows = new Map();
+function ridMkRow() {
+  const r = el('div', 'ridrow'), L = el('div', 'rl'), R = el('div', 'rr');
+  const f = r._f = {id: el('div', 'mono'), a: el('div'), b: el('div', 'muted'), lv: el('b'), btn: el('button', 'ghost')};
+  f.btn.type = 'button'; f.btn.textContent = 'Ignore';
+  f.btn.onclick = () => ask('Ignore this aircraft?', '“' + r._id + '” is added to your own-aircraft list: no more warnings for it. Only do this for your own aircraft.', 'Add to my aircraft', () => ridIgnoreAdd(r._id), true);
+  [f.id, f.a, f.b].forEach(x => L.appendChild(x)); R.appendChild(f.lv); R.appendChild(f.btn);
+  r.appendChild(L); r.appendChild(R); return r;
+}
+function ridFill(r, a) {
+  const f = r._f; r._id = a.id;
+  setText(f.id, (a.n ? 'RID' + a.n + ' · ' : '') + a.id);
+  setText(f.a, a.dist_m == null || a.brg == null ? 'range not confirmed' : rngBrg(a));
+  setText(f.b, (SRC[a.src] || a.src) + ' \u00b7 ' + a.age_ms / 1000 + ' s ago');
+  setText(f.lv, a.ignored ? 'IGNORED' : a.level ? a.level.toUpperCase() : '—');
+  f.btn.hidden = !!a.ignored;
+  f.btn.disabled = !/^[\x20-\x7e]{1,20}$/.test(a.id) || /^(BLE|WIFI|HEX):/.test(a.id) || ridIgnore().length > 3;
+}
+function ridList(d) {
+  const box = $('#rid-list'), rs = (lastStatus && lastStatus.rid) || {}, seen = new Set();
+  const ac = d.ac || [];
+  ac.forEach((a, i) => {
+    seen.add(a.id);
+    let r = ridRows.get(a.id); if (!r) { r = ridMkRow(); ridRows.set(a.id, r); }
+    ridFill(r, a);
+    if (box.children[i] !== r) box.insertBefore(r, box.children[i] || null);
+  });
+  ridRows.forEach((r, id) => { if (!seen.has(id)) { r.remove(); ridRows.delete(id); } });
+  setText($('#rid-nearmsg'), !d.active ? (rs.enabled ? 'Inactive (' + rs.inactive_reason + '): nothing listed.' : 'Remote ID is off.')
+    : ac.length ? ac.length + ' heard' : 'None heard. Not the same as clear.');
+}
+async function ridNearPoll() {
+  if (ridBusy || document.hidden || !$('#rid').classList.contains('on')) return;
+  ridBusy = true;
+  try {
+    const r = await fetch('/api/rid');
+    if (r.status !== 503) { if (!r.ok) throw 0; ridList(await r.json()); }   // 503 = busy: retry quietly
+  } catch (e) { setText($('#rid-nearmsg'), 'Offline: last list shown.'); }
+  finally { ridBusy = false; }
+}
+function ridIgnoreAdd(id) {
+  const free = ridIgn().find(e => !e.value.trim());
+  if (!free) return msg('My aircraft list is full.');
+  free.value = id; setDirty(true); ridUi(); msg('Added. Save to apply.');
 }
 
 loadConfig().catch(() => msg('could not load config — is the bridge up?'));

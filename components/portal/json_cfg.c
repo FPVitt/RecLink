@@ -171,6 +171,32 @@ static cJSON *cfg_build(const cfg_t *c, jstream_t *js)
     cJSON *radio = cJSON_AddObjectToObject(r, "radio");
     cJSON_AddNumberToObject(radio, "wifi_power", c->wifi_tx_power);   // RF_PWR_*
     cJSON_AddNumberToObject(radio, "ble_power", c->ble_tx_power);     // RF_PWR_*, applies after reboot
+
+    // Remote ID receiver (spec 8.8.9). Distances in metres; the portal converts for imperial.
+    // rid.ble_coded is reserved (always 0) and not exposed.
+    FL();
+    cJSON *rid = cJSON_AddObjectToObject(r, "rid");
+    cJSON_AddBoolToObject(rid, "enabled", c->rid.enabled);
+    cJSON_AddNumberToObject(rid, "mode", c->rid.mode);
+    cJSON_AddNumberToObject(rid, "ble_duty", c->rid.ble_duty);
+    cJSON_AddNumberToObject(rid, "stale_s", c->rid.stale_s);
+    cJSON_AddNumberToObject(rid, "min_sats", c->rid.min_sats);
+    cJSON *rw = cJSON_AddObjectToObject(rid, "warn");
+    cJSON_AddBoolToObject(rw, "enabled", c->rid.warn.enabled);
+    cJSON_AddNumberToObject(rw, "notice_m", c->rid.warn.notice_m);
+    cJSON_AddNumberToObject(rw, "warn_m", c->rid.warn.warn_m);
+    cJSON_AddNumberToObject(rw, "alert_m", c->rid.warn.alert_m);
+    cJSON_AddBoolToObject(rw, "blink", c->rid.warn.blink);
+    cJSON_AddNumberToObject(rw, "takeover_level", c->rid.warn.takeover_level);
+    cJSON_AddNumberToObject(rw, "bearing", c->rid.warn.bearing);
+    cJSON_AddBoolToObject(rw, "ground", c->rid.warn.ground);
+    cJSON *ig = cJSON_AddArrayToObject(rid, "ignore");
+    for (int i = 0; i < RID_IGNORE_MAX; i++) {
+        char id[RID_ID_LEN];
+        memcpy(id, c->rid.ignore[i], RID_ID_LEN);
+        id[RID_ID_LEN - 1] = '\0';
+        if (id[0]) { cJSON_AddItemToArray(ig, cJSON_CreateString(id)); }
+    }
     #undef FL
     return r;
 }
@@ -341,6 +367,42 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
     if ((o = J_OBJ(j, "radio"))) {
         mnum_u(o, "wifi_power", &c->wifi_tx_power, 1);
         mnum_u(o, "ble_power", &c->ble_tx_power, 1);
+    }
+    // Remote ID (spec 8.8.9): cfg_validate clamps / re-orders afterwards.
+    if ((o = J_OBJ(j, "rid"))) {
+        mbool(o, "enabled", &c->rid.enabled);
+        mnum_u(o, "mode", &c->rid.mode, 1);
+        mnum_u(o, "ble_duty", &c->rid.ble_duty, 1);
+        mnum_u(o, "stale_s", &c->rid.stale_s, 1);
+        mnum_u(o, "min_sats", &c->rid.min_sats, 1);
+        const cJSON *w = J_OBJ(o, "warn");
+        if (w) {
+            mbool(w, "enabled", &c->rid.warn.enabled);
+            mnum_u(w, "notice_m", &c->rid.warn.notice_m, 2);
+            mnum_u(w, "warn_m", &c->rid.warn.warn_m, 2);
+            mnum_u(w, "alert_m", &c->rid.warn.alert_m, 2);
+            mbool(w, "blink", &c->rid.warn.blink);
+            // "takeover" / "takeover_slot" are reserved since 2026-11-18: accepted and ignored.
+            mnum_u(w, "takeover_level", &c->rid.warn.takeover_level, 1);
+            mnum_u(w, "bearing", &c->rid.warn.bearing, 1);
+            mbool(w, "ground", &c->rid.warn.ground);
+        }
+        // "ignore" REPLACES the whole list (absent = unchanged). Strings only, <= 20 chars;
+        // cfg_validate drops non-printable entries and duplicates.
+        const cJSON *ig = J_OBJ(o, "ignore");
+        if (cJSON_IsArray(ig)) {
+            memset(c->rid.ignore, 0, sizeof(c->rid.ignore));
+            int n = 0;
+            for (const cJSON *e = ig->child; e && n < RID_IGNORE_MAX; e = e->next) {
+                if (!cJSON_IsString(e) || !e->valuestring || !e->valuestring[0]) { continue; }
+                if (strlen(e->valuestring) >= RID_ID_LEN) {
+                    if (err && errlen) { snprintf(err, errlen, "rid.ignore: an ID is at most %d characters", RID_ID_LEN - 1); }
+                    continue;
+                }
+                strlcpy(c->rid.ignore[n], e->valuestring, RID_ID_LEN);
+                n++;
+            }
+        }
     }
     return ESP_OK;
 }

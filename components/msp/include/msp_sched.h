@@ -9,8 +9,9 @@ typedef struct msp_sched msp_sched_t;
 void msp_sched_init(void);
 
 // Pick the next request to send now. Returns false if nothing is due.
-// gps_present gates the GPS/analog/battery polls (spec 4.2 note).
-bool msp_sched_pick(uint32_t now_ms, bool gps_present, bool osd_supported,
+// gps_present gates the GPS/analog/battery polls (spec 4.2 note); attitude gates
+// MSP_ATTITUDE (Remote ID active AND armed, spec 8.8.6).
+bool msp_sched_pick(uint32_t now_ms, bool gps_present, bool osd_supported, bool attitude,
                     uint16_t *out_func);
 
 // Mark a func as just-sent (advances its next-due by its period).

@@ -14,7 +14,7 @@
 #include "gp_preset.h"
 
 #define CFG_MAGIC   0x43424247u   // "CBBG"
-#define CFG_VERSION 6u
+#define CFG_VERSION 7u           // v6 -> v7: Remote ID receiver (rid.*, spec 8.8.9)
 
 // Radio-switch zones (preset.bands). Zones 1-3 live in the original head fields;
 // zones 4..PRESET_ZONES_MAX in the v6 tail. Use the cfg_zone_* accessors below.
@@ -36,6 +36,10 @@
 
 #define CFG_DEFAULT_WIFI_PW "reclinkfpv"   // AP password on factory defaults
 
+// Remote ID receiver (spec 8.8.9): own-aircraft UAS IDs the receiver ignores.
+#define RID_IGNORE_MAX 4
+#define RID_ID_LEN     21                    // ODID_ID_SIZE (20) + NUL
+
 // -------- status flags (spec 3.6). Runtime, surfaced in /api/status.flags -----
 typedef enum {
     FLAG_CFG_RESET        = 1u << 0,
@@ -44,6 +48,7 @@ typedef enum {
     FLAG_FC_OFFLINE       = 1u << 3,
     FLAG_CLOCK_SYNC_FAIL  = 1u << 4,
     FLAG_WDT_RECOVERED    = 1u << 5,
+    FLAG_RID_FAULT        = 1u << 6,   // rid_task hung: Remote ID disabled until reboot (spec 8.8.8)
 } bridge_flag_t;
 
 // Runtime flag store (flags.c). Not persisted -- recomputed each boot.
@@ -74,6 +79,9 @@ enum { PORTAL_TRIG_BUTTON = 0, PORTAL_TRIG_ALWAYS_DISARMED = 1 };
 // portal_task.c / ble_central.c for the actual dBm mapping per radio. Default
 // is MAX on both, matching the prior (implicit, unconfigurable) behaviour.
 enum { RF_PWR_LOW = 0, RF_PWR_MEDIUM = 1, RF_PWR_MAX = 2 };
+// -------- Remote ID (cfg.rid, spec 8.8.9) --------------------------------------
+enum { RID_MODE_BLE = 0, RID_MODE_WIFI = 1, RID_MODE_BOTH = 2 };
+enum { RID_DUTY_LOW = 0, RID_DUTY_NORMAL = 1, RID_DUTY_HIGH = 2 };
 
 // One stored camera bond.
 typedef struct __attribute__((packed)) {
@@ -216,6 +224,37 @@ typedef struct __attribute__((packed)) {
     uint8_t  n_zones;
     struct { uint16_t max_us; uint32_t id; } bands_x[PRESET_ZONES_MAX - 3];
     cfg_gp_zone_t gp_preset_x[PRESET_ZONES_MAX - 3];
+
+    // ---- v7+ tail: Remote ID receiver (spec 8.8.9). migrate_6_to_7 writes the defaults with
+    // enabled = 0 (NOT a zero-fill: that would leave the feature on-but-silent once the user
+    // enables it). The tail has its OWN rid_crc32: it sits outside the main crc32, and a bit-flip
+    // must not be able to turn on in-flight Wi-Fi reception -- a mismatch loads the (disabled)
+    // defaults. Distances are metres whatever osd.units says. rid.ignore is the only Remote
+    // ID-derived value ever persisted (spec 8.8.4).
+    struct __attribute__((packed)) {
+        uint8_t  enabled;            // 0 (off until bench-proven)
+        uint8_t  mode;               // RID_MODE_* (BLE default)
+        uint8_t  ble_duty;           // RID_DUTY_* (NORMAL default)
+        uint8_t  ble_coded;          // reserved; must be 0 in v1
+        uint8_t  stale_s;            // 5, range 2..30 (LOW duty forces >= 10)
+        uint8_t  min_sats;           // 6, range 5..12 -- the GPS gate (spec 8.8.5)
+        struct __attribute__((packed)) {
+            uint8_t  enabled;        // proximity warning master (default 1)
+            uint16_t notice_m;       // 1000
+            uint16_t warn_m;         // 300
+            uint16_t alert_m;        // 100
+            uint8_t  blink;          // 1
+            uint8_t  takeover;       // RESERVED, ignored since 2026-11-18 (no separate takeover
+                                     // slot); kept so the v7 layout / rid_crc32 are unchanged
+            uint8_t  takeover_slot;  // RESERVED, ignored (as above)
+            uint8_t  takeover_level; // RESERVED, ignored since 2026-11-18 (ALERT always takes the
+                                     // whole %rp line; WARN / NOTICE alternate with the normal line)
+            uint8_t  bearing;        // 0 auto / 1 glyph / 2 compass / 3 degrees
+            uint8_t  ground;         // 0: aircraft reporting "ground" never exceed NOTICE
+        } warn;
+        char     ignore[RID_IGNORE_MAX][RID_ID_LEN];   // UAS IDs of your own aircraft, "" = empty
+        uint32_t rid_crc32;          // over the rid tail above (enabled .. ignore)
+    } rid;
 } cfg_t;
 
 // ---- zone accessors (hide the head/tail split) -----------------------------------
@@ -254,6 +293,9 @@ enum {
     OSD_TOK_AR, OSD_TOK_PR, OSD_TOK_BD, OSD_TOK_CR, OSD_TOK_GS, OSD_TOK_GF,
     OSD_TOK_FB, OSD_TOK_SP, OSD_TOK_SG,
     OSD_TOK_BI,
+    OSD_TOK_RP,          // Remote ID proximity warning (spec 8.8.7). NOT OR-ed back in by
+                         // cfg_validate (that would make it impossible to switch off): set once
+                         // by migrate_6_to_7 and in the factory defaults.
     OSD_TOK_COUNT
 };
 
@@ -310,6 +352,15 @@ bool cfg_cam_at(int i, cam_bond_t *out, uint8_t *poll_ds);
 esp_err_t cfg_factory_erase(void);
 
 void cfg_load_defaults(cfg_t *dst);
+
+// ---- Remote ID tail helpers (cfg_rid.c; pure, host-tested) --------------------------------
+void     cfg_rid_defaults(cfg_t *c);         // the spec 8.8.9 defaults, enabled = 0
+uint32_t cfg_rid_crc(const cfg_t *c);        // CRC-32 over rid.enabled .. rid.ignore
+void     cfg_rid_seal(cfg_t *c);             // rid.rid_crc32 = cfg_rid_crc(c)
+// true if rid_crc32 matched; on a mismatch the tail is replaced by the disabled defaults
+// (and sealed) and false is returned -- the caller logs it and re-commits.
+bool     cfg_rid_check(cfg_t *c);
+void     cfg_rid_validate(cfg_t *c);         // clamp / re-order / sanitise (never rejects)
 
 // -------- deferred runtime counters: namespace "stats" (spec 11.1) ----------
 typedef struct {

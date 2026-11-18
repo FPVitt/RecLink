@@ -49,15 +49,23 @@ CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
 # ("bond failed"). Disable it -- one owner per resource.
 CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
 
-# --- Wi-Fi: AP only. 8 static RX buffers (1.6 KB each, taken from the heap at
-#     Wi-Fi init), same as the gopro_ble_debug image whose OTA upload works; 12
-#     cost 6 KB of a ~35 KB heap that the portal needs for page loads.
+# --- Wi-Fi: the portal AP (bench, disarmed only) and -- only with the Remote ID
+#     receiver's Wi-Fi mode enabled (default off) -- passive receive-only RID_RX
+#     (WIFI_MODE_NULL + promiscuous, channel 6) while armed; never STA, never TX
+#     while armed (spec 8.8.2). 8 static RX buffers (1.6 KB each, taken from the
+#     heap at Wi-Fi init), same as the gopro_ble_debug image whose OTA upload works;
+#     12 cost 6 KB of a ~35 KB heap that the portal needs for page loads.
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=8
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=24
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_RX_BA_WIN=12
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
+# Wi-Fi IRAM optimizations OFF (global, every board profile): they place Wi-Fi TX/RX hot paths in
+# IRAM, which on the C3 is the same SRAM the heap comes from. The portal needs no throughput and
+# the heap is tight (~35 KB with the AP up), so that SRAM goes back to the heap instead.
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 
 # --- lwIP: a real TCP RECEIVE window + queue for OTA uploads -------------
 # The SEND buffer is deliberately small (4 x MSS). Every connection that has just
@@ -83,7 +91,10 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_COLORS=n
 CONFIG_LOG_TIMESTAMP_SOURCE_RTOS=y
 
-# --- Coexistence (bench only; disabled in flight by esp_wifi_stop) -------
+# --- Coexistence: Wi-Fi + BLE share the C3 radio. In flight Wi-Fi is off
+#     (esp_wifi_stop) unless Remote ID Wi-Fi reception (RID_RX) is enabled; there
+#     is no API to bias it towards BLE on the C3 (esp_coex_preference_set is a
+#     no-op there, VERIFY.md RID-ESP-COEX) -- the controller arbitrates. -------
 CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
 
 # --- Panic behaviour: reboot, keep a summary in RTC for /api/status -----

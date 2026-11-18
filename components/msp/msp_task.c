@@ -8,6 +8,7 @@
 #include "msp_parse.h"
 #include "msp_sched.h"
 #include "fc_state.h"
+#include "hdg_align.h"
 
 #include <string.h>
 
@@ -47,6 +48,7 @@ static uint8_t s_evq_buf[16 * sizeof(fc_event_t)];
 static QueueHandle_t s_cmdq, s_osdq, s_evq;
 
 static volatile bool s_refresh_req;
+static volatile bool s_att_poll;          // Remote ID active (writer: housekeeping)
 
 // ---- passenger guard (spec 1.2.1 / 4.6 / 13.1) -----------------------
 // The bridge may only issue MSP read requests, MSP2_SET_TEXT, and (opt-in)
@@ -80,6 +82,8 @@ static bool msp_func_allowed(uint16_t func)
     case MSP_STATUS:
     case MSP_RC:
     case MSP_RAW_GPS:
+    case MSP_ATTITUDE:       // Remote ID heading (spec 8.8.6) -- a read, nothing is written
+    case MSP_ALTITUDE:       // Remote ID above/below -- a read, nothing is written
     case MSP_ANALOG:
     case MSP_BOXIDS:
     case MSP_BATTERY_STATE:
@@ -125,6 +129,7 @@ esp_err_t msp_osd_send_slot(uint8_t slot, const char *text)
 
 QueueHandle_t msp_fc_events(void) { return s_evq; }
 void msp_request_refresh(void) { s_refresh_req = true; }
+void msp_set_attitude_poll(bool rid_active) { s_att_poll = rid_active; }
 
 // ---- helpers ---------------------------------------------------------
 static void emit_event(uint8_t type, int32_t value)
@@ -214,6 +219,8 @@ static void msp_task(void *arg)
     bool gps_good_pub = false;
     bool rtc_valid_pub = false;
     bool ready_emitted = false;
+    hdg_align_t hdg;                // Remote ID heading latch (spec 8.8.5)
+    hdg_align_reset(&hdg);
 
     uint8_t rxb[256];
     TickType_t last_wake = xTaskGetTickCount();
@@ -297,6 +304,35 @@ static void msp_task(void *arg)
             }
         }
 
+        // ---- Remote ID heading (spec 8.8.5 / 8.8.6) -----------------
+        // att_valid: an MSP_ATTITUDE reply <= 500 ms old. hdg_aligned: see hdg_align.h. Both are
+        // only ever read for the OSD arrow; nothing here is written to the FC.
+        {
+            bool att_valid = st.att_rx_ms != 0 && (now - st.att_rx_ms) <= 500u;
+            // Own height above the arming point: only while armed (Betaflight zeroes it at arming)
+            // and <= 1 s old; otherwise the above/below relation is unknown.
+            bool alt_valid = s_att_poll && st.armed_valid && st.armed && st.alt_rx_ms != 0 &&
+                             (now - st.alt_rx_ms) <= 1000u;
+            if (alt_valid != st.alt_valid) { st.alt_valid = alt_valid; fc_state_publish(&st); published = true; }
+            hdg_align_in_t hin = {
+                .link_up = link_up, .armed_valid = st.armed_valid, .armed = st.armed,
+                .airborne_hint = flight_may_be_airborne(),
+                .fix = st.gps.fix, .sats = st.gps.sats, .spd_cm_s = st.gps.spd_cm_s,
+                .gps_rx_ms = st.gps_rx_ms,
+            };
+            // Only while Remote ID is active (housekeeping's gate, which also requires the boot-time
+            // allocation and rid.enabled): otherwise nothing ever latches.
+            bool aligned = false;
+            if (s_att_poll) { aligned = hdg_align_step(&hdg, &hin, now); }
+            else            { hdg_align_reset(&hdg); }
+            if (att_valid != st.att_valid || aligned != st.hdg_aligned) {
+                st.att_valid = att_valid;
+                st.hdg_aligned = aligned;
+                fc_state_publish(&st);
+                published = true;
+            }
+        }
+
         // ---- GPS-good sustained + RTC-valid edges -----------------
         bool gps_good = st.gps_good;
         if (gps_good != gps_good_pub) {
@@ -328,7 +364,8 @@ static void msp_task(void *arg)
 
         // ---- TX: one scheduled read ------------------------------
         uint16_t func;
-        if (msp_sched_pick(now, st.gps_present, st.osd_supported, &func)) {
+        bool att = s_att_poll && link_up && st.armed_valid && st.armed;
+        if (msp_sched_pick(now, st.gps_present, st.osd_supported, att, &func)) {
             request_read(func);
             msp_sched_sent(func, now);
         }

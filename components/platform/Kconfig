@@ -36,6 +36,15 @@ menu "RecLink board"
         bool "Button is active-low"
         default y
 
+    config BRIDGE_BOARD_RECLINK
+        bool "Official RecLink PCB"
+        default n
+        help
+            The portal Wi-Fi is always on while disarmed (and off while armed):
+            the web UI hides the "Open the portal" option and housekeeping
+            ignores wifi.portal_trigger. Prototype boards (SuperMini, S3) keep
+            the option.
+
     choice BRIDGE_LED_KIND
         prompt "Status LED type"
         default BRIDGE_LED_WS2812

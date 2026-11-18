@@ -97,6 +97,7 @@
   <button data-t="status" class="on">Status</button>
   <button data-t="cam-control">Cam control</button>
   <button data-t="osd">OSD</button>
+  <button data-t="rid">Remote ID</button>
   <button data-t="clock" class="adv-only">Clock</button>
   <button data-t="camera">Binding</button>
   <button data-t="network">Network</button>
@@ -237,17 +238,19 @@
   <div class="card" id="osdedit">
     <h3>Lines</h3>
     <div id="palette" class="palette"></div>
+    <p class="warn-inline" id="osd-nol" hidden>Remote ID alerts have no line to appear on &mdash; add %rp to one of the four lines.</p>
+    <p class="muted"><b>%rp</b>: Remote ID warning, e.g. <b>!RID1 240M &#8599;+</b>. Alerts take the whole line; warnings alternate with it. Options: Remote ID tab.</p>
     <div id="olines">
-      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"><label class="rawrow" hidden><input id="raw-0" class="mono" maxlength="23"></label></div>
-      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"><label class="rawrow" hidden><input id="raw-1" class="mono" maxlength="23"></label></div>
-      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"><label class="rawrow" hidden><input id="raw-2" class="mono" maxlength="23"></label></div>
-      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b><button type="button" class="rawtog">raw</button></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"><label class="rawrow" hidden><input id="raw-3" class="mono" maxlength="23"></label></div>
+      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"></div>
+      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"></div>
+      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"></div>
+      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"></div>
     </div>
   </div>
 
   <label>Update rate &mdash; Hz (1&ndash;10)
     <input type="number" inputmode="numeric" name="osd.refresh_hz" min="1" max="10" step="1"></label>
-  <label>Speed units (used by %sp)
+  <label>Units (speed %sp, Remote ID distances)
     <select name="osd.units">
       <option value="0">Metric &mdash; km/h</option>
       <option value="1">Imperial &mdash; mph</option>
@@ -261,6 +264,112 @@
     <label>Blink warnings<input type="checkbox" name="osd.warn.blink"></label>
     <label>Show a warning when the camera link is lost<input type="checkbox" name="osd.warn.show_on_lost"></label>
   </fieldset>
+</section>
+
+<section id="rid" class="tab">
+  <p class="warn-inline">&#9888; Informational only, not collision avoidance. Many aircraft broadcast nothing.</p>
+
+  <p class="warn-inline" id="rid-nol" hidden>Remote ID alerts have no line to appear on &mdash; add %rp to one of the four lines (OSD tab).</p>
+  <div id="rid-reboot" class="card" hidden>
+    <h3 class="warn-inline">&#9888; Reboot to apply</h3>
+    <p>Saved on, but not running yet.</p>
+    <div class="row"><button type="button" id="rid-reboot-btn">Reboot now</button></div>
+  </div>
+
+  <div class="card" id="rid-c-recv">
+    <h3>Receiver</h3>
+    <label>Remote ID receiver (off by default)<input type="checkbox" name="rid.enabled"></label>
+    <p class="muted">Turning on needs a reboot after Save; off applies at once.</p>
+    <fieldset id="rid-recv">
+      <legend>Settings</legend>
+      <label>Listen on
+        <select name="rid.mode">
+          <option value="0">Bluetooth</option>
+          <option value="1">Wi-Fi</option>
+          <option value="2">Bluetooth + Wi-Fi</option>
+        </select></label>
+      <label>Bluetooth scan effort
+        <select name="rid.ble_duty">
+          <option value="0">Low (expiry &ge; 10 s)</option>
+          <option value="1">Normal</option>
+          <option value="2">High</option>
+        </select></label>
+      <label>Minimum GPS satellites (5&ndash;12)
+        <input type="number" inputmode="numeric" name="rid.min_sats" min="5" max="12" step="1"></label>
+      <label><span id="rid-stale-l">Position expires after &mdash; s (2&ndash;30)</span>
+        <input type="number" inputmode="numeric" name="rid.stale_s" min="2" max="30" step="1"></label>
+      <p class="muted">Inactive without a GPS fix and this many satellites. Wi-Fi reception runs only while armed, so it can&rsquo;t be watched here.</p>
+    </fieldset>
+    <p class="warn-inline rerr"></p>
+  </div>
+
+  <div class="card" id="rid-c-warn">
+    <h3>Proximity warning</h3>
+    <label id="rid-warnsw">Show warnings on the OSD<input type="checkbox" name="rid.warn.enabled"></label>
+    <fieldset id="rid-wopt">
+      <legend>Settings</legend>
+      <label><span data-rd="notice_m"></span>
+        <input type="number" inputmode="numeric" name="rid.warn.notice_m" step="1"></label>
+      <label><span data-rd="warn_m"></span>
+        <input type="number" inputmode="numeric" name="rid.warn.warn_m" step="1"></label>
+      <label><span data-rd="alert_m"></span>
+        <input type="number" inputmode="numeric" name="rid.warn.alert_m" step="1"></label>
+      <label>Bearing style
+        <select name="rid.warn.bearing">
+          <option value="0">Auto (arrow, else compass)</option>
+          <option value="1">Arrow only</option>
+          <option value="2">Compass (N, NE, E&hellip;)</option>
+          <option value="3">Degrees (045)</option>
+        </select></label>
+      <label>Blink the !<input type="checkbox" name="rid.warn.blink"></label>
+      <label>Warn about aircraft on the ground (else NOTICE max)<input type="checkbox" name="rid.warn.ground"></label>
+      <pre class="mono" id="rid-prev"></pre>
+      <ul class="muted tips">
+        <li>One aircraft per message: <b>!RID<i>x</i> distance bearing</b>, <i>x</i> = its number 1&ndash;9.</li>
+        <li><b>+</b> after the bearing: it is above you; <b>-</b>: below you (&plusmn;15 m is level).</li>
+        <li><b>ALERT</b> messages are shown alone, one after another, on the whole %rp line.</li>
+        <li><b>WARN</b> and <b>NOTICE</b> messages alternate with the normal line.</li>
+        <li>Only the <b>!</b> blinks: slowly at WARN, fast at ALERT.</li>
+        <li>The arrow needs ~5 s of flight at 5&nbsp;m/s with 5+ satellites; until then: compass text.</li>
+      </ul>
+    </fieldset>
+    <p class="warn-inline rerr"></p>
+  </div>
+
+  <div class="card" id="rid-c-mine">
+    <h3>My aircraft</h3>
+    <fieldset id="rid-mine">
+      <legend>Ignore list (max 4)</legend>
+      <p class="muted">If your own aircraft carries a Remote ID module, add its ID here or it will warn about itself.</p>
+      <label>ID 1<input name="rid.ignore.0" maxlength="20" autocapitalize="off"></label>
+      <label>ID 2<input name="rid.ignore.1" maxlength="20" autocapitalize="off"></label>
+      <label>ID 3<input name="rid.ignore.2" maxlength="20" autocapitalize="off"></label>
+      <label>ID 4<input name="rid.ignore.3" maxlength="20" autocapitalize="off"></label>
+    </fieldset>
+    <p class="warn-inline rerr"></p>
+  </div>
+
+  <div class="card">
+    <h3>Nearby now</h3>
+    <p class="muted">Only <b>Bluetooth</b> transmitters are heard while this page is up, and only with a GPS fix (Remote ID active).</p>
+    <p class="muted" id="rid-nearmsg"></p>
+    <div id="rid-list"></div>
+  </div>
+
+  <div class="card">
+    <h3>Health</h3>
+    <div class="grid" id="rid-health"></div>
+  </div>
+
+  <div class="card" id="rid-c-test">
+    <h3>Test reception</h3>
+    <p class="muted">30 s frame count; no GPS fix needed.</p>
+    <div class="row"><button type="button" id="rid-testbtn">Test reception (30 s)</button></div>
+    <p class="muted" id="rid-teststat"></p>
+    <p class="muted" id="rid-tempty"></p>
+    <div id="rid-tlist"></div>
+    <p class="muted">Only the aircraft ID, range and bearing are kept; all other broadcast data is discarded.</p>
+  </div>
 </section>
 
 <section id="clock" class="tab adv-only">
@@ -309,7 +418,7 @@
     <button type="button" class="reveal" data-for="wifi.password">show</button></label>
   <label class="adv-only">Wi-Fi channel (0 = auto, 1&ndash;13)
     <input type="number" inputmode="numeric" name="wifi.channel" min="0" max="13" step="1"></label>
-  <label>Open the portal
+  <label id="wifi-trig">Open the portal
     <select name="wifi.portal_trigger">
       <option value="0">Only after holding the button</option>
       <option value="1">Always, while disarmed</option>

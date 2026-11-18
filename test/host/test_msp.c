@@ -167,6 +167,29 @@ static void test_parse_variant_rc_and_errors(void)
     CHECK(!msp_parse_frame(&f, &s, &ctx));
 }
 
+// Remote ID additions (spec 8.8.6): MSP_ATTITUDE yaw (whole degrees, reduced mod 360), the
+// MSP_STATUS compass bit, and the RAW_GPS receive time for the GPS gate.
+static void test_parse_attitude_mag_gps_rx(void)
+{
+    fc_state_t s; memset(&s, 0, sizeof s);
+    msp_parse_ctx_t ctx; msp_parse_ctx_init(&ctx, 6);
+    uint8_t att[6] = { 0x10, 0x00, 0xF0, 0xFF, 45, 0 };          // roll 1.6, pitch -1.6, yaw 45
+    msp_frame_t f = resp(MSP_ATTITUDE, att, 6);
+    CHECK(msp_parse_frame(&f, &s, &ctx)); CHECK_EQ(s.yaw_deg, 45); CHECK_EQ(s.att_rx_ms, 12345);
+    att[4] = (uint8_t)(-10 & 0xFF); att[5] = (uint8_t)((-10 >> 8) & 0xFF);
+    f = resp(MSP_ATTITUDE, att, 6); msp_parse_frame(&f, &s, &ctx); CHECK_EQ(s.yaw_deg, 350);
+    att[4] = 370 & 0xFF; att[5] = 370 >> 8;
+    f = resp(MSP_ATTITUDE, att, 6); msp_parse_frame(&f, &s, &ctx); CHECK_EQ(s.yaw_deg, 10);
+    s.att_rx_ms = 0;
+    f = resp(MSP_ATTITUDE, att, 5); msp_parse_frame(&f, &s, &ctx); CHECK_EQ(s.att_rx_ms, 0);  // truncated
+    uint8_t st[25] = { 0 }; st[4] = (1u << 2) | (1u << 3);       // MAG | GPS sensor bits
+    f = resp(MSP_STATUS, st, 25); msp_parse_frame(&f, &s, &ctx);
+    CHECK(s.mag_present); CHECK(s.gps_present);
+    uint8_t gps[16] = { 2, 9 };
+    f = resp(MSP_RAW_GPS, gps, 16); msp_parse_frame(&f, &s, &ctx);
+    CHECK_EQ(s.gps_rx_ms, 12345); CHECK_EQ(s.gps.fix, 3); CHECK_EQ(s.gps.sats, 9);
+}
+
 int main(void)
 {
     RUN(test_encode_known_frames);
@@ -178,5 +201,6 @@ int main(void)
     RUN(test_parse_arm_state);
     RUN(test_parse_status_lengths);
     RUN(test_parse_variant_rc_and_errors);
+    RUN(test_parse_attitude_mag_gps_rx);
     TEST_MAIN_END();
 }

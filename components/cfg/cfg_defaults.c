@@ -85,5 +85,8 @@ void cfg_load_defaults(cfg_t *d)
     d->wifi.portal_timeout_min = 15;
 
     d->led_brightness = 128;
+
+    // Remote ID receiver (spec 8.8.9): off; OSD_TOK_RP is already on via fields_mask above.
+    cfg_rid_defaults(d);
     d->crc32 = 0;   // filled by cfg_commit / cfg_init
 }

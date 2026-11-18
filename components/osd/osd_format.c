@@ -1,4 +1,5 @@
 #include "osd.h"
+#include "rid_core.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -63,9 +64,18 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
                     const fc_state_t *fc, const cam_state_t *cam,
                     const cfg_t *cfg, bool blink_phase)
 {
+    return osd_format_line_rp(out, out_cap, tmpl, fc, cam, cfg, blink_phase, NULL);
+}
+
+int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
+                       const fc_state_t *fc, const cam_state_t *cam,
+                       const cfg_t *cfg, bool blink_phase, const osd_rp_t *rp)
+{
     size_t len = 0;
     out[0] = '\0';
     char tmp[24];
+    int arrow_at[2] = { -1, -1 };   // indices of the %rp glyph placeholders in out (-1 = none)
+    uint8_t arrow_glyph[2] = { 0, 0 };
 
     for (const char *p = tmpl; *p && len + 1 < out_cap; p++) {
         if (*p != '%') { if (len + 1 < out_cap) { out[len++] = *p; out[len] = '\0'; } continue; }
@@ -210,6 +220,17 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
                          (unsigned long)((fc->gps.spd_cm_s * 36u + 500u) / 1000u));
             }
             len = app(out, out_cap, len, tmp);
+        } else if (TOK2('r','p')) {                // Remote ID proximity warning (spec 8.8.7)
+            p++;
+            if (!field_on(cfg, OSD_TOK_RP) || !rp || !rp->text[0]) { continue; }
+            size_t at = len;
+            len = app(out, out_cap, len, rp->text);
+            for (int k = 0; k < 2; k++) {
+                if (rp->pt.idx[k] >= 0 && at + (size_t)rp->pt.idx[k] < len) {
+                    arrow_at[k] = (int)(at + (size_t)rp->pt.idx[k]);
+                    arrow_glyph[k] = rp->pt.glyph[k];
+                }
+            }
         } else {
             // unknown token: emit literally
             if (len + 2 < out_cap) { out[len++] = '%'; out[len++] = a; out[len] = '\0'; }
@@ -231,5 +252,55 @@ int osd_format_line(char *out, size_t out_cap, const char *tmpl,
 
     // hard 16-char clamp (spec 9.1)
     if (len > 16) { out[16] = '\0'; len = 16; }
+
+    // The Remote ID arrow (Betaflight's own home-arrow glyphs 0x60..0x6F) is exempt from the
+    // digital filter (owner decision 2026-11-18, spec 9.1 / 8.8.7): patched in only now, after the
+    // filter AND the clamp, and only if its placeholder survived the clamp.
+    for (int k = 0; k < 2; k++) {
+        if (arrow_at[k] >= 0 && (size_t)arrow_at[k] < len && out[arrow_at[k]] == RID_ARROW_PLACEHOLDER) {
+            out[arrow_at[k]] = (char)arrow_glyph[k];
+        }
+    }
     return (int)len;
+}
+
+// ---- Remote ID line replacement (owner decision 2026-11-18) ---------------------------------
+int osd_rp_line(const cfg_t *cfg)
+{
+    for (int i = 0; i < 4; i++) {
+        char l[sizeof(cfg->osd.line[i]) + 1];
+        memcpy(l, cfg->osd.line[i], sizeof(cfg->osd.line[i]));
+        l[sizeof(cfg->osd.line[i])] = '\0';
+        if (strstr(l, "%rp")) { return i; }
+    }
+    return -1;
+}
+
+void osd_compose_lines(char line[4][20], const fc_state_t *fc, const cam_state_t *cam,
+                       const cfg_t *cfg, bool blink, const osd_rp_t *rp)
+{
+    int rl = osd_rp_line(cfg);
+    // Disconnect display (spec 9.6): slot0 = CAM LOST / CAM ? , others blank.
+    if (cam->link != CAM_LINK_READY) {
+        bool searching = (cam->link == CAM_LINK_CONNECTING || cam->link == CAM_LINK_SYNCING ||
+                          cam->link == CAM_LINK_SCAN);
+        const char *s0 = searching ? (blink ? "" : "CAM ?") : "CAM LOST";
+        snprintf(line[0], 20, "%s", s0);
+        line[1][0] = line[2][0] = line[3][0] = '\0';
+    } else {
+        for (int i = 0; i < 4; i++) {
+            osd_format_line_rp(line[i], 20, cfg->osd.line[i], fc, cam, cfg, blink, i == rl ? rp : NULL);
+        }
+    }
+    // Replacement: AFTER the CAM LOST path, so it works during CAM LOST and with no camera. Not
+    // tied to the %rp field-enable bit (rid.warn.enabled is the master, as the takeover was).
+    if (rp && rp->replace && rl >= 0) {
+        snprintf(line[rl], 20, "%s", rp->text);
+        for (int k = 0; k < 2; k++) {
+            int ai = rp->pt.idx[k];
+            if (ai >= 0 && ai < 16 && line[rl][ai] == RID_ARROW_PLACEHOLDER) {
+                line[rl][ai] = (char)rp->pt.glyph[k];
+            }
+        }
+    }
 }

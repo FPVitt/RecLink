@@ -22,6 +22,7 @@
 #include "control.h"
 #include "osd.h"
 #include "portal.h"
+#include "rid.h"
 
 static const char *TAG = "app";
 
@@ -45,6 +46,11 @@ void app_main(void)
     cfg_stats_load(NULL);
 
     if (rtcnv_wdt_recovered_unacked()) { bridge_flag_set(FLAG_WDT_RECOVERED); led_request(LED_FAULT); }
+
+    // Remote ID receiver (spec 8.8): its RAM (task stack, message buffers, table) is allocated
+    // here, once, before steady state -- and ONLY if it is enabled in the stored config. Disabled
+    // at boot: nothing is reserved; switching it on later takes effect at the next reboot.
+    rid_boot_init(cfg_get()->rid.enabled != 0);
 
     // --- BLE host up, then reconcile cfg vs bond store ---------------
     ble_central_init();

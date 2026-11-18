@@ -9,6 +9,7 @@
 #include "camera.h"
 #include "control.h"
 #include "portal.h"
+#include "rid.h"
 
 #include <stdio.h>
 #include "esp_log.h"
@@ -25,8 +26,8 @@ static const char *TAG = "hk";
 static void log_stacks(void)
 {
     static const char *const names[] = { "housekeeping", "osd_task", "ctrl_task",
-                                         "cam_task", "msp_task", "portal_task" };
-    char sb[96]; size_t o = 0;
+                                         "cam_task", "msp_task", "portal_task", "rid_task" };
+    char sb[160]; size_t o = 0;
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         TaskHandle_t th = xTaskGetHandle(names[i]);
         if (th && o < sizeof(sb)) {
@@ -40,7 +41,9 @@ static void log_stacks(void)
 // spec 12.1: after 60 s uptime the system is in steady state -- no code path
 // outside the vendor stacks should still be allocating. Latch the heap
 // low-water mark at that point and warn if it keeps sinking (a slow leak).
-static void heap_watch(void)
+// Remote ID (spec 8.8.11 test 6): Wi-Fi RID_RX takes the driver's heap at arming, so the
+// baseline is re-taken after RID_RX starts -- otherwise every arming would log a false leak.
+static void heap_watch(bool rebaseline)
 {
     static uint32_t baseline_lwm;      // 0 until latched at 60 s
     static uint32_t warned_at;
@@ -48,6 +51,11 @@ static void heap_watch(void)
 
     uint32_t up = now_ms();
     uint32_t lwm = (uint32_t)heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
+    if (rebaseline && baseline_lwm) {
+        baseline_lwm = warned_at = lwm;
+        ESP_LOGI(TAG, "heap low-water re-baselined after RID_RX start: %lu B (free %lu B)",
+                 (unsigned long)lwm, (unsigned long)esp_get_free_heap_size());
+    }
 
     if (!baseline_lwm) {
         if (up >= 60000) {
@@ -84,6 +92,101 @@ static led_pattern_t pick_led(const fc_state_t *fc, cam_link_state_t link, tribo
     }
 }
 
+// ---- Remote ID supervision (spec 8.8.2 / 8.8.5 / 8.8.8) ----------------------------------------
+// housekeeping owns the activation gate, the BLE-ingest enable, the RID_RX start / hold / stop
+// conditions, the reception-test expiry and the rid_task heartbeat check. Everything is behind
+// BOTH rid.enabled (live: 1 -> 0 stops all activity at once) and rid_available() (the boot-time
+// allocation: 0 -> 1 needs a reboot). Not allocated: no task, no scan change, no Wi-Fi request,
+// no MSP_ATTITUDE.
+typedef struct {
+    rid_gate_t gate;
+    uint32_t   first_arm_ms;        // first decoded armed of this armed episode (0 = none)
+    uint32_t   disarm_since;        // decoded disarm held since (0 = not)
+    bool       rx_req;
+    bool       ble_listen_pub;
+    uint8_t    mode_pub, duty_pub;
+    uint8_t    wifi_state_prev;
+    uint32_t   last_1s;
+} rid_sup_t;
+
+static bool rid_supervise(rid_sup_t *r, const fc_state_t *fc, const cfg_t *c, uint32_t now)
+{
+    bool rebaseline = false;
+    bool avail = rid_available();                            // allocated at boot
+    bool en = c->rid.enabled && avail;
+
+    // Reception test: expiry, and abort at once on arming (spec 8.8.2.1 #6).
+    rid_test_tick(now);
+    if (rid_test_active() && (fc->armed || flight_may_be_airborne() || !en)) {
+        rid_test_abort();
+        portal_wifi_kick();
+        applog_note("Remote ID reception test aborted (%s)", en ? "armed" : "disabled");
+    }
+
+    // GPS gate: 5 s settle, 15 s loss grace.
+    bool gps_ok = rid_gps_ok_eval(fc->link_up, fc->gps_present, fc->gps.fix, fc->gps.sats,
+                                  c->rid.min_sats, fc->gps_rx_ms, now);
+    bool active = rid_gate_step(&r->gate, en, gps_ok, now);
+    rid_set_active(active);
+    msp_set_attitude_poll(active);                           // msp_task adds "and armed"
+
+    // rid_task heartbeat (spec 8.8.8): stale > 5 s -> FLAG_RID_FAULT (latched until reboot),
+    // Wi-Fi RX off, BLE ingest off, RID scan dropped. No reboot.
+    bool fault = bridge_flag_get(FLAG_RID_FAULT);
+    if (avail && !fault && (now - rid_heartbeat_ms()) > 5000u) {
+        bridge_flag_set(FLAG_RID_FAULT);
+        fault = true;
+        applog_note("Remote ID task stalled -> receiver disabled until reboot (RID RX FAIL)");
+    }
+
+    // BLE listening (the rid_listen scan reason == the gap_event matcher's enable).
+    bool ble = en && !fault &&
+               ((active && rid_mode_has_ble(c->rid.mode)) || rid_test_active());
+    rid_set_ble_ingest(ble);
+    if (ble != r->ble_listen_pub || (ble && (c->rid.mode != r->mode_pub || c->rid.ble_duty != r->duty_pub))) {
+        r->ble_listen_pub = ble;
+        r->mode_pub = c->rid.mode;
+        r->duty_pub = c->rid.ble_duty;
+        cam_rid_scan_update();                               // explicit re-apply (spec 8.8.3)
+    }
+
+    // RID_RX (spec 8.8.2.1): starts only with the FC link up, >= 2 s after the first decoded arm,
+    // after F1 has settled and after the AP teardown (portal_task sequences that itself); stops
+    // only after a decoded disarm held >= 3 s and !flight_may_be_airborne(), or when Remote ID
+    // goes inactive / faults. An FC link drop while armed holds the state (no driver churn).
+    if (fc->link_up && fc->armed_valid && fc->armed) {
+        if (!r->first_arm_ms) { r->first_arm_ms = now ? now : 1; }
+        r->disarm_since = 0;
+    } else if (fc->link_up && fc->armed_valid && !fc->armed) {
+        if (!r->disarm_since) { r->disarm_since = now ? now : 1; }
+    }
+    bool disarm_done = r->disarm_since && (now - r->disarm_since) >= RID_WIFI_STOP_HOLD_MS &&
+                       !flight_may_be_airborne();
+    if (disarm_done) { r->first_arm_ms = 0; }
+    bool base = en && !fault && active && rid_mode_has_wifi(c->rid.mode);
+    if (!base || disarm_done) {
+        r->rx_req = false;
+    } else if (!r->rx_req && r->first_arm_ms && fc->link_up && fc->armed_valid && fc->armed &&
+               (now - r->first_arm_ms) >= RID_WIFI_START_DELAY_MS) {
+        bool raw, sw, desired; uint8_t phase, last;
+        ctrl_record_status(&raw, &sw, &desired, &phase, &last);
+        bool f1_settled = phase != CTRL_REC_START_DELAY && phase != CTRL_REC_VERIFY_START;
+        if (f1_settled) { r->rx_req = true; }
+    }
+    portal_rid_rx_request(r->rx_req);
+    // RID RX FAIL grace counts from the moment RID_RX is due AND the AP teardown has finished.
+    uint32_t due = rid_wifi_due_ms();
+    if (!r->rx_req) { if (due) { rid_set_wifi_due_ms(0); } }
+    else if (!due && !portal_ap_busy()) { rid_set_wifi_due_ms(now ? now : 1); }
+
+    uint8_t ws = rid_wifi_state();
+    if (ws == RID_WIFI_RX && r->wifi_state_prev != RID_WIFI_RX) { rebaseline = true; }
+    r->wifi_state_prev = ws;
+
+    if (now - r->last_1s >= 1000u) { r->last_1s = now; rid_tick_1s(now); }
+    return rebaseline;
+}
+
 static void hk_task(void *arg)
 {
     (void)arg;
@@ -91,6 +194,7 @@ static void hk_task(void *arg)
     uint32_t last_liveness = 0;
     // Was the aircraft armed when the previous boot ended? (RTC; false after a power cycle)
     bool armed_seen = flight_may_be_airborne();
+    static rid_sup_t rid_sup;                    // Remote ID supervision state (static: small stack)
 
     for (;;) {
         fc_state_t fc; fc_state_get(&fc);
@@ -137,7 +241,11 @@ static void hk_task(void *arg)
 
         // --- portal supervision (spec 10.1) -------------------
         const cfg_t *c = cfg_get();
+#ifdef CONFIG_BRIDGE_BOARD_RECLINK
+        bool always = true;      // official board: Wi-Fi portal always on while disarmed (off while armed)
+#else
         bool always = (c->wifi.portal_trigger == PORTAL_TRIG_ALWAYS_DISARMED);
+#endif
         // Arm state must be KNOWN (decoded from MSP_STATUS this link session), not just
         // "link up and armed == false (the zero default)" -- spec 13.3.
         bool trig = always && fc.link_up && fc.armed_valid && !fc.armed;
@@ -152,6 +260,8 @@ static void hk_task(void *arg)
             !bridge_flag_get(FLAG_WDT_RECOVERED)) {
             trig = true;
         }
+        // Remote ID first: its RID_RX request and test state feed portal_supervise's AP guard.
+        bool rid_rebase = rid_supervise(&rid_sup, &fc, c, now_ms());
         portal_supervise(fc.armed || flight_may_be_airborne(), trig, be == BTN_LONG);
 
         // --- camera liveness (spec 3.5) ----------------------
@@ -164,7 +274,7 @@ static void hk_task(void *arg)
         cfg_stats_flush();
 
         // --- heap low-water watch (spec 12.1) ---------------
-        heap_watch();
+        heap_watch(rid_rebase);
 
         twdt_feed(WDT_HOUSEKEEPING);
         // 10 Hz: keeps the armed-edge -> portal_stop() latency ~100 ms

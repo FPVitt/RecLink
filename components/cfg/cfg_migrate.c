@@ -59,12 +59,26 @@ static void migrate_5_to_6(cfg_t *c)
     c->version = 6;
 }
 
+// v6 -> v7: Remote ID receiver tail (rid.*, spec 8.8.9). NOT a zero-fill: a zeroed tail would
+// mean warn.enabled = 0, ble_duty = LOW, takeover_slot = 0 (the CAM LOST slot), stale_s clamped
+// to 2 and every threshold clamped to 20 m -- a user who later switched rid.enabled on would get
+// a receiver that looks on while drawing nothing. Write the real defaults (enabled = 0, so the
+// upgrade changes nothing about flight behaviour) and set the %rp field bit ONCE, here: the
+// cfg_validate rule that ORs appended token bits back in deliberately stops before OSD_TOK_RP.
+static void migrate_6_to_7(cfg_t *c)
+{
+    cfg_rid_defaults(c);
+    c->osd.fields_mask |= (1u << OSD_TOK_RP);
+    c->version = 7;
+}
+
 typedef void (*migrate_fn)(cfg_t *);
 
 // index 0 -> migrate v1 to v2, index 1 -> v2 to v3, etc.
-#define N_MIGRATIONS 5
+#define N_MIGRATIONS 6
 #if N_MIGRATIONS > 0
-static const migrate_fn k_chain[N_MIGRATIONS] = { migrate_1_to_2, migrate_2_to_3, migrate_3_to_4, migrate_4_to_5, migrate_5_to_6 };
+static const migrate_fn k_chain[N_MIGRATIONS] = { migrate_1_to_2, migrate_2_to_3, migrate_3_to_4, migrate_4_to_5, migrate_5_to_6,
+                                                   migrate_6_to_7 };
 #endif
 
 // Returns true if the blob is now at CFG_VERSION; false if no path exists.

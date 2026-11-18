@@ -23,6 +23,15 @@ typedef enum {
 typedef void (*ble_scan_cb_t)(const ble_adv_t *adv);
 typedef void (*ble_evt_cb_t)(ble_central_evt_t ev, int status);
 typedef void (*ble_notify_cb_t)(uint16_t val_handle, const uint8_t *data, uint16_t len);
+// Runs first on every advertising report, on the raw AD bytes (NimBLE host task). Returns true
+// to consume the report (it is then not forwarded to the scan callback). Must be O(1),
+// allocation-free and log-free (spec 8.8.3).
+typedef bool (*ble_raw_adv_hook_t)(const uint8_t addr[6], int8_t rssi, const uint8_t *data, uint8_t len);
+
+// Scan parameters (units of 0.625 ms), always with filter_duplicates = 0.
+typedef struct { uint16_t itvl, window; uint8_t passive; } ble_scan_params_t;
+extern const ble_scan_params_t BLE_SCAN_AGGRESSIVE;   // 60 / 50 ms active (pairing / hunt)
+extern const ble_scan_params_t BLE_SCAN_GENTLE;       // 200 / 22.5 ms passive (portal AP up)
 
 // Start the controller + host. Idempotent. Call once from app_main.
 void ble_central_init(void);
@@ -35,6 +44,10 @@ void ble_central_set_flight_power(bool airborne);
 // queries before this return garbage -- callers must wait (review H15).
 bool ble_central_synced(void);
 void ble_central_set_cbs(ble_scan_cb_t scan, ble_evt_cb_t evt, ble_notify_cb_t notify);
+void ble_central_set_raw_adv_hook(ble_raw_adv_hook_t hook);
+// Forward (non-consumed) adverts to the scan callback? cam_task sets this only while the camera
+// is in SCAN (s_hunt_active, spec 8.8.3). Default on.
+void ble_central_forward_adverts(bool on);
 
 esp_err_t ble_central_scan(bool enable);
 esp_err_t ble_central_connect(const uint8_t addr[6], uint8_t addr_type);
@@ -53,6 +66,8 @@ int8_t ble_central_last_rssi(void);
 // Gentle mode: low-duty passive scan (Wi-Fi-friendly). Applies to the next
 // ble_central_scan(true) / restarts a running scan with the new params.
 void      ble_central_scan_gentle(bool on);
+void      ble_central_scan_params(const ble_scan_params_t *p);   // general form of the above
+bool      ble_central_scan_running(void);
 uint16_t  ble_central_mtu(void);              // negotiated ATT MTU (0 if not connected)
 esp_err_t ble_central_forget_bond(const uint8_t addr[6], uint8_t addr_type);
 esp_err_t ble_central_forget_bond_any(const uint8_t addr[6]);  // try public + random

@@ -104,9 +104,10 @@ void      cam_ble_suspend(void);                // drop the BLE link (for OTA)
 void      cam_throttle(bool on);                // slow driver polling (portal up)
 bool      cam_portal_up(void);                  // the portal AP is up (set by cam_throttle)
 void      cam_ble_pause_scan(bool on);          // pause the camera hunt (portal AP up; keeps a READY link)
+void      cam_rid_scan_update(void);            // Remote ID listening changed: re-apply the scan (8.8.3)
 uint32_t  cam_notify_drops(void);              // BLE notifications lost to a full queue (monotonic)
 uint32_t  cam_link_age_ms(void);              // time in the current link state
-const char *cam_scan_state(void);             // "off" / "active" / "gentle"
+const char *cam_scan_state(void);             // "off" / "active" / "gentle" / "rid"
 void      cam_erase_all_bonds(void);           // factory reset path (spec 11.0)
 bool      cam_reconcile_bonds(bool erase_orphan_bond);  // boot; -> FLAG_REPAIR_NEEDED
 

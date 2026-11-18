@@ -11,7 +11,8 @@
 #define ONESHOT_RETRY_MS 150
 
 // period_ms == 0  -> one-shot (fires once until re-armed)
-// gps_gated       -> only when fc_state.gps_present
+// gps_gated       -> 1: only when fc_state.gps_present; 2: only while Remote ID wants the
+//                    heading (MSP_ATTITUDE, spec 8.8.6: Remote ID active AND armed)
 // osd_gated       -> only when osd_supported (skip craft/canvas otherwise? no --
 //                    canvas is fine, it's harmless; keep all reads ungated)
 typedef struct {
@@ -43,6 +44,11 @@ static entry_t s_tbl[] = {
     // MSP_BATTERY_STATE), so the slot and the UART time were wasted.
     { MSP_RAW_GPS,        500, 1, 0, 0, 0 },    // 2 Hz, gps-gated
     { MSP_RTC,          15000, 0, 0, 0, 0 },    // every 15 s, always
+    // Remote ID heading (spec 8.8.6): 5 Hz, ONLY while Remote ID is active and the aircraft is
+    // armed -- never polled with rid.enabled = 0, so the schedule is otherwise unchanged.
+    { MSP_ATTITUDE,       200, 2, 0, 0, 0 },
+    // Remote ID above/below: 2 Hz, same gating as MSP_ATTITUDE (active AND armed).
+    { MSP_ALTITUDE,       500, 2, 0, 0, 0 },
 };
 #define N (sizeof(s_tbl) / sizeof(s_tbl[0]))
 
@@ -82,14 +88,16 @@ void msp_sched_mark_responded(uint16_t func)
     }
 }
 
-bool msp_sched_pick(uint32_t now, bool gps_present, bool osd_supported, uint16_t *out)
+bool msp_sched_pick(uint32_t now, bool gps_present, bool osd_supported, bool attitude,
+                    uint16_t *out)
 {
     (void)osd_supported;
     int best = -1;
     uint32_t best_late = 0;
     for (size_t i = 0; i < N; i++) {
         entry_t *e = &s_tbl[i];
-        if (e->gps_gated && !gps_present) { continue; }
+        if (e->gps_gated == 1 && !gps_present) { continue; }
+        if (e->gps_gated == 2 && !attitude) { continue; }
         if (e->period_ms == 0 && e->oneshot_done) { continue; }
         if ((int32_t)(now - e->next_due) < 0) { continue; }   // not due yet
         uint32_t late = now - e->next_due;

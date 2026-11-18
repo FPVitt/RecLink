@@ -6,6 +6,7 @@
 // response (spec 1.2.4).
 #include "camera.h"
 #include "ble_central.h"
+#include "rid.h"
 
 #include <string.h>
 
@@ -34,7 +35,8 @@ static const uint32_t k_backoff_s[] = { 1, 2, 4, 8, 16, 30, 30 };
 
 // ---- internal event queue -----------------------------------------
 typedef enum { IQ_BLE_EVT, IQ_NOTIFY_WAKE, IQ_ADV, IQ_CMD_PAIR, IQ_CMD_FORGET,
-               IQ_CMD_SUSPEND, IQ_CMD_SCAN_PAUSE } iq_kind_t;
+               IQ_CMD_SUSPEND, IQ_CMD_SCAN_PAUSE,
+               IQ_CMD_RID_SCAN } iq_kind_t;          // Remote ID scan re-apply (spec 8.8.3)
 typedef struct {
     uint8_t kind;
     union {
@@ -80,8 +82,9 @@ static uint32_t s_state_since_ms;
 // ---- multi-camera reconnect (spec 7.1) -----------------------------
 // Up to CAM_MAX_BONDS cameras can be bonded. On a cold reconnect the scan
 // matches ANY bonded address; among the bonded cameras seen within a short
-// window it connects to the strongest signal. Once a link is up the scan
-// stops (only one camera connected at a time). s_bonds is a snapshot of the
+// window it connects to the strongest signal. Once a link is up the CAMERA
+// scan stops (only one camera connected at a time) -- a passive Remote ID
+// listening scan may continue alongside the connection (spec 8.8.3). s_bonds is a snapshot of the
 // cfg bond list, refreshed at boot and after every pair/forget.
 static cam_bond_t s_bonds[CAM_MAX_BONDS];
 static int        s_bond_n;
@@ -146,6 +149,8 @@ static void set_link(cam_link_state_t st)
 {
     if (s_cs.link == st) { return; }
     s_cs.link = st;
+    // s_hunt_active (spec 8.8.3): adverts reach s_iq only while the camera is in SCAN.
+    ble_central_forward_adverts(st == CAM_LINK_SCAN);
     s_state_since_ms = now_ms();
     if (st == CAM_LINK_READY) {
         s_was_ready = true; s_connected_this_session = true;
@@ -264,6 +269,14 @@ static void h_notify(uint16_t handle, const uint8_t *data, uint16_t len)
         iq_item_t it = { .kind = IQ_NOTIFY_WAKE };
         if (xQueueSend(s_iq, &it, 0) != pdTRUE) { s_nb_wake_pending = false; }
     }
+}
+
+// NimBLE host task, every advertising report, BEFORE anything is forwarded: a Remote ID advert is
+// matched in O(1) and diverted to rid_rxq_ble (rid.c); everything else falls through to h_scan.
+// With Remote ID off, rid_ble_ingest() returns false at its first check.
+static bool h_raw_adv(const uint8_t addr[6], int8_t rssi, const uint8_t *data, uint8_t len)
+{
+    return rid_ble_ingest(addr, rssi, data, len);
 }
 
 // cam_task ctx: hand every buffered notification to the driver.
@@ -392,6 +405,13 @@ void cam_ble_pause_scan(bool on)
     iq_item_t it = { .kind = IQ_CMD_SCAN_PAUSE, .flag = { .on = on ? 1 : 0 } };
     xQueueSend(s_iq, &it, pdMS_TO_TICKS(100));
 }
+// Remote ID enabled / mode / duty / fault changed (spec 8.8.3 "applied live"): re-apply the scan
+// in READY / LOST / IDLE too. Never blocks; a lost message is corrected by the 1 Hz supervision.
+void cam_rid_scan_update(void)
+{
+    iq_item_t it = { .kind = IQ_CMD_RID_SCAN };
+    if (s_iq) { xQueueSend(s_iq, &it, 0); }
+}
 QueueHandle_t cam_events(void) { return s_evq; }
 
 void cam_erase_all_bonds(void) { ble_central_erase_all_bonds(); }
@@ -490,15 +510,82 @@ static bool scan_wanted(bool *gentle)
     return false;
 }
 
-static const char *s_scan_state = "off";   // portal diagnostics: off / active / gentle
+static const char *s_scan_state = "off";   // portal diagnostics: off / active / gentle / rid
+
+// ---- Remote ID listening scan (spec 8.8.3) ----------------------------------------------
+// A third reason to scan, rid_listen: a continuous PASSIVE scan at rid.ble_duty, also while the
+// camera is READY and with no camera bonded. The camera hunt and RID share one scan; the higher
+// duty wins. While the portal AP is up the RID part is capped at the gentle parameters (a 25-50 %
+// scan would starve the association the user needs to switch the feature off). NimBLE's scan and
+// connect are mutually exclusive: no RID scan while a connect is in progress; it restarts on
+// BLE_GAP_EVENT_CONNECT, not on READY.
+static const ble_scan_params_t k_rid_duty[3] = {
+    { .itvl = 0x0200, .window = 0x0033, .passive = 1 },   // LOW    320 / 32 ms  (10 %)
+    { .itvl = 0x0100, .window = 0x0040, .passive = 1 },   // NORMAL 160 / 40 ms  (25 %)
+    { .itvl = 0x0080, .window = 0x0040, .passive = 1 },   // HIGH    80 / 40 ms  (50 %)
+};
+static bool s_ble_suspended;      // OTA: BLE dropped until reboot
+static bool s_rid_scan_applied;   // the last apply_scan() included the RID reason
+
+static uint32_t duty_pm(const ble_scan_params_t *p) { return (uint32_t)p->window * 1000u / p->itvl; }
+
+static bool rid_scan_wanted(void)
+{
+    if (!rid_ble_listen() || s_ble_suspended) { return false; }
+    // A connect in progress owns the master slot (ble_gap.c:7187-7196): wait for CONNECT.
+    if (s_cs.link == CAM_LINK_CONNECTING && !ble_central_connected()) { return false; }
+    return true;
+}
+
+static bool discovery_closed(void)
+{
+    return s_pair_discover && (int32_t)(now_ms() - s_discover_until) >= 0;
+}
 
 static void apply_scan(void)
 {
     bool gentle = false;
-    bool want = scan_wanted(&gentle);
-    ble_central_scan_gentle(gentle);
+    bool hunt = (s_cs.link == CAM_LINK_SCAN) && !discovery_closed() && scan_wanted(&gentle);
+    bool rid = rid_scan_wanted();
+    ble_scan_params_t p = gentle ? BLE_SCAN_GENTLE : BLE_SCAN_AGGRESSIVE;
+    if (rid) {
+        const cfg_t *c = cfg_get();
+        uint8_t d = c ? c->rid.ble_duty : RID_DUTY_NORMAL;
+        ble_scan_params_t r = k_rid_duty[d <= RID_DUTY_HIGH ? d : RID_DUTY_NORMAL];
+        if ((s_scan_paused || cam_portal_up()) && duty_pm(&r) > duty_pm(&BLE_SCAN_GENTLE)) {
+            r = BLE_SCAN_GENTLE;
+        }
+        // Higher of the two; an active hunt (pairing needs the scan response) always wins.
+        bool hunt_wins = hunt && (!p.passive || duty_pm(&p) >= duty_pm(&r));
+        if (!hunt_wins) { p = r; }
+    }
+    bool want = hunt || rid;
+    ble_central_scan_params(&p);
     ble_central_scan(want);
-    s_scan_state = !want ? "off" : gentle ? "gentle" : "active";
+    s_rid_scan_applied = rid;
+    s_scan_state = !want ? "off" : (rid && !hunt) ? "rid" : gentle ? "gentle" : "active";
+}
+
+// rid_scan_ok for the OSD's RID RX FAIL (spec 8.8.7): the RID scan should be running but has not
+// been for > 5 s -- not evaluated while the camera is CONNECTING / BONDING / SYNCING and for 5 s
+// after (every camera (re)connect pauses it, spec 8.8.3).
+static void rid_scan_supervise(uint32_t now)
+{
+    static uint32_t not_running_since, holdoff_until;
+    bool wanted = rid_ble_listen() && !s_ble_suspended;
+    bool running = ble_central_scan_running();
+    bool connecting = s_cs.link == CAM_LINK_CONNECTING || s_cs.link == CAM_LINK_BONDING ||
+                      s_cs.link == CAM_LINK_SYNCING;
+    if (connecting) { holdoff_until = now + 5000u; }
+    bool ok = true;
+    if (wanted && !running) {
+        if (!not_running_since) { not_running_since = now ? now : 1; }
+        bool held = connecting || (int32_t)(now - holdoff_until) < 0;
+        if (!held && now - not_running_since > 5000u) { ok = false; }
+    } else {
+        not_running_since = 0;
+    }
+    rid_set_scan_status(wanted && running, ok);
 }
 
 // portal BLE diagnostics (Status tab).
@@ -575,6 +662,9 @@ static void handle_ble_evt(int ev, int status)
         if (s_cs.link == CAM_LINK_CONNECTING) {
             ESP_LOGI(TAG, "connected, securing");
             ble_central_secure();
+            // The master slot is free again (ble_gap.c:2654): restart the Remote ID scan now,
+            // not at READY (spec 8.8.3).
+            if (rid_scan_wanted()) { apply_scan(); }
         }
         break;
     case BLE_EVT_ENC_DONE:
@@ -658,6 +748,7 @@ static void cam_task(void *arg)
     (void)arg;
     twdt_register(WDT_CAM);
     ble_central_set_cbs(h_scan, h_evt, h_notify);
+    ble_central_set_raw_adv_hook(h_raw_adv);
 
     const cfg_t *cfg = cfg_get();
     load_bonds();
@@ -684,6 +775,7 @@ static void cam_task(void *arg)
 
     uint32_t last_tick = now_ms();
     uint32_t last_drv_poll = now_ms();
+    ble_central_forward_adverts(s_cs.link == CAM_LINK_SCAN);
 
     for (;;) {
         iq_item_t it;
@@ -842,6 +934,7 @@ static void cam_task(void *arg)
             case IQ_CMD_SUSPEND:
                 // OTA in progress: drop BLE so it doesn't contend with Wi-Fi +
                 // flash writes on the single core. A reboot restores it.
+                s_ble_suspended = true;       // no Remote ID scan either until the reboot
                 ble_central_scan(false);
                 ble_central_disconnect();
                 if (s_drv && s_drv->link_down) { s_drv->link_down(); }
@@ -858,6 +951,7 @@ static void cam_task(void *arg)
                     // to the gentle low-duty reconnect scan.
                     s_connected_this_session = (s_cs.link == CAM_LINK_READY);
                     if (s_cs.link == CAM_LINK_SCAN) { apply_scan(); }
+                    else if (rid_scan_wanted() || s_rid_scan_applied) { apply_scan(); }   // cap RID at gentle
                     applog_note(s_bond_n > 0 && !s_connected_this_session
                                 ? "portal AP up: reconnect scan -> gentle (Wi-Fi-friendly)"
                                 : "portal AP up: BLE hunt paused");
@@ -867,9 +961,15 @@ static void cam_task(void *arg)
                     if (s_drv && (s_cs.link == CAM_LINK_SCAN || s_cs.link == CAM_LINK_LOST)) {
                         s_backoff_idx = 0;
                         begin_scan();
+                    } else if (rid_scan_wanted() || s_rid_scan_applied) {
+                        apply_scan();                // RID back to its configured duty
                     }
                     applog_note("BLE scan resumed");
                 }
+                break;
+            case IQ_CMD_RID_SCAN:
+                if (s_cs.link == CAM_LINK_SCAN && s_drv && !discovery_closed()) { apply_scan(); }
+                else if (rid_scan_wanted() || s_rid_scan_applied) { apply_scan(); }
                 break;
             }
         }
@@ -917,9 +1017,13 @@ static void cam_task(void *arg)
             // NimBLE dropping discovery on its own. apply_scan() picks the mode
             // (aggressive / gentle / off) per scan_wanted().
             if (s_pair_discover && (int32_t)(now - s_discover_until) >= 0) {
-                ble_central_scan(false);   // discovery window closed; list stays for the portal
+                // discovery window closed; list stays for the portal (a Remote ID scan may go on)
+                if (rid_scan_wanted() || s_rid_scan_applied) { apply_scan(); }
+                else { ble_central_scan(false); }
             } else if (s_cs.link == CAM_LINK_SCAN && s_drv) {
                 apply_scan();
+            } else if (rid_scan_wanted() || s_rid_scan_applied) {
+                apply_scan();              // Remote ID scan supervision: restart after DISC_COMPLETE
             }
 
             publish_dirty();
@@ -962,6 +1066,7 @@ static void cam_task(void *arg)
             while (xQueueReceive(s_cmdq, &c, 0) == pdTRUE) { exec_cmd(&c); }
         }
 
+        rid_scan_supervise(now);
         twdt_feed(WDT_CAM);
     }
 }

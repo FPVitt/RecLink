@@ -17,6 +17,8 @@
 #include "platform.h"
 #include "applog.h"
 #include "monoclock.h"
+#include "rid.h"
+#include "osd.h"
 
 #include "esp_log.h"
 #include "esp_system.h"
@@ -36,6 +38,7 @@ static union {
     uint8_t     ota[OTA_BUF];
     char        logs[APPLOG_RING_BYTES + 1];
     cam_caps_t  caps;
+    rid_snapshot_t rid;          // GET /api/rid: the Remote ID table copy (spec 8.8.4 / 12.1)
 } s_scratch;
 _Static_assert(sizeof(((typeof(s_scratch) *)0)->logs) <= OTA_BUF, "log dump must fit the shared scratch");
 
@@ -111,11 +114,15 @@ static esp_err_t h_status(httpd_req_t *r)
     const esp_app_desc_t *ad = esp_app_get_description();
     cJSON_AddStringToObject(j, "fw", ad->version);
     cJSON_AddNumberToObject(j, "uptime_s", now_ms() / 1000);
+#ifdef CONFIG_BRIDGE_BOARD_RECLINK
+    cJSON_AddBoolToObject(j, "reclink_board", true);     // the UI hides the "Open the portal" option
+#endif
 
     cJSON *flags = cJSON_AddArrayToObject(j, "flags");
     uint32_t fl = bridge_flags_all();
-    const char *names[] = { "CFG_RESET","REPAIR_NEEDED","OSD_UNSUPPORTED","FC_OFFLINE","CLOCK_SYNC_FAIL","WDT_RECOVERED" };
-    for (int i = 0; i < 6; i++) { if (fl & (1u << i)) { cJSON_AddItemToArray(flags, cJSON_CreateString(names[i])); } }
+    const char *names[] = { "CFG_RESET","REPAIR_NEEDED","OSD_UNSUPPORTED","FC_OFFLINE","CLOCK_SYNC_FAIL","WDT_RECOVERED",
+                            "RID_FAULT" };
+    for (int i = 0; i < 7; i++) { if (fl & (1u << i)) { cJSON_AddItemToArray(flags, cJSON_CreateString(names[i])); } }
 
     cJSON *m = cJSON_AddObjectToObject(j, "msp");
     cJSON_AddBoolToObject(m, "connected", fc.link_up);
@@ -308,6 +315,87 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddBoolToObject(cs, "hot", cam.hot);
     #undef VU
 
+    // Remote ID receiver (spec 8.8.10 / 10.5). Counters and the summary only -- no IDs, no
+    // coordinates (those are in GET /api/rid).
+    FL();
+    {
+        cJSON *rd = cJSON_AddObjectToObject(j, "rid");
+        uint32_t now = now_ms();
+        bool active = rid_active();
+        cJSON_AddBoolToObject(rd, "enabled", cfg->rid.enabled);
+        cJSON_AddBoolToObject(rd, "available", rid_available());      // RAM allocated at boot
+        // No layout line contains %rp: Remote ID draws nothing on the OSD (the portal warns).
+        cJSON_AddBoolToObject(rd, "no_osd_line", cfg->rid.enabled && osd_rp_line(cfg) < 0);
+        cJSON_AddBoolToObject(rd, "reboot_required", cfg->rid.enabled && !rid_available() && !rid_alloc_failed());
+        cJSON_AddBoolToObject(rd, "active", active);
+        char why[40] = "";
+        if (!cfg->rid.enabled) { strlcpy(why, "disabled", sizeof(why)); }
+        else if (rid_alloc_failed()) { strlcpy(why, "memory allocation failed", sizeof(why)); }
+        else if (!rid_available()) { strlcpy(why, "reboot required", sizeof(why)); }
+        else if (!active) {
+            if (!fc.link_up)                         { strlcpy(why, "no FC link", sizeof(why)); }
+            else if (!fc.gps_present)                { strlcpy(why, "no GPS sensor", sizeof(why)); }
+            else if (fc.gps.fix < 3)                 { strlcpy(why, "no fix", sizeof(why)); }
+            else if (fc.gps.sats < cfg->rid.min_sats) {
+                snprintf(why, sizeof(why), "%u of %u satellites", fc.gps.sats, cfg->rid.min_sats);
+            } else if (!fc.gps_rx_ms || now - fc.gps_rx_ms > RID_GPS_MAX_AGE_MS) {
+                strlcpy(why, "GPS data stale", sizeof(why));
+            } else                                   { strlcpy(why, "settling", sizeof(why)); }
+        }
+        cJSON_AddStringToObject(rd, "inactive_reason", why);
+        static const char *const k_mode[] = { "ble", "wifi", "both" };
+        cJSON_AddStringToObject(rd, "mode", k_mode[cfg->rid.mode <= 2 ? cfg->rid.mode : 0]);
+        cJSON_AddNumberToObject(rd, "min_sats", cfg->rid.min_sats);
+        bool hv = fc.att_valid && fc.hdg_aligned;
+        cJSON_AddStringToObject(rd, "hdg", !hv ? "none" : fc.mag_present ? "mag" : "gps");
+        cJSON_AddBoolToObject(rd, "hdg_aligned", fc.hdg_aligned);
+        cJSON_AddBoolToObject(rd, "mag_present", fc.mag_present);
+        rid_counters_t rc; rid_counters_get(&rc);
+        cJSON *rb = cJSON_AddObjectToObject(rd, "ble");
+        cJSON_AddStringToObject(rb, "scan", rid_scan_running() ? "on" : "off");
+        cJSON_AddNumberToObject(rb, "rx", rc.ble_rx);
+        cJSON_AddNumberToObject(rb, "drops", rc.ble_drops);
+        cJSON *rw = cJSON_AddObjectToObject(rd, "wifi");
+        static const char *const k_ws[] = { "off", "ap", "rx", "test" };
+        uint8_t ws = rid_wifi_state();
+        cJSON_AddStringToObject(rw, "state", k_ws[ws <= RID_WIFI_TEST ? ws : 0]);
+        cJSON_AddNumberToObject(rw, "ch", 6);
+        cJSON_AddNumberToObject(rw, "rx", rc.wifi_rx);
+        cJSON_AddNumberToObject(rw, "drops", rc.wifi_drops);
+        cJSON_AddNumberToObject(rw, "frames_30s", rid_wifi_frames_30s());
+        cJSON_AddNumberToObject(rw, "beacon", rc.beacon);
+        cJSON_AddNumberToObject(rw, "nan", rc.nan);
+        rid_summary_t sm; rid_summary_get(&sm);
+        static const char *const k_lvl[] = { "none", "notice", "warn", "alert" };
+        cJSON_AddNumberToObject(rd, "count", active ? sm.count : 0);
+        if (active && (sm.flags & RID_SUM_HAVE)) {
+            cJSON *nr = cJSON_AddObjectToObject(rd, "nearest");
+            cJSON_AddNumberToObject(nr, "dist_m", sm.n_msg ? sm.msg[0].dist_m : sm.near_dist_m);
+            cJSON_AddStringToObject(nr, "level", k_lvl[sm.level <= 3 ? sm.level : 0]);
+        }
+        cJSON_AddNumberToObject(rd, "decoded", rc.decoded);
+        cJSON_AddNumberToObject(rd, "jump_rejects", rc.jump_rejects);
+        cJSON_AddNumberToObject(rd, "range_rejects", rc.range_rejects);
+        cJSON_AddNumberToObject(rd, "evict_drops", rc.evict_drops);
+        uint8_t fm = rid_fault_mask(cfg, now);
+        cJSON *rf = cJSON_AddObjectToObject(rd, "fault");
+        cJSON_AddBoolToObject(rf, "subsystem", (fm & RID_FAULT_SUBSYS) != 0 || bridge_flag_get(FLAG_RID_FAULT));
+        cJSON_AddBoolToObject(rf, "ble", (fm & RID_FAULT_BLE) != 0);
+        cJSON_AddBoolToObject(rf, "wifi", (fm & RID_FAULT_WIFI) != 0);
+        rid_test_status_t ts; rid_test_status(&ts, now);
+        cJSON *rt = cJSON_AddObjectToObject(rd, "test");
+        static const char *const k_ts[] = { "idle", "run", "done" };
+        cJSON_AddStringToObject(rt, "state", k_ts[ts.state <= 2 ? ts.state : 0]);
+        cJSON_AddBoolToObject(rt, "wifi", ts.wifi);
+        cJSON_AddBoolToObject(rt, "aborted", ts.aborted);
+        cJSON_AddNumberToObject(rt, "secs_left", ts.secs_left);
+        cJSON_AddNumberToObject(rt, "ble_frames", ts.ble_frames);
+        cJSON_AddNumberToObject(rt, "wifi_frames", ts.wifi_frames);
+        cJSON_AddNumberToObject(rt, "beacon", ts.beacon);
+        cJSON_AddNumberToObject(rt, "nan", ts.nan);
+        cJSON_AddNumberToObject(rt, "aircraft", ts.aircraft);
+    }
+
     FL();
     cJSON *wifi = cJSON_AddObjectToObject(j, "wifi");
     cJSON_AddBoolToObject(wifi, "portal", portal_active());
@@ -381,6 +469,11 @@ static esp_err_t h_config_post(httpd_req_t *r)
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddBoolToObject(resp, "ok", e == ESP_OK);
     cJSON_AddBoolToObject(resp, "applied", e == ESP_OK);
+    // Remote ID RAM is allocated only at boot: rid.enabled 0 -> 1 is persisted but takes effect at
+    // the next reboot (1 -> 0 applies at once).
+    if (e == ESP_OK && cfg_get()->rid.enabled && !rid_available()) {
+        cJSON_AddBoolToObject(resp, "reboot_required", true);
+    }
     return send_json(r, resp, e == ESP_OK ? NULL : "500 Internal Server Error");
 }
 
@@ -590,6 +683,125 @@ static esp_err_t h_clock_sync(httpd_req_t *r)
     cJSON_AddStringToObject(resp, "action", "queued");
     // delta from the *previous* completed sync, for context (0 if none / DJI blind).
     cJSON_AddNumberToObject(resp, "last_delta_ms", ctrl_clock_last_delta_ms());
+    return send_json(r, resp, NULL);
+}
+
+// ---- Remote ID (spec 8.8.10) ------------------------------------
+// GET /api/rid -- the aircraft table, streamed by hand (no whole-response cJSON tree). The table
+// is copied with a 0-timeout take into the shared scratch: a blocked handler would hang
+// httpd_stop() at arming and keep RID_RX from ever starting -> 503 instead. Per aircraft ONLY
+// {id, src, age_ms, ignored} + {level, dist_m, brg} when confirmed (rid_ac_json; data minimisation).
+static esp_err_t h_rid(httpd_req_t *r)
+{
+    portal_note_client_activity();
+    rid_snapshot_t *sn = &s_scratch.rid;
+    if (rid_available() && !rid_table_try_copy(sn)) {
+        httpd_resp_set_status(r, "503 Service Unavailable");
+        httpd_resp_set_type(r, "application/json");
+        httpd_resp_set_hdr(r, "Retry-After", "1");
+        return httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"busy\"}");
+    }
+    if (!rid_available()) { memset(sn, 0, sizeof(*sn)); }   // never allocated: empty, inactive
+    fc_state_t fc; fc_state_get(&fc);
+    bool active = rid_active();
+    bool hv = fc.att_valid && fc.hdg_aligned;
+    uint32_t now = now_ms();
+
+    jstream_t js;
+    js_open(&js, r);
+    char b[RID_AC_JSON_MAX];
+    int n = snprintf(b, sizeof(b), "\"active\":%s,\"hdg\":\"%s\",\"ac\":[",
+                     active ? "true" : "false", !hv ? "none" : fc.mag_present ? "mag" : "gps");
+    js_put(&js, b, (size_t)n);
+    bool first = true;
+    for (int i = 0; active && i < RID_MAX_AC; i++) {
+        if (!sn->ac[i].used) { continue; }
+        if (!first) { js_put(&js, ",", 1); }
+        first = false;
+        n = rid_ac_json(b, sizeof(b), &sn->ac[i], now, true, (uint8_t)(i + 1));
+        js_put(&js, b, (size_t)n);
+    }
+    js_put(&js, "]", 1);
+    return js_close(&js, cJSON_CreateObject());
+}
+
+// GET /api/rid/test -- the reception test's counters and the aircraft heard during it (live while
+// it runs, frozen after it ends until the next test, a reboot, or rid.enabled = 0). Per aircraft
+// ONLY {id, src, age_ms} + {dist_m, brg} with a confirmed own position. Streamed by hand; 0-timeout
+// take (503 + Retry-After when busy).
+static esp_err_t h_rid_test_get(httpd_req_t *r)
+{
+    portal_note_client_activity();
+    uint32_t now = now_ms();
+    rid_snapshot_t *sn = &s_scratch.rid;
+    if (rid_available() && !rid_test_try_copy(sn)) {
+        httpd_resp_set_status(r, "503 Service Unavailable");
+        httpd_resp_set_type(r, "application/json");
+        httpd_resp_set_hdr(r, "Retry-After", "1");
+        return httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"busy\"}");
+    }
+    if (!rid_available()) { memset(sn, 0, sizeof(*sn)); }
+    rid_test_status_t ts; rid_test_status(&ts, now);
+    static const char *const k_ts[] = { "idle", "run", "done" };
+
+    jstream_t js;
+    js_open(&js, r);
+    char b[RID_AC_JSON_MAX];
+    int n = snprintf(b, sizeof(b),
+        "\"state\":\"%s\",\"secs_left\":%u,\"wifi\":%s,\"aborted\":%s,\"ble_frames\":%lu,"
+        "\"wifi_frames\":%lu,\"beacon\":%lu,\"nan\":%lu,\"aircraft\":%u,\"ac\":[",
+        k_ts[ts.state <= 2 ? ts.state : 0], ts.secs_left, ts.wifi ? "true" : "false",
+        ts.aborted ? "true" : "false", (unsigned long)ts.ble_frames, (unsigned long)ts.wifi_frames,
+        (unsigned long)ts.beacon, (unsigned long)ts.nan, ts.aircraft);
+    js_put(&js, b, (size_t)n);
+    bool first = true;
+    for (int i = 0; ts.state != RID_TEST_IDLE && i < RID_MAX_AC; i++) {
+        if (!sn->ac[i].used) { continue; }
+        if (!first) { js_put(&js, ",", 1); }
+        first = false;
+        n = rid_ac_json(b, sizeof(b), &sn->ac[i], now, false, (uint8_t)(i + 1));
+        js_put(&js, b, (size_t)n);
+    }
+    js_put(&js, "]", 1);
+    return js_close(&js, cJSON_CreateObject());
+}
+
+// POST /api/rid/test {"secs":30} -- reception test (spec 8.8.10): BLE always, plus Wi-Fi (which
+// drops the AP: the phone disconnects) when rid.mode includes it. Needs no GPS fix; counters only;
+// aborts if the aircraft arms. 409 armed, 412 rid.enabled off.
+static esp_err_t h_rid_test(httpd_req_t *r)
+{
+    if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    const cfg_t *c = cfg_get();
+    if (!c->rid.enabled) {
+        httpd_resp_set_status(r, "412 Precondition Failed");
+        httpd_resp_set_type(r, "application/json");
+        return httpd_resp_sendstr(r, "{\"ok\":false,\"error\":\"remote id disabled\"}");
+    }
+    if (!rid_available()) {        // RAM is only allocated at boot (enabled then): reboot first
+        httpd_resp_set_status(r, "412 Precondition Failed");
+        httpd_resp_set_type(r, "application/json");
+        return httpd_resp_sendstr(r, rid_alloc_failed()
+            ? "{\"ok\":false,\"error\":\"remote id memory allocation failed at boot\"}"
+            : "{\"ok\":false,\"error\":\"remote id was not enabled at boot -- reboot first\",\"reboot_required\":true}");
+    }
+    int secs = 30;
+    char *body = read_body(r, 64);
+    cJSON *j = body ? cJSON_Parse(body) : NULL;
+    free(body);
+    const cJSON *js = j ? cJSON_GetObjectItem(j, "secs") : NULL;
+    if (cJSON_IsNumber(js)) { secs = (int)js->valuedouble; }
+    cJSON_Delete(j);
+    if (secs < 5) { secs = 5; }
+    if (secs > 60) { secs = 60; }
+    bool wifi = rid_mode_has_wifi(c->rid.mode);
+    bool started = rid_test_start((uint16_t)secs, wifi, now_ms());
+    portal_wifi_kick();
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddBoolToObject(resp, "ok", true);
+    cJSON_AddBoolToObject(resp, "started", started);       // false: one is already running
+    cJSON_AddNumberToObject(resp, "secs", secs);
+    cJSON_AddBoolToObject(resp, "wifi", wifi);              // true: the AP goes down now
     return send_json(r, resp, NULL);
 }
 
@@ -819,6 +1031,9 @@ void http_api_register(httpd_handle_t s)
         { "/api/ota",           HTTP_POST, h_ota,         NULL },
         { "/api/logs",          HTTP_GET,  h_logs,        NULL },
         { "/api/msp/scan",      HTTP_GET,  h_msp_scan,    NULL },
+        { "/api/rid",           HTTP_GET,  h_rid,         NULL },
+        { "/api/rid/test",      HTTP_POST, h_rid_test,    NULL },
+        { "/api/rid/test",      HTTP_GET,  h_rid_test_get, NULL },
         { "/*",                 HTTP_GET,  h_root,        NULL },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {

@@ -40,6 +40,17 @@ documents are offered under DJI's End User License Agreement
 terms above for the code it reuses. DJI's EULA is DJI's document, not part of this project, and anyone
 redistributing or commercialising the DJI driver should read it themselves.
 
+## opendroneid-core-c (Apache-2.0)
+
+The Remote ID receiver (`components/rid/`, spec §8.8) decodes Open Drone ID Basic ID and Location
+messages with the per-message decoders of the Open Drone ID core C library
+<https://github.com/opendroneid/opendroneid-core-c>, pinned to commit
+`849c03adbe0cdd68997a462fafab397edcfe53f3` (2026-10-07). Two files are vendored unmodified (a
+header comment recording the pin was added at the top of each) under
+`components/rid/opendroneid/`: `opendroneid.c` and `opendroneid.h`, together with the library's
+`LICENSE` (Apache License 2.0). Copyright (C) 2019 Intel Corporation; SPDX-License-Identifier:
+Apache-2.0. Only `decodeBasicIDMessage()` / `decodeLocationMessage()` are used.
+
 ## Other components
 
 | Component | Licence | Where |

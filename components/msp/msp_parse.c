@@ -111,6 +111,7 @@ bool msp_parse_frame(const msp_frame_t *f, fc_state_t *s, msp_parse_ctx_t *ctx)
         uint16_t sensors = rd_u16(p, 4);
         uint32_t modeflags = rd_u32(p, 6);
         s->gps_present = (sensors >> 3) & 1;
+        s->mag_present = (sensors >> 2) & 1;     // "compass detected" (VERIFY.md RID-BF-MAG-BIT)
 
         if (ctx->arm_bit_index >= 0) {
             s->armed = (modeflags >> ctx->arm_bit_index) & 1u;
@@ -160,6 +161,7 @@ bool msp_parse_frame(const msp_frame_t *f, fc_state_t *s, msp_parse_ctx_t *ctx)
         s->gps.alt_m   = rd_u16(p, 10);
         s->gps.spd_cm_s = rd_u16(p, 12);
         s->gps.course_ddeg = rd_u16(p, 14);
+        s->gps_rx_ms = now_ms();                  // Remote ID gate: freshness of the own fix
         recompute_gps_good(s, ctx->min_sats);
         changed = true;
         break;
@@ -168,6 +170,31 @@ bool msp_parse_frame(const msp_frame_t *f, fc_state_t *s, msp_parse_ctx_t *ctx)
     case MSP_ANALOG:
         // rssi optional; skip unless needed.
         break;
+
+    case MSP_ALTITUDE: {
+        // verified @ betaflight 2025.12.5 (7348054) src/main/msp/msp.c:1329-1336:
+        //   0 i32 getEstimatedAltitudeCm() (written as U32), 4 i16 vario cm/s (ignored).
+        // flight/position.c:131-191: while armed = zeroedAltitudeCm (filtered, zero at arming);
+        // while disarmed = GPS ASL or baro -- the consumer only trusts it while armed.
+        RD_GUARD(4);
+        s->alt_rel_cm = (int32_t)rd_u32(p, 0);
+        s->alt_rx_ms = now_ms();
+        changed = true;
+        break;
+    }
+
+    case MSP_ATTITUDE: {
+        // verified @ betaflight 2025.12.5 src/main/msp/msp.c:1323-1327: roll i16 (0.1 deg),
+        // pitch i16 (0.1 deg), yaw i16 = DECIDEGREES_TO_DEGREES -> whole degrees 0..359
+        // (imu.c:317-319). Reduced mod 360 defensively for other versions (VERIFY.md RID-BF-ATT-YAW).
+        RD_GUARD(6);
+        int v = (int16_t)rd_u16(p, 4);
+        v %= 360; if (v < 0) { v += 360; }
+        s->yaw_deg = (int16_t)v;
+        s->att_rx_ms = now_ms();
+        changed = true;
+        break;
+    }
 
     case MSP_BATTERY_STATE: {
         // spec 16.A: cells u8, cap u16, vbat u8, mAh u16, amps i16, state u8, vbat u16

@@ -122,9 +122,11 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     CLAMP(c->osd.corner, 0, 3);
     CLAMP(c->osd.type, 0, 1);
     // New OSD tokens appended over time: if a blob has every classic token on
-    // but none of the newer ones, turn the newer ones on too.
+    // but none of the newer ones, turn the newer ones on too -- up to OSD_TOK_BI only.
+    // OSD_TOK_RP (Remote ID) and anything after it is set once by its migration; OR-ing it
+    // back in here on every validate would make %rp impossible to switch off (spec 8.8.9).
     if ((c->osd.fields_mask & 0xFFFu) == 0xFFFu) {
-        c->osd.fields_mask |= ((1u << OSD_TOK_COUNT) - 1u);
+        c->osd.fields_mask |= ((1u << OSD_TOK_RP) - 1u);
     }
     for (int i = 0; i < 4; i++) { c->osd.line[i][sizeof(c->osd.line[i]) - 1] = '\0'; }
     CLAMP(c->osd.warn.batt_pct, 0, 100);
@@ -193,6 +195,8 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     // Keep camera.bonded consistent with whether an active brand is set.
     c->camera.bonded = c->camera.brand[0] ? 1 : 0;
 
+    cfg_rid_validate(c);              // Remote ID tail (spec 8.8.9): clamp / re-order, never reject
+
     return ESP_OK;
 }
 
@@ -237,6 +241,7 @@ static esp_err_t commit_locked(const cfg_t *cand, bool keep_bonds)
     tmp.version = CFG_VERSION;
     tmp.size    = sizeof(cfg_t);
     tmp.crc32   = blob_crc(&tmp);
+    cfg_rid_seal(&tmp);               // the v7 tail's own CRC (spec 8.8.9)
 
     err = write_blob(&tmp);
     if (err != ESP_OK) {
@@ -446,7 +451,7 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
     cfg_t disk;
     size_t sz = sizeof(disk);
     nvs_handle_t h;
-    bool good = false, migrated = false;
+    bool good = false, migrated = false, rid_reset = false;
 
     if (nvs_open(NS_CFG, NVS_READONLY, &h) == ESP_OK) {
         // The blob may be smaller than sizeof(cfg_t) if written by older firmware.
@@ -458,6 +463,12 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
             if (disk.version == CFG_VERSION && sz == sizeof(cfg_t)) {
                 good = (disk.crc32 == blob_crc(&disk));
                 if (!good) { ESP_LOGE(TAG, "cfg CRC mismatch"); }
+                // The Remote ID tail has its own CRC: a mismatch loads its DISABLED defaults
+                // (a bit-flip must never switch on in-flight Wi-Fi reception) and re-commits.
+                if (good && !cfg_rid_check(&disk)) {
+                    ESP_LOGE(TAG, "cfg rid tail CRC mismatch -- Remote ID defaults (disabled) loaded");
+                    rid_reset = true;
+                }
             } else if (disk.version < CFG_VERSION) {
                 // Older schema. Every field up to crc32 is unchanged across
                 // versions, so the stored CRC still validates the head; the
@@ -479,16 +490,18 @@ esp_err_t cfg_init(bool *out_cfg_reset, bool *out_erase_orphan_bond)
         s_live = disk;
         s_ready = true;
         // Re-commit if we migrated (tail now present but flash still has old size).
-        if (migrated || s_live.crc32 != blob_crc(&s_live) || s_live.version != CFG_VERSION) {
+        if (migrated || rid_reset || s_live.crc32 != blob_crc(&s_live) || s_live.version != CFG_VERSION) {
             s_live.version = CFG_VERSION;
             s_live.size = sizeof(cfg_t);
             s_live.crc32 = blob_crc(&s_live);
+            cfg_rid_seal(&s_live);
             write_blob(&s_live);
         }
     } else {
         ESP_LOGW(TAG, "loading factory defaults, FLAG_CFG_RESET");
         cfg_load_defaults(&s_live);
         s_live.crc32 = blob_crc(&s_live);
+        cfg_rid_seal(&s_live);
         s_ready = true;
         write_blob(&s_live);
         if (out_cfg_reset)         { *out_cfg_reset = true; }

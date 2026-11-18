@@ -123,7 +123,7 @@ progress::-moz-progress-bar{background:var(--acc)}
 
 details summary{cursor:pointer;color:var(--mut);font-size:13px;padding:8px 0}
 
-#log,#scanout{max-height:240px;overflow:auto;background:#11151b;border:1px solid var(--line);
+#log,#scanout,#rid-prev{max-height:240px;overflow:auto;background:#11151b;border:1px solid var(--line);
   border-radius:6px;padding:8px;margin-top:8px}
 #scanout:empty{display:none}
 
@@ -157,8 +157,6 @@ body:not(.dirty) footer #save{opacity:.6}
 .oline{border:1px solid var(--line);border-radius:8px;padding:8px;margin:8px 0}
 .oline.foc{border-color:var(--acc)}
 .olh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.rawtog{background:transparent;border:1px solid var(--line);color:var(--mut);
-  padding:4px 10px;min-height:32px;font-size:12px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;min-height:40px}
 .chips .empty{color:var(--mut);font-size:13px;padding:9px 4px}
 .chip{display:inline-flex;align-items:center;gap:5px;background:var(--card);
@@ -166,8 +164,6 @@ body:not(.dirty) footer #save{opacity:.6}
 .chip b{font-weight:600;font-size:13px}
 .chip.lit input{min-width:0;width:9ch;min-height:32px;padding:4px 6px;font-size:13px}
 .chip .x{background:transparent;border:0;color:var(--mut);min-width:0;min-height:32px;padding:2px 5px;font-size:13px}
-.rawrow{display:block;padding:0}
-.rawrow input{width:100%;margin-top:6px}
 
 /* Cam control: AUX range bars (Betaflight Modes style) */
 details.adv{margin:10px 0 4px}
@@ -260,3 +256,18 @@ button:disabled{opacity:.45;cursor:default}
 .gpt{flex-wrap:wrap}
 .gpt button{flex:1 1 28%}
 .zid[hidden]{display:none}
+
+/* Remote ID tab */
+.rerr{font-size:13px;margin:8px 0 0}
+.rerr:empty{display:none}
+input.bad{border-color:var(--dng)}
+.ridrow{display:flex;gap:10px;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.ridrow:last-child{border-bottom:0}
+.rl{min-width:0}
+.rl .mono{word-break:break-all;font-weight:600}
+.rr{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.rr button{padding:6px 12px}
+.tac{padding:10px 0;border-top:1px solid var(--line);font-size:14px}
+.tac .mono{display:block;word-break:break-all}
+.osdline[data-l]::after{content:attr(data-l);font-size:11px;font-weight:600;margin-left:1.5ch;color:var(--warn);text-shadow:none}
+.tips{margin:6px 0 0;padding-left:18px}.tips li{margin:3px 0}

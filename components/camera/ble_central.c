@@ -28,6 +28,8 @@ static const char *TAG = "ble";
 static ble_scan_cb_t   s_scan_cb;
 static ble_evt_cb_t    s_evt_cb;
 static ble_notify_cb_t s_notify_cb;
+static ble_raw_adv_hook_t s_raw_hook;     // Remote ID matcher (runs first, spec 8.8.3)
+static volatile bool   s_fwd_adv = true;  // forward adverts to cam_task (camera in SCAN only)
 
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static int8_t   s_rssi;
@@ -189,12 +191,22 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     (void)arg;
     switch (event->type) {
     case BLE_GAP_EVENT_DISC: {
-        if (!s_scan_cb) { break; }
+        // Remote ID adverts are matched (O(1), on the raw AD bytes) and diverted to rid_rxq_ble
+        // BEFORE anything reaches cam_task; with the camera READY nothing is forwarded at all,
+        // so a crowd of phones and earbuds cannot fill s_iq and push out link events (8.8.3).
+        if (s_raw_hook && s_raw_hook(event->disc.addr.val, event->disc.rssi,
+                                     event->disc.data, event->disc.length_data)) { break; }
+        if (!s_scan_cb || !s_fwd_adv) { break; }
         ble_adv_t a;
         parse_adv(&event->disc, &a);
         s_scan_cb(&a);
         break;
     }
+    case BLE_GAP_EVENT_DISC_COMPLETE:
+        // The host can end a scan by itself (BLE_HS_EPREEMPTED, VERIFY.md RID-NIMBLE-SCAN-CONN):
+        // any DISC_COMPLETE means "not running" (ble_gap_disc_active() is then false); cam_task's
+        // 1 Hz supervision restarts it.
+        break;
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status == 0) {
             s_conn = event->connect.conn_handle;
@@ -346,29 +358,43 @@ uint16_t ble_central_val_handle(const ble_uuid_t *u)
 // association / HTTP instead of starving it. Reconnect matches on address only,
 // so the scan response (which carries the GoPro name) is not needed. Pairing and
 // in-flight reconnect use the aggressive active scan.
-static bool s_scan_gentle;
-static bool s_scan_gentle_running;
-void ble_central_scan_gentle(bool on) { s_scan_gentle = on; }
+//
+// The two-mode cache is a parameter tuple (spec 8.8.3): the Remote ID listening scan adds its
+// own passive duty presets, and cam_task picks the higher of the camera-hunt and RID duty.
+const ble_scan_params_t BLE_SCAN_AGGRESSIVE = { .itvl = 0x0060, .window = 0x0050, .passive = 0 };
+const ble_scan_params_t BLE_SCAN_GENTLE     = { .itvl = 0x0140, .window = 0x0024, .passive = 1 };
+static ble_scan_params_t s_scan_want = { .itvl = 0x0060, .window = 0x0050, .passive = 0 };
+static ble_scan_params_t s_scan_run;
+void ble_central_scan_gentle(bool on) { s_scan_want = on ? BLE_SCAN_GENTLE : BLE_SCAN_AGGRESSIVE; }
+void ble_central_scan_params(const ble_scan_params_t *p) { if (p) { s_scan_want = *p; } }
+
+static bool params_eq(const ble_scan_params_t *a, const ble_scan_params_t *b)
+{
+    return a->itvl == b->itvl && a->window == b->window && a->passive == b->passive;
+}
 
 esp_err_t ble_central_scan(bool enable)
 {
     if (!s_host_synced) { return ESP_ERR_INVALID_STATE; }
     if (!enable) { ble_gap_disc_cancel(); return ESP_OK; }
     if (ble_gap_disc_active()) {
-        if (s_scan_gentle_running == s_scan_gentle) { return ESP_OK; }
+        if (params_eq(&s_scan_run, &s_scan_want)) { return ESP_OK; }
         ble_gap_disc_cancel();          // mode changed -> restart with new params
     }
 
     uint8_t own = BLE_OWN_ADDR_PUBLIC;
     ble_hs_id_infer_auto(0, &own);
-    // No duplicate filtering -- some controllers suppress scan responses with it.
-    struct ble_gap_disc_params p = s_scan_gentle
-        ? (struct ble_gap_disc_params){ .itvl = 0x0140, .window = 0x0024, .passive = 1, .filter_duplicates = 0 }
-        : (struct ble_gap_disc_params){ .itvl = 0x0060, .window = 0x0050, .passive = 0, .filter_duplicates = 0 };
+    // No duplicate filtering -- some controllers suppress scan responses with it, and the Remote
+    // ID scan needs every report (Location after Basic ID from the same transmitter, 8.8.3).
+    struct ble_gap_disc_params p = { .itvl = s_scan_want.itvl, .window = s_scan_want.window,
+                                     .passive = s_scan_want.passive, .filter_duplicates = 0 };
     int rc = ble_gap_disc(own, BLE_HS_FOREVER, &p, gap_event, NULL);
-    if (rc == 0 || rc == BLE_HS_EALREADY) { s_scan_gentle_running = s_scan_gentle; return ESP_OK; }
+    if (rc == 0 || rc == BLE_HS_EALREADY) { s_scan_run = s_scan_want; return ESP_OK; }
     return ESP_FAIL;
 }
+
+// A scan is running right now (the host's own view; DISC_COMPLETE / a connect stops it).
+bool ble_central_scan_running(void) { return s_host_synced && ble_gap_disc_active(); }
 
 esp_err_t ble_central_connect(const uint8_t addr[6], uint8_t addr_type)
 {
@@ -505,6 +531,8 @@ void ble_central_set_cbs(ble_scan_cb_t scan, ble_evt_cb_t evt, ble_notify_cb_t n
 {
     s_scan_cb = scan; s_evt_cb = evt; s_notify_cb = notify;
 }
+void ble_central_set_raw_adv_hook(ble_raw_adv_hook_t hook) { s_raw_hook = hook; }
+void ble_central_forward_adverts(bool on) { s_fwd_adv = on; }
 
 void ble_central_init(void)
 {

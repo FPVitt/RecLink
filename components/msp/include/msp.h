@@ -19,6 +19,8 @@ enum {
     MSP_STATUS           = 101,
     MSP_RC               = 105,
     MSP_RAW_GPS          = 106,
+    MSP_ATTITUDE         = 108,   // Remote ID heading only (spec 8.8.6); read-only
+    MSP_ALTITUDE         = 109,   // Remote ID above/below only; read-only
     MSP_ANALOG           = 110,
     MSP_BOXIDS           = 119,
     MSP_BATTERY_STATE    = 130,
@@ -76,3 +78,7 @@ QueueHandle_t msp_fc_events(void);       // consumed by ctrl_task only
 
 // Force-refresh OSD canvas + api on demand (called on cam reconnect etc).
 void msp_request_refresh(void);
+
+// Remote ID (spec 8.8.6): poll MSP_ATTITUDE at 5 Hz while Remote ID is active AND the aircraft
+// is (decoded) armed. Writer: housekeeping (the activation gate's owner). Off by default.
+void msp_set_attitude_poll(bool rid_active);

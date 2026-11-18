@@ -51,6 +51,23 @@ typedef struct {
 
     uint16_t osd_cols, osd_rows;    // 0 = unknown
     char     craft_name[17];
+
+    // ---- Remote ID (spec 3.4 / 8.8.5 / 8.8.6); all single-writer (msp_task) ----------------
+    uint32_t gps_rx_ms;             // uptime of the last MSP_RAW_GPS reply (the GPS gate; gps_good
+                                    // is not cleared on link loss)
+    bool     mag_present;           // MSP_STATUS sensor bit 2 = compass DETECTED (not "used") --
+                                    // portal Health only
+    int16_t  yaw_deg;               // MSP_ATTITUDE yaw, 0..359 (Remote ID bearing only)
+    bool     att_valid;             // an MSP_ATTITUDE reply <= 500 ms old
+    uint32_t att_rx_ms;
+    int32_t  alt_rel_cm;            // MSP_ALTITUDE: estimated altitude, cm. While ARMED Betaflight
+                                    // reports it relative to the arming point (position.c @
+                                    // 2025.12.5); disarmed it is GPS ASL / baro -> not used then
+    bool     alt_valid;             // a reply <= 1 s old AND (decoded) armed -- Remote ID above/below
+    uint32_t alt_rx_ms;
+    bool     hdg_aligned;           // yaw trusted: ground speed >= 5 m/s for >= 5 s with >= 5 sats
+                                    // since the link came up; latched until link loss or the disarm
+                                    // hold ends (hdg_align.h)
 } fc_state_t;
 
 // FC link timeout (spec 4.5).
