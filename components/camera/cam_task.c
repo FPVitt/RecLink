@@ -9,6 +9,7 @@
 #include "rid.h"
 
 #include <string.h>
+#include "ble_status.h"
 
 #include "cfg.h"
 #include "monoclock.h"
@@ -27,9 +28,10 @@ static const char *TAG = "cam";
 
 // ---- timings (spec 5.2 / 8.5) ----------------------------------------
 #define CAM_RX_TIMEOUT_MS     5000
-#define CONNECT_TIMEOUT_MS   10000
+#define CONNECT_TIMEOUT_MS   7000
 #define TICK_PERIOD_MS        1000
 #define LIVENESS_STALL_MS    30000     // housekeeping-style check, spec 3.5
+#define LIVENESS_STATUS      (-1)      // synthetic DISCONNECTED status: not a controller reason
 
 static const uint32_t k_backoff_s[] = { 1, 2, 4, 8, 16, 30, 30 };
 
@@ -95,9 +97,23 @@ static int8_t     s_recon_rssi;
 static const camera_driver_t *s_recon_drv;
 static uint32_t   s_recon_since_ms;      // when the first candidate appeared (0 = none)
 #define RECON_PICK_MS 2500               // gather candidates this long before choosing
+// A camera whose last attempt failed (no handshake, dropped, went silent soon after READY) is
+// demoted for RECON_PENALTY_MS so a second, working camera wins the pick -- otherwise a powered-down
+// camera that still advertises (DJI standby) and sits next to the board would be chosen forever.
+// If it is the only one heard it is still tried, after a longer gather (RECON_PICK_MS x3).
+#define RECON_PENALTY_MS 30000
+#define RECON_PENALTY_DB 40
+static uint32_t   s_pen_until[CAM_MAX_BONDS];   // per s_bonds[] index; 0 = none
+static int        s_recon_eff;           // best candidate's RSSI after the penalty
+static bool       s_recon_pen;           // that candidate is currently demoted
+static bool pen_active(int bi)
+{
+    return s_pen_until[bi] && (int32_t)(s_pen_until[bi] - now_ms()) > 0;
+}
 
 static void load_bonds(void)
 {
+    memset(s_pen_until, 0, sizeof(s_pen_until));
     s_bond_n = 0;
     for (int i = 0; i < CAM_MAX_BONDS; i++) {
         cam_bond_t b;
@@ -111,6 +127,13 @@ static int bond_match(const uint8_t addr[6])
         if (memcmp(s_bonds[i].addr, addr, 6) == 0) { return i; }
     }
     return -1;
+}
+// Demote the camera we were last aiming at (multi-camera only).
+static void pen_set_target(void)
+{
+    if (s_bond_n < 2) { return; }
+    int bi = bond_match(s_target_addr);
+    if (bi >= 0) { s_pen_until[bi] = now_ms() + RECON_PENALTY_MS; }
 }
 // spec 3.5 / FMEA row 3: "camera stack hang (connected, silent)" -- the link
 // reaches READY, then the camera falls silent and we hit the RX timeout,
@@ -154,6 +177,10 @@ static void set_link(cam_link_state_t st)
     s_state_since_ms = now_ms();
     if (st == CAM_LINK_READY) {
         s_was_ready = true; s_connected_this_session = true;
+        // Stamp "heard from the camera" BEFORE the commit below: cam_liveness_check() (1 Hz, in
+        // housekeeping) reads the committed value, and a stale one made it declare a stall and
+        // tear down a link that had been READY for ~200 ms.
+        s_cs.last_rx_ms = now_ms();
         // Anything queued before this session is stale (spec 13 item 5): a command that
         // ctrl/portal enqueued around a LOST episode must not run the moment the next
         // session is READY. ctrl_task only submits after it sees the READY event below,
@@ -604,6 +631,8 @@ static void begin_scan(void)
 // Lock onto one advertiser and start connecting. `d` is the driver for that
 // camera's brand. On a reconnect (not first_pair) this also records which
 // bonded camera is now active so ctrl/osd/driver code sees the right brand.
+static void go_lost(const char *why, bool silent_hang);
+
 static void connect_now(const uint8_t addr[6], uint8_t addr_type,
                         const char *name, const camera_driver_t *d)
 {
@@ -615,13 +644,18 @@ static void connect_now(const uint8_t addr[6], uint8_t addr_type,
     if (!s_first_pair) { cfg_set_active_camera(addr); }   // sync commit, rare
     ble_central_scan(false);
     set_link(CAM_LINK_CONNECTING);
-    ble_central_connect(s_target_addr, s_target_addr_type);
+    if (ble_central_connect(s_target_addr, s_target_addr_type) != ESP_OK) {
+        go_lost("connect start failed", false);     // backoff + rescan instead of waiting out the timeout
+    }
 }
 
 // `silent_hang` = the loss was an RX-silence timeout on an established link
 // (FMEA row 3), as opposed to a disconnect / bond / discovery failure.
 static void go_lost(const char *why, bool silent_hang)
 {
+    // Failed before READY, or READY for under a minute: demote it for the next pick. A camera that
+    // flew a long time and then dropped (RF dropout) keeps its priority.
+    if (s_cs.link != CAM_LINK_READY || (int32_t)(now_ms() - s_state_since_ms) < 60000) { pen_set_target(); }
     applog_note("cam LOST: %s", why);
     rtcnv_set_last_disconnect(why);
     ble_central_disconnect();
@@ -665,20 +699,42 @@ static void handle_ble_evt(int ev, int status)
             // The master slot is free again (ble_gap.c:2654): restart the Remote ID scan now,
             // not at READY (spec 8.8.3).
             if (rid_scan_wanted()) { apply_scan(); }
+        } else {
+            // A connect that completed after its attempt was abandoned (timeout / re-pick): nothing
+            // manages this link, so drop it rather than leave it alive and unowned.
+            ESP_LOGW(TAG, "late connect (link %d) -> dropping it", (int)s_cs.link);
+            ble_central_disconnect();
         }
         break;
     case BLE_EVT_ENC_DONE:
         s_bond_fails = 0;
+        if (s_cs.link != CAM_LINK_CONNECTING) {
+            // Encryption changed again on a link already syncing/ready (some cameras re-key right
+            // after connecting). Restarting discovery here would wipe the table mid-procedure.
+            ESP_LOGI(TAG, "encryption re-confirmed (link %d) -> no re-discovery", (int)s_cs.link);
+            break;
+        }
         set_link(CAM_LINK_SYNCING);
         ble_central_discover_all();
         break;
     case BLE_EVT_ENC_TRANSIENT:
+        if (s_cs.link != CAM_LINK_CONNECTING && s_cs.link != CAM_LINK_SYNCING) { break; }   // stale: that attempt is already torn down
         // Timeout / link lost / controller busy while encrypting: the usual result at the edge of
         // range. It says nothing about the bond, so it is never counted towards erasing it.
+        // One exception, hardware-observed on an Osmo Action 6: after the camera forgets us, a bonded
+        // reconnect comes up and is dropped by the camera at once with HCI 0x3E (status 0x23E), and no
+        // key/authentication event ever fires. For a DJI that pattern is counted like a key failure
+        // (3 in a row for the same camera, never airborne) so it ends in "re-pair" instead of looping.
+        if (status == BLESTAT_HCI_BASE + 0x3E && s_drv && strcmp(s_drv->name, "dji") == 0 && !s_first_pair) {
+            ESP_LOGW(TAG, "dji: dropped at once with 0x3E (status %d) -> counted as a possible stale bond", status);
+            goto bond_fail;
+        }
         ESP_LOGW(TAG, "encryption failed (status %d, not a key failure) -> retry", status);
         go_lost("encryption failed", false);
         break;
     case BLE_EVT_ENC_FAIL:
+        if (s_cs.link != CAM_LINK_CONNECTING && s_cs.link != CAM_LINK_SYNCING) { break; }   // stale
+    bond_fail:
         // On a bonded reconnect, repeated KEY/AUTHENTICATION failures (ble_central classifies them;
         // timeouts and link loss arrive as BLE_EVT_ENC_TRANSIENT) mean the camera dropped its side
         // of the bond -- erasing ours and asking for a re-pair is the only real fix (spec 3.6 / 11.0
@@ -710,6 +766,9 @@ static void handle_ble_evt(int ev, int status)
         ESP_LOGI(TAG, "MTU = %d", status);
         break;
     case BLE_EVT_DISC_DONE: {
+        // A discovery that finishes after its attempt was torn down (timeout / disconnect) must not
+        // run the driver's link_up against a half-empty table.
+        if (s_cs.link != CAM_LINK_SYNCING) { break; }
         // subscribe the brand's notify chars, then hand to the driver.
         const brand_gatt_t *g = s_drv->gatt ? s_drv->gatt() : NULL;
         if (g) {
@@ -734,11 +793,25 @@ static void handle_ble_evt(int ev, int status)
         break;
     }
     case BLE_EVT_DISC_FAIL:
+        if (s_cs.link != CAM_LINK_SYNCING) { break; }
+        ESP_LOGW(TAG, "gatt discovery failed: status %d", status);
         go_lost("gatt discovery failed", false);
         break;
     case BLE_EVT_DISCONNECTED:
+        // In SCAN the previous attempt was already abandoned (its teardown / cancelled connect
+        // reports here); counting it again made a spurious LOST + penalty + backoff.
+        if (s_cs.link == CAM_LINK_SCAN) { break; }
         // go_lost() itself initiates a disconnect; its GAP event must not count as a second loss.
-        if (s_cs.link != CAM_LINK_IDLE && s_cs.link != CAM_LINK_LOST) { go_lost("gatt disconnect", false); }
+        if (s_cs.link != CAM_LINK_IDLE && s_cs.link != CAM_LINK_LOST) {
+            if (status == LIVENESS_STATUS) {
+                ESP_LOGW(TAG, "liveness stall (READY, nothing from the camera for %d s) -> teardown",
+                         LIVENESS_STALL_MS / 1000);
+            } else {
+                ESP_LOGW(TAG, "peer disconnect: reason %d (link %d, %lu ms in state)", status,
+                         (int)s_cs.link, (unsigned long)(now_ms() - s_state_since_ms));
+            }
+            go_lost("gatt disconnect", false);
+        }
         break;
     }
 }
@@ -830,7 +903,11 @@ static void cam_task(void *arg)
                                 it.adv.name[0] ? it.adv.name : s_bonds[bi].name, bd);
                     break;
                 }
-                if (!s_recon_have || it.adv.rssi > s_recon_rssi) {
+                bool pen = pen_active(bi);
+                int eff = it.adv.rssi - (pen ? RECON_PENALTY_DB : 0);
+                if (!s_recon_have || eff > s_recon_eff) {
+                    s_recon_eff = eff;
+                    s_recon_pen = pen;
                     s_recon_have = true;
                     memcpy(s_recon_addr, it.adv.addr, 6);
                     s_recon_addr_type = it.adv.addr_type;
@@ -1001,7 +1078,7 @@ static void cam_task(void *arg)
                 // RX-silence timeout (spec 8.5)
                 if (now - s_cs.last_rx_ms > CAM_RX_TIMEOUT_MS) {
                     go_lost("rx timeout 5 s", true);
-                } else if (now - s_state_since_ms > 30000) {
+                } else if ((int32_t)(now - s_state_since_ms) > 30000) {
                     s_hang_fails = 0;   // a READY link that has held 30 s is healthy
                 }
             }
@@ -1033,17 +1110,25 @@ static void cam_task(void *arg)
         // Gather bonded-camera adverts for RECON_PICK_MS, then connect to the
         // strongest (or immediately once one is very close).
         if (s_cs.link == CAM_LINK_SCAN && s_recon_have && s_recon_since_ms &&
-            (now - s_recon_since_ms >= RECON_PICK_MS || s_recon_rssi >= -50)) {
-            ESP_LOGI(TAG, "reconnect: %d cams in range, best %d dBm -> connecting",
+            (now - s_recon_since_ms >= (s_recon_pen ? 3 * RECON_PICK_MS : RECON_PICK_MS) ||
+             (s_recon_rssi >= -50 && !s_recon_pen))) {
+            ESP_LOGI(TAG, "reconnect: best of %d bonded at %d dBm -> connecting",
                      s_bond_n, s_recon_rssi);
             connect_now(s_recon_addr, s_recon_addr_type, s_cs.name, s_recon_drv);
+            // connect_now() can take tens of ms (the active-camera switch
+            // commits settings to NVS) and stamps s_state_since_ms after `now`
+            // was read; without this the unsigned age below wraps and the
+            // 10 s connect timeout fires at once, cancelling every attempt.
+            now = now_ms();
         }
 
         // ---- connect / sync timeout -----------------------------
         if ((s_cs.link == CAM_LINK_CONNECTING || s_cs.link == CAM_LINK_SYNCING) &&
-            now - s_state_since_ms > CONNECT_TIMEOUT_MS) {
+            (int32_t)(now - s_state_since_ms) > CONNECT_TIMEOUT_MS) {
             ESP_LOGW(TAG, "connect/sync timeout -> rescan");
+            pen_set_target();
             ble_central_disconnect();
+            if (s_drv && s_drv->link_down) { s_drv->link_down(); }   // its late DISCONNECTED is ignored in SCAN
             begin_scan();
         }
 
@@ -1052,7 +1137,7 @@ static void cam_task(void *arg)
         // off); the backoff just paces the re-entry.
         if (s_cs.link == CAM_LINK_LOST) {
             uint32_t wait_ms = k_backoff_s[s_backoff_idx] * 1000;
-            if (now - s_state_since_ms >= wait_ms) {
+            if ((int32_t)(now - s_state_since_ms) >= (int32_t)wait_ms) {
                 if (s_backoff_idx < (int)(sizeof(k_backoff_s)/sizeof(k_backoff_s[0])) - 1) {
                     s_backoff_idx++;
                 }
@@ -1094,7 +1179,7 @@ void cam_liveness_check(void)
     cam_link_state_t link; uint32_t last_rx;
     cam_state_get_link(&link, &last_rx);     // not a full cam_state_t: housekeeping's stack is small
     if (link == CAM_LINK_READY && (now_ms() - last_rx) > LIVENESS_STALL_MS) {
-        iq_item_t it = { .kind = IQ_BLE_EVT, .ble = { .ev = BLE_EVT_DISCONNECTED, .status = 0 } };
+        iq_item_t it = { .kind = IQ_BLE_EVT, .ble = { .ev = BLE_EVT_DISCONNECTED, .status = LIVENESS_STATUS } };
         xQueueSend(s_iq, &it, 0);
     }
 }

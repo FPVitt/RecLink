@@ -19,6 +19,7 @@ const char *dji_resolution_str(uint8_t v)
     case 95:  return "2.7K";      // 2.7K 4:3
     case 103: return "4K";        // 4K 4:3
     case 109: return "4K";        // 4K 9:16
+    case 125: return "4K";        // Osmo Action 6 in 4K30 (INFERRED: its own 1D/06 text says "4K30"; not in DJI's table)
     // photo formats (Osmo Action: 4=L 3=M ; Osmo 360: 4=30MP 3=20MP 2=12MP)
     case 4:   return "L";
     case 3:   return "M";

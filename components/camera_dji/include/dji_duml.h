@@ -4,7 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define DUML_SOF 0xAA
+#define DUML_SOF 0xAA            // R-SDK frame start
+#define DUML55_SOF 0x55          // classic DUML frame start (interleaved by the camera, skipped)
 #define DUML_HDR_LEN 12          // SOF..CRC16 inclusive
 #define DUML_MAX_FRAME 256
 
@@ -32,6 +33,9 @@ typedef struct {
 } duml_reasm_t;
 
 void duml_reasm_reset(duml_reasm_t *r);
+
+// CRC8 of a classic DUML (0x55) header (bytes 0..2).
+uint8_t duml55_crc8(const uint8_t *b, size_t n);
 
 // Feed a notification. Returns true + fills *msg when a CRC-valid frame lands.
 bool duml_reasm_feed(duml_reasm_t *r, const uint8_t *data, uint16_t len, duml_msg_t *msg);

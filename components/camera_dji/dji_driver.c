@@ -1,5 +1,5 @@
 // dji_driver.c -- DJI DUML BLE driver (spec 7). cam_task context only.
-// Fire-and-forget writes; state arrives via the 1 Hz status push 0x1D/0x02.
+// Fire-and-forget writes; state arrives via the 2 Hz status push 0x1D/0x02.
 #include "camera_dji.h"
 #include "dji_duml.h"
 #include "dji_enums.h"
@@ -38,6 +38,7 @@ static const ble_uuid16_t U_WRITE  = BLE_UUID16_INIT(0xFFF5);
 #define ID_MODE         0x04   // CS_CAMERA
 #define ID_SUBSCRIBE    0x05   // CS_CAMERA
 #define ID_STATUS_PUSH  0x02   // CS_CAMERA (camera -> us)
+#define ID_STATUS_PUSH2 0x06   // CS_CAMERA: mode / param text, sent by the Action 6 on every mode change
 
 // connection_request_command_frame length (spec 7.3): device_id[4] mac_len[1]
 // mac[16] fw[4] conidx[1] verify_mode[1] verify_data[2] reserved[4]. @ 92fe23e5
@@ -51,6 +52,12 @@ static uint32_t s_device_id;
 static bool     s_first_pair;
 static bool     s_handshaked;
 static duml_reasm_t rz;
+static uint32_t s_last_rx_ms;     // last notification, to shed a stale half frame
+static char    s_txt_res[8], s_txt_fps[6];
+static bool    s_txt_valid;
+static uint8_t s_txt_mode = 0xFF;             // camera_mode (1D/02) the text belongs to; 0xFF = not yet known
+static bool    s_asleep;                      // power_mode == 3 seen; log once per link
+static char    s_model[24];                   // from the camera-reported device id
 
 // ---- helpers ---------------------------------------------------
 // CmdType (spec 7.2 / demo docs/protocol.md): bit[5]=0 command frame,
@@ -65,12 +72,38 @@ static duml_reasm_t rz;
 #define DJI_CMD_WAIT_RESULT   0x02
 #define DJI_ACK_NO_RESPONSE   0x20   // response frame, no reply expected
 
-static void tx(uint8_t cmd_type, uint8_t cmd_set, uint8_t cmd_id, const uint8_t *pl, uint16_t n)
+// Sends a frame and returns the seq it carried (the camera echoes it in its reply).
+static uint16_t tx(uint8_t cmd_type, uint8_t cmd_set, uint8_t cmd_id, const uint8_t *pl, uint16_t n)
 {
-    if (!h_write) { return; }
+    uint16_t seq = s_seq++;
+    if (!h_write) { return seq; }
     uint8_t frame[DUML_MAX_FRAME];
-    size_t len = duml_build(frame, sizeof(frame), cmd_type, s_seq++, cmd_set, cmd_id, pl, n);
+    size_t len = duml_build(frame, sizeof(frame), cmd_type, seq, cmd_set, cmd_id, pl, n);
     if (len) { ble_central_write(h_write, frame, len, false); }
+    return seq;
+}
+
+// ---- reply matching ------------------------------------------------
+// An Action 6 answers a 1D/04 mode switch with a frame whose cmd id is 1D/03 (the record-control
+// reply id), but always with the SAME seq as our request. So replies are matched by seq against the
+// commands we actually sent, never by cmd id. A small ring covers retries still in flight.
+typedef enum { PEND_NONE = 0, PEND_REC_START, PEND_REC_STOP, PEND_PRESET } pend_op_t;
+#define PEND_N 6
+static struct { uint16_t seq; pend_op_t op; } s_pend[PEND_N];
+static uint8_t s_pend_i;
+static void pend_add(uint16_t seq, pend_op_t op)
+{
+    s_pend[s_pend_i].seq = seq; s_pend[s_pend_i].op = op;
+    s_pend_i = (uint8_t)((s_pend_i + 1) % PEND_N);
+}
+static pend_op_t pend_take(uint16_t seq)
+{
+    for (int i = 0; i < PEND_N; i++) {
+        if (s_pend[i].op != PEND_NONE && s_pend[i].seq == seq) {
+            pend_op_t op = s_pend[i].op; s_pend[i].op = PEND_NONE; return op;
+        }
+    }
+    return PEND_NONE;
 }
 
 // ACK a camera-initiated command frame -- must echo the camera's SEQ.
@@ -174,7 +207,8 @@ static esp_err_t dji_record(bool start)
     p[4] = start ? 0 : 1;             // record_ctrl: 0 start, 1 stop
     // verified: record_control_command_frame (device_id u32 | record_ctrl u8 |
     // reserved u8[4]) @ 92fe23e5; cmd_type CMD_RESPONSE_OR_NOT (command_logic.c).
-    tx(DJI_CMD_RESPONSE_OPT, CS_CAMERA, ID_REC, p, sizeof(p));
+    pend_add(tx(DJI_CMD_RESPONSE_OPT, CS_CAMERA, ID_REC, p, sizeof(p)),
+             start ? PEND_REC_START : PEND_REC_STOP);
 
     // §7.4 fallback: fire the hard-key toggle only when this same intent has
     // gone unconfirmed by the 2 Hz status push for >= 2.5 s, and only once.
@@ -198,7 +232,7 @@ static esp_err_t dji_select_preset(uint8_t slot)
     // verified: camera_mode_switch_command_frame (device_id u32 | mode u8 |
     // reserved u8[4]) @ 92fe23e5; cmd_type CMD_RESPONSE_OR_NOT (command_logic.c).
     // `mode` values: see dji_mode_str() / camera_mode_t.
-    tx(DJI_CMD_RESPONSE_OPT, CS_CAMERA, ID_MODE, p, sizeof(p));
+    pend_add(tx(DJI_CMD_RESPONSE_OPT, CS_CAMERA, ID_MODE, p, sizeof(p)), PEND_PRESET);
     return ESP_OK;
 }
 
@@ -296,6 +330,8 @@ static esp_err_t dji_link_up(bool first_pair)
         return ESP_FAIL;
     }
     duml_reasm_reset(&rz);
+    memset(s_pend, 0, sizeof(s_pend));
+    s_txt_valid = false; s_model[0] = '\0'; s_asleep = false;
     s_first_pair = first_pair;
     s_handshaked = false;
 
@@ -332,6 +368,37 @@ static void dji_link_down(void)
 //   37 camera_bat_percentage u8
 // Push cadence is fixed 2 Hz (see send_subscribe). camera_mode > 0x34 => a 1D06
 // "new camera status push" frame follows with the English mode/param strings.
+// 1D/06 "new camera status push": [01][len][name x21][02][len][param x21], 46 bytes. The Action 6 sends
+// it on every mode change, e.g. name "VIDEO", param "4K30 Off". The text is the camera's own wording,
+// so it is the fallback for resolution / frame rate when the 1D/02 enum code is not in our table
+// (an Action 6 in 4K30 reports video_resolution 125, which DJI's table does not list).
+
+static void parse_mode_text(const uint8_t *p, uint16_t n)
+{
+    s_txt_valid = false;
+    if (n < 46 || p[0] != 1 || p[23] != 2 || p[1] > 21 || p[24] > 21) { return; }
+    char par[22]; memcpy(par, &p[25], p[24]); par[p[24]] = '\0';
+    // leading "<res><K|P><fps>" token ("4K30", "2.7K60", "1080P30", "4K120"); anything else (photo
+    // sizes, "M (16:9)") leaves the text unused.
+    int i = 0, rl = 0;
+    char res[8], fps[6];
+    while (par[i] && par[i] != 'K' && par[i] != 'P' && i < 6) { i++; }
+    if (par[i] != 'K' && par[i] != 'P') { return; }
+    rl = i + 1;
+    if (rl >= (int)sizeof(res)) { return; }
+    memcpy(res, par, rl); res[rl] = '\0';
+    int fl = 0;
+    while (par[rl + fl] >= '0' && par[rl + fl] <= '9' && fl < 4) { fps[fl] = par[rl + fl]; fl++; }
+    if (fl == 0) { return; }
+    fps[fl] = '\0';
+    // a resolution like "1080P" is shown as "1080" like the enum table does
+    if (res[rl - 1] == 'P') { res[rl - 1] = '\0'; }
+    strlcpy(s_txt_res, res, sizeof(s_txt_res));
+    strlcpy(s_txt_fps, fps, sizeof(s_txt_fps));
+    s_txt_valid = true;
+    s_txt_mode = cam_scratch()->mode.valid ? (uint8_t)cam_scratch()->mode.v : 0xFF;   // 0xFF: adopt the next 1D/02 mode
+}
+
 static void parse_status_push(const uint8_t *p, uint16_t n)
 {
     if (n < 38) { return; }
@@ -346,7 +413,20 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
     uint32_t remain_mb    = get_u32(&p[15]);
     uint32_t remain_time  = get_u32(&p[23]);
     uint8_t  batt_pct     = p[37];
-    /* uint8_t power_mode = p[28]; uint8_t temp_over = p[30]; */
+    uint8_t  power_mode   = p[28];
+    /* uint8_t temp_over = p[30]; */
+
+    if (power_mode == 3) {
+        // The only documented sleep indicator (1D/02 power_mode 3). A sleeping Osmo keeps its BLE link
+        // and even answers the handshake, but its numbers are not a live camera: report nothing instead
+        // of values that look real, so it never "proves" itself (see cam_task reconnect policy).
+        if (!s_asleep) { s_asleep = true; applog_note("dji: camera asleep (power_mode 3)"); }
+        s->recording = TRIBOOL_UNKNOWN;
+        s->pre_record = TRIBOOL_UNKNOWN;
+        if (CB->on_state_dirty) { CB->on_state_dirty(); }
+        return;
+    }
+    s_asleep = false;
 
     s->mode.valid = true; s->mode.v = camera_mode;
     val_str_set(&s->mode_name, dji_mode_str(camera_mode));
@@ -373,9 +453,17 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
     s->sd_missing = (remain_mb == 0);
     s->battery_pct.valid = true; s->battery_pct.v = batt_pct;
 
-    val_str_set(&s->resolution, dji_resolution_str(res_idx));
+    // enum tables first; when a code is unknown fall back to the camera's own 1D/06 text, but only
+    // while that text belongs to the current mode (blank-on-unconfirmed otherwise).
+    if (s_txt_valid && s_txt_mode == 0xFF) { s_txt_mode = camera_mode; }
+    if (s_txt_valid && s_txt_mode != camera_mode) { s_txt_valid = false; }
+    const char *rs = dji_resolution_str(res_idx);
+    if (!*rs && s_txt_valid) { rs = s_txt_res; }
+    val_str_set(&s->resolution, rs);
     if (!*s->resolution.v) { s->resolution.valid = false; }
-    val_str_set(&s->framerate, dji_fps_str(fps_idx));
+    const char *fs = dji_fps_str(fps_idx);
+    if (!*fs && s_txt_valid) { fs = s_txt_fps; }
+    val_str_set(&s->framerate, fs);
     if (!*s->framerate.v) { s->framerate.valid = false; }
 
     s->busy = TRIBOOL_FALSE;   // DJI has no explicit busy; mode switch latency handled by ctrl dwell
@@ -390,7 +478,7 @@ static void dji_go_ready(void)
     send_subscribe();
     if (s_first_pair && CB->on_paired) {
         const cam_state_t *s = cam_scratch();
-        CB->on_paired(s->addr, s->name[0] ? s->name : "DJI Osmo", s_device_id);
+        CB->on_paired(s->addr, s->name[0] ? s->name : (s_model[0] ? s_model : "DJI Osmo"), s_device_id);
         s_first_pair = false;
     }
     if (CB->on_link_state) { CB->on_link_state(CAM_LINK_READY); }
@@ -425,6 +513,21 @@ static void handle_msg(const duml_msg_t *m)
         uint16_t verify_data = m->payload[27] | ((uint16_t)m->payload[28] << 8);
         uint8_t  cam_reserved = m->payload[29];
         ESP_LOGI(TAG, "dji verify: mode=%u data=%u", verify_mode, verify_data);
+        {
+            // The camera's own device id names the model (docs: Action 4 FF33, Action 5 Pro FF44,
+            // Action 6 FF55, Osmo 360 FF66; the sample frame carries them as 00 00 33 FF).
+            uint32_t id = get_u32(m->payload);
+            uint16_t hi = (uint16_t)(id >> 16) == 0 ? (uint16_t)(id & 0xFFFF) : (uint16_t)(id >> 16);
+            const char *mn = NULL;
+            switch (hi) {
+            case 0xFF33: mn = "Osmo Action 4"; break;
+            case 0xFF44: mn = "Osmo Action 5 Pro"; break;
+            case 0xFF55: mn = "Osmo Action 6"; break;
+            case 0xFF66: mn = "Osmo 360"; break;
+            default: break;
+            }
+            if (mn) { strlcpy(s_model, mn, sizeof(s_model)); applog_note("dji model: %s", mn); }
+        }
 
         if (verify_mode == 2 && verify_data == 0) {
             uint8_t rsp[9] = {0};
@@ -441,14 +544,22 @@ static void handle_msg(const duml_msg_t *m)
         }
     } else if (m->cmd_set == CS_CAMERA && m->cmd_id == ID_STATUS_PUSH) {
         parse_status_push(m->payload, m->payload_len);
+    } else if (m->cmd_set == CS_CAMERA && m->cmd_id == ID_STATUS_PUSH2) {
+        parse_mode_text(m->payload, m->payload_len);
     } else if (m->cmd_set == CS_CAMERA && (m->cmd_id == ID_REC || m->cmd_id == ID_MODE)) {
-        if (!(m->cmd_type & 0x20)) { return; }   // only our ACKs, not a camera-initiated cmd
+        if (!(m->cmd_type & 0x20)) { return; }   // only replies, not a camera-initiated command
+        // Match by seq, ignore the cmd id (see pend_take). Not ours / already answered: ignore.
+        pend_op_t op = pend_take(m->seq);
+        if (op == PEND_NONE) { return; }
         uint8_t ret = m->payload_len ? m->payload[0] : 0xFF;
-        // Note: 1D03 ACK is optional (CMD_RESPONSE_OR_NOT); the status-push
-        // confirm in dji_rec_observe() is the primary signal (§7.4).
-        if (m->cmd_id == ID_REC && ret == 0) { s_rec_confirmed = true; }
+        // Note: the reply is optional (CMD_RESPONSE_OR_NOT); the status-push confirm in
+        // dji_rec_observe() is the primary signal (§7.4).
+        if ((op == PEND_REC_START || op == PEND_REC_STOP) && ret == 0 && (op == PEND_REC_START) == s_rec_want) {
+            s_rec_confirmed = true;
+        }
         if (CB->on_ack) {
-            CB->on_ack(m->cmd_id == ID_REC ? CAM_OP_RECORD_START : CAM_OP_SELECT_PRESET, ret == 0);
+            CB->on_ack(op == PEND_REC_START ? CAM_OP_RECORD_START
+                       : op == PEND_REC_STOP ? CAM_OP_RECORD_STOP : CAM_OP_SELECT_PRESET, ret == 0);
         }
     }
 }
@@ -456,6 +567,10 @@ static void handle_msg(const duml_msg_t *m)
 static void dji_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
 {
     if (handle != vh_notify) { return; }
+    uint32_t now = now_ms();
+    // A half frame whose tail never came would swallow the start of the next one: drop it after 2 s.
+    if (rz.have && (int32_t)(now - s_last_rx_ms) > 2000) { duml_reasm_reset(&rz); }
+    s_last_rx_ms = now;
     duml_msg_t m;
     if (duml_reasm_feed(&rz, data, len, &m)) { handle_msg(&m); }
     while (duml_reasm_next(&rz, &m)) { handle_msg(&m); }
@@ -464,11 +579,19 @@ static void dji_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
 // ---- adv match (spec 7.1) ---------------------------------
 static bool dji_adv_match(const ble_adv_t *adv)
 {
-    // manufacturer-data bytes [0]=0xAA [1]=0x08 [4]=0xFA
+    // Strong: manufacturer data AA 08 <model> 00 FA ... (company id 0x08AA). On an Action 6 this sits in
+    // the SCAN RESPONSE, not in the advert that carries the name, and a passive scan (portal up) never
+    // sees it -- so the advert itself is also matched weakly, by name or service (hardware-observed:
+    // "OsmoAction6-XXXX"; DJI documents short names "OA4" / "OA5Pro"). Plain "DJI*" names are NOT
+    // matched: drones and controllers use them and must not appear in the camera list.
     if (adv->mfg_len >= 5 && adv->mfg[0] == 0xAA && adv->mfg[1] == 0x08 && adv->mfg[4] == 0xFA) {
         return true;
     }
-    return false;
+    if (adv->name[0] && (strncmp(adv->name, "Osmo", 4) == 0 || strncmp(adv->name, "OA", 2) == 0 ||
+                         strncmp(adv->name, "Xtra", 4) == 0)) {
+        return true;
+    }
+    return adv->svc_uuid16 == 0xFFF0;
 }
 
 const camera_driver_t *dji_driver(void)

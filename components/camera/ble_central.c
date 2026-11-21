@@ -275,6 +275,7 @@ static int on_dsc(uint16_t conn, const struct ble_gatt_error *err,
                   uint16_t chr_val_handle, const struct ble_gatt_dsc *dsc, void *arg)
 {
     (void)chr_val_handle; (void)arg;
+    if (conn != s_conn) { return 0; }              // link gone: stop the chain, no stale DISC_DONE
     if (err->status == 0 && dsc) {
         if (ble_uuid_u16(&dsc->uuid.u) == BLE_GATT_DSC_CLT_CFG_UUID16) {
             s_chrs[s_dsc_idx].cccd_handle = dsc->handle;
@@ -300,13 +301,18 @@ static void disc_next_dsc(uint16_t conn)
         // Only a notify/indicate characteristic has a CCCD worth finding; skipping the
         // rest saves one ATT round trip each (~25 of a GoPro's ~30) on every connection.
         if (!(s_chrs[s_dsc_idx].props & (BLE_GATT_CHR_PROP_NOTIFY | BLE_GATT_CHR_PROP_INDICATE))) { continue; }
-        uint16_t start = s_chrs[s_dsc_idx].val_handle + 1;
+        // NimBLE's start_handle for this call is the characteristic's VALUE handle: it asks the
+        // peer from start_handle + 1 (ble_gattc.c disc_all_dscs prev_handle). Passing val + 1 made
+        // the request start after the CCCD, and for the usual layout (value, CCCD, next declaration)
+        // an empty range that failed with EINVAL before anything was sent.
+        uint16_t start = s_chrs[s_dsc_idx].val_handle;
         uint16_t end = (s_dsc_idx + 1 < s_chr_n) ? (uint16_t)(s_chrs[s_dsc_idx + 1].def_handle - 1)
                                                  : 0xffff;
-        if (start > end) { continue; }
-        if (ble_gattc_disc_all_dscs(conn, start, end, on_dsc, NULL) == 0) { return; }
-        ESP_LOGW(TAG, "descriptor discovery h=%u not started",
-                 s_chrs[s_dsc_idx].val_handle);
+        if (end <= start) { continue; }              // no room for a descriptor
+        int rc = ble_gattc_disc_all_dscs(conn, start, end, on_dsc, NULL);
+        if (rc == 0) { return; }
+        ESP_LOGW(TAG, "descriptor discovery h=%u not started: rc=%d",
+                 s_chrs[s_dsc_idx].val_handle, rc);
     }
     emit(BLE_EVT_DISC_DONE, 0);     // characteristics + descriptors both done
 }
@@ -315,6 +321,7 @@ static int on_chr(uint16_t conn, const struct ble_gatt_error *err,
                   const struct ble_gatt_chr *chr, void *arg)
 {
     (void)arg;
+    if (conn != s_conn) { return 0; }
     if (err->status == 0 && chr) {
         if (s_chr_n < MAX_CHRS) {
             ble_uuid_copy(&s_chrs[s_chr_n].uuid, &chr->uuid.u);
@@ -409,7 +416,7 @@ esp_err_t ble_central_connect(const uint8_t addr[6], uint8_t addr_type)
         .supervision_timeout = 400,
         .min_ce_len = 0, .max_ce_len = 0,
     };
-    int rc = ble_gap_connect(own, &a, 8000, &cp, gap_event, NULL);
+    int rc = ble_gap_connect(own, &a, 6000, &cp, gap_event, NULL);   // < CONNECT_TIMEOUT_MS (cam_task.c)
     return rc == 0 ? ESP_OK : ESP_FAIL;
 }
 
@@ -471,6 +478,8 @@ void ble_central_disconnect(void)
 {
     if (s_conn != BLE_HS_CONN_HANDLE_NONE) {
         ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+    } else if (ble_gap_conn_active()) {
+        ble_gap_conn_cancel();      // a connect still pending: free the master slot for the next scan
     }
 }
 
