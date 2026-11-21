@@ -985,6 +985,7 @@ function applyGates() {
   $$('#zone-ids .zid').forEach(e => { e.hidden = !isDJI; });
   zwrap.hidden = !isDJI;
   $('#dji-zone-note').hidden = !isDJI;
+  $('#hilight-card').hidden = isDJI;                     // a DJI has no highlight tag
   gate($('#lbl-check'),  isGP  || !cfgBrand, 'GoPro only');
   gate($('#lbl-resync'), isDJI || !cfgBrand, 'DJI only');
   const gp = !!isDJI;

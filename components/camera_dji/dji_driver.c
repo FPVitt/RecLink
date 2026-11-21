@@ -295,15 +295,11 @@ static esp_err_t dji_get_datetime(void)
 
 static esp_err_t dji_hilight(void)
 {
-    // verified: key_report_command_frame (key_code u8 | mode u8 | key_value u16)
-    // + command_logic_key_report_qs() @ 92fe23e5 (2026-08-29):
-    //   key_code 0x02 = QS button, mode 0x01 = "report key event",
-    //   key_value 0x00 = short-press event; cmd_type CMD_RESPONSE_OR_NOT.
-    // NOTE: the DJI Osmo has no highlight-tag; QS = "quick-switch mode" button.
-    // Whether that is the desired mapping for `hilight` is a spec decision.
-    uint8_t p[4] = { 0x02, 0x01, 0x00, 0x00 };
-    tx(DJI_CMD_RESPONSE_OPT, CS_COMMON, ID_KEY_REPORT, p, sizeof(p));
-    return ESP_OK;
+    // A DJI Osmo has no highlight tag. The only frame this used to send was the QS key report
+    // (key_code 0x02, mode 0x01, value 0x00 @ 92fe23e5), and QS is the "quick-switch mode" button:
+    // on a real Action 6 it switched Video -> Photo (bench 2026-11-21). A mode change nobody asked
+    // for is worse than no tag, so a DJI does nothing here and the portal hides the setting.
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 static esp_err_t dji_tick_1s(void)
