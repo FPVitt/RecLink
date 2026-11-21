@@ -62,14 +62,22 @@ function buildZoneRows() {
       `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>` +
       (i < presetN - 1 ? `<input type="hidden" name="preset.bands.${i}.max_us">` : '') +
       `<label class="zid">Mode ID
-         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label></div>`);
+         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label>` +
+      `<button type="button" class="ghost zapply" data-z="${i}" title="Switch the connected camera to this zone now">Apply</button></div>`);
   }
   $('#zone-add').disabled = presetN >= ZONES_MAX;
   $('#zone-del').disabled = presetN <= ZONES_MIN;
 }
 buildZoneRows();
+// DJI zones: switch the connected camera to this zone's mode now (saved settings, like the test buttons).
+zwrap.addEventListener('click', async e => {
+  const b = e.target.closest('.zapply'); if (!b) return;
+  if (document.body.classList.contains('dirty')) return msg('Save first: Apply uses the saved zone.');
+  const i = +b.dataset.z;
+  msg((await post('/api/camera/preset', { slot: i })).ok ? 'zone ' + (i + 1) + ' applied' : 'failed');
+});
 
-const numAt = name => {
+const numAt =name => {
   const e = document.querySelector(`[name="${CSS.escape(name)}"]`);
   return e ? (e.value === '' ? 0 : Number(e.value)) : 0;
 };
@@ -1203,6 +1211,8 @@ function renderCams(c) {
   $$('#pairrow [data-pair]').forEach(b => b.disabled = count >= 4);
   $('#pairfull').hidden = count < 4;
   $('#camtest').disabled = $('#rectest').disabled = !cams.some(x => x.connected);
+  { const on = cams.some(x => x.connected && camHex(x.addr) === viewCam);      // the camera on screen is the connected one
+    $$('.zapply').forEach(b => { b.disabled = !on; }); }
   $('#forgetall').hidden = count < 2;
 
   const wrap = $('#camlist');
