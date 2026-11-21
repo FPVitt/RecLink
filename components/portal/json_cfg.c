@@ -103,6 +103,8 @@ static cJSON *cfg_build(const cfg_t *c, jstream_t *js)
     cJSON_AddNumberToObject(pre, "dwell_ms", c->preset.dwell_ms);
     cJSON_AddBoolToObject(pre, "allow_during_record", c->preset.allow_during_record);
     cJSON_AddNumberToObject(pre, "n_zones", cfg_zones(c));
+    // GoPro zone style: 0 = advanced (push settings), 1 = simple (switch the camera's own preset by id).
+    cJSON_AddNumberToObject(pre, "gp_mode", cfg_gp_zone_is_preset(cfg_zone_gp(c, 0)) ? 1 : 0);
     cJSON *bands = cJSON_AddArrayToObject(pre, "bands");
     for (int i = 0; i < cfg_zones(c); i++) {
         cJSON *b = cJSON_CreateObject();
@@ -111,7 +113,7 @@ static cJSON *cfg_build(const cfg_t *c, jstream_t *js)
         // GoPro zone settings: {"<setting id>": <option value>, ...}
         cJSON *gp = cJSON_AddObjectToObject(b, "gp");
         const cfg_gp_zone_t *g = cfg_zone_gp(c, i);
-        for (int k = 0; k < g->n && k < GP_PSET_MAX; k++) {
+        for (int k = 0; k < cfg_gp_zone_n(g); k++) {
             char key[8];
             snprintf(key, sizeof(key), "%u", g->s[k].id);
             cJSON_AddNumberToObject(gp, key, g->s[k].val);
@@ -308,6 +310,17 @@ esp_err_t json_merge_cfg(const cJSON *j, cfg_t *c, char *err, size_t errlen)
                         g->n++;
                     }
                 }
+            }
+        }
+        // GoPro zone style, applied AFTER the bands so it wins over any "gp" list in the same body:
+        // simple = every zone becomes a "load camera preset <id>" zone and pushes no settings;
+        // advanced = a simple zone goes back to an empty settings list.
+        const cJSON *gm = J_OBJ(o, "gp_mode");
+        if (cJSON_IsNumber(gm)) {
+            for (int i = 0; i < cfg_zones(c); i++) {
+                cfg_gp_zone_t *g = cfg_zone_gp_mut(c, i);
+                if (gm->valuedouble >= 1) { memset(g, 0, sizeof(*g)); g->n = GP_ZONE_PRESET; }
+                else if (cfg_gp_zone_is_preset(g)) { memset(g, 0, sizeof(*g)); }
             }
         }
     }

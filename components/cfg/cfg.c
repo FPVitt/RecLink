@@ -102,6 +102,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     // canonical apply order (gp_preset.h). Anything else is silently dropped.
     for (int z = 0; z < nz; z++) {
         cfg_gp_zone_t *g = cfg_zone_gp_mut(c, z);
+        if (cfg_gp_zone_is_preset(g)) { memset(g->s, 0, sizeof(g->s)); continue; }   // simple zone: marker only
         uint8_t val[GP_PSET_MAX]; bool has[GP_PSET_MAX] = { false };
         for (int k = 0; k < g->n && k < GP_PSET_MAX; k++) {
             int idx = gp_pset_index(g->s[k].id);

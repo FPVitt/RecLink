@@ -96,10 +96,21 @@ typedef struct __attribute__((packed)) {
 // __attribute__((packed)) so the on-flash image is portable across compilers.
 // ---------------------------------------------------------------------------
 // One zone's GoPro settings: (setting id, option value) pairs, n of them.
+//
+// Two kinds of GoPro zone ("advanced" / "simple"), told apart by n so the blob layout is unchanged:
+//   n = 0..GP_PSET_MAX   advanced: push these settings to the camera's active preset;
+//   n = GP_ZONE_PRESET   simple: switch the camera to ITS OWN preset whose id is the zone's
+//                        preset.bands[i].id (a u32, what Open GoPro "Load Preset" takes) and push
+//                        nothing -- the same idea as a DJI zone's mode id.
+// An older firmware that meets 0xFF in a blob reads it as an out-of-range n and drops the list.
+#define GP_ZONE_PRESET 0xFF
 typedef struct __attribute__((packed)) {
     uint8_t n;
     struct { uint8_t id; uint8_t val; } s[GP_PSET_MAX];
 } cfg_gp_zone_t;
+static inline bool cfg_gp_zone_is_preset(const cfg_gp_zone_t *g) { return g->n == GP_ZONE_PRESET; }
+// Number of pushed settings (0 for a simple zone), always <= GP_PSET_MAX.
+static inline int cfg_gp_zone_n(const cfg_gp_zone_t *g) { return g->n <= GP_PSET_MAX ? g->n : 0; }
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;

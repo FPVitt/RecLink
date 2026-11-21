@@ -78,6 +78,36 @@ static void test_profile_pure(void)
     CHECK_EQ(e.osd.refresh_hz, hz);                                   // *e untouched
 }
 
+// A "simple" GoPro zone (n == GP_ZONE_PRESET) survives validation and a commit, carries its preset id
+// in bands[].id, never exposes settings, and an ordinary zone is still cleaned as before.
+static void test_simple_gopro_zone(void)
+{
+    fresh();
+    cfg_t c; cfg_snapshot(&c);
+    cfg_gp_zone_t *z0 = cfg_zone_gp_mut(&c, 0), *z1 = cfg_zone_gp_mut(&c, 1), *z2 = cfg_zone_gp_mut(&c, 2);
+    memset(z0, 0, sizeof *z0); z0->n = GP_ZONE_PRESET; z0->s[0].id = 2; z0->s[0].val = 9;     // junk behind the marker
+    cfg_zone_set(&c, 0, cfg_zone_max_us(&c, 0), 65540u);                                        // a GoPro preset id (> 255)
+    z1->n = 2; z1->s[0].id = 3; z1->s[0].val = 1; z1->s[1].id = 250; z1->s[1].val = 1;         // 250 is not whitelisted
+    z2->n = 99;                                                                                 // out of range: dropped
+    char err[64];
+    CHECK_EQ(cfg_validate(&c, err, sizeof err), ESP_OK);
+    CHECK(cfg_gp_zone_is_preset(cfg_zone_gp(&c, 0)));
+    CHECK_EQ(cfg_gp_zone_n(cfg_zone_gp(&c, 0)), 0);
+    CHECK_EQ(cfg_zone_gp(&c, 0)->s[0].id, 0);                    // the junk behind the marker is gone
+    CHECK_EQ(cfg_zone_id(&c, 0), 65540u);                        // the preset id is kept as is
+    CHECK(!cfg_gp_zone_is_preset(cfg_zone_gp(&c, 1)));
+    CHECK_EQ(cfg_gp_zone_n(cfg_zone_gp(&c, 1)), 1);              // only the whitelisted setting stays
+    CHECK_EQ(cfg_gp_zone_n(cfg_zone_gp(&c, 2)), 0);
+    CHECK(!cfg_gp_zone_is_preset(cfg_zone_gp(&c, 2)));
+    CHECK_EQ(cfg_commit(&c), ESP_OK);
+    CHECK(cfg_gp_zone_is_preset(cfg_zone_gp(cfg_get(), 0)));     // survives the commit
+    CHECK_EQ(cfg_zone_id(cfg_get(), 0), 65540u);
+    cfg_gp_zone_t g = { .n = 5 };
+    CHECK_EQ(cfg_gp_zone_n(&g), 5);
+    g.n = GP_ZONE_PRESET;
+    CHECK_EQ(cfg_gp_zone_n(&g), 0);                              // never indexes past s[]
+}
+
 static void test_switch_saves_and_loads(void)
 {
     fresh();
@@ -237,6 +267,7 @@ static void test_nicknames(void)
 int main(void)
 {
     RUN(test_profile_pure);
+    RUN(test_simple_gopro_zone);
     RUN(test_switch_saves_and_loads);
     RUN(test_edit_inactive_camera);
     RUN(test_no_profile_inherits);

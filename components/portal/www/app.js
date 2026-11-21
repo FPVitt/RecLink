@@ -61,8 +61,9 @@ function buildZoneRows() {
     zwrap.insertAdjacentHTML('beforeend',
       `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>` +
       (i < presetN - 1 ? `<input type="hidden" name="preset.bands.${i}.max_us">` : '') +
-      `<label class="zid">Mode ID
+      `<label class="zid"><span class="zt">Mode ID</span>
          <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label>` +
+      `<button type="button" class="ghost zcap" data-z="${i}" title="Use the preset the camera is on now" hidden>Capture</button>` +
       `<button type="button" class="ghost zapply" data-z="${i}" title="Switch the connected camera to this zone now">Apply</button></div>`);
   }
   $('#zone-add').disabled = presetN >= ZONES_MAX;
@@ -71,6 +72,13 @@ function buildZoneRows() {
 buildZoneRows();
 // DJI zones: switch the connected camera to this zone's mode now (saved settings, like the test buttons).
 zwrap.addEventListener('click', async e => {
+  const cp = e.target.closest('.zcap');                 // GoPro simple zone: take the camera's current preset id
+  if (cp) {
+    const id = lastStatus && lastStatus.cam_state && lastStatus.cam_state.preset_id;
+    if (!id) return msg('The camera has not reported its preset yet.');
+    setNum('preset.bands.' + cp.dataset.z + '.id', id);
+    return msg('zone ' + (+cp.dataset.z + 1) + ' = preset ' + id + '. Save to keep it.');
+  }
   const b = e.target.closest('.zapply'); if (!b) return;
   if (document.body.classList.contains('dirty')) return msg('Save first: Apply uses the saved zone.');
   const i = +b.dataset.z;
@@ -982,10 +990,16 @@ function applyGates() {
   gpGate();
 
   const isGP = cfgBrand === 'gopro', isDJI = cfgBrand === 'dji';
-  $('#gp-builder').hidden = isDJI;                       // DJI zones use a mode ID instead
-  $$('#zone-ids .zid').forEach(e => { e.hidden = !isDJI; });
-  zwrap.hidden = !isDJI;
+  const gpSimple = isGP && getField('preset.gp_mode') === 1;      // GoPro "simple" zones switch the camera's own preset by id
+  const idZones = isDJI || gpSimple;                     // zones that are just an id (DJI mode / GoPro preset), no settings builder
+  $('#gp-mode-row').hidden = !isGP;
+  $('#gp-builder').hidden = idZones;
+  $$('#zone-ids .zid').forEach(e => { e.hidden = !idZones; });
+  $$('#zone-ids .zt').forEach(e => { e.textContent = gpSimple ? 'Preset ID' : 'Mode ID'; });
+  $$('#zone-ids .zcap').forEach(e => { e.hidden = !gpSimple; });
+  zwrap.hidden = !idZones;
   $('#dji-zone-note').hidden = !isDJI;
+  $('#gp-simple-note').hidden = !gpSimple;
   $('#hilight-card').hidden = isDJI;                     // a DJI has no highlight tag
   gate($('#lbl-check'),  isGP  || !cfgBrand, 'GoPro only');
   gate($('#lbl-resync'), isDJI || !cfgBrand, 'DJI only');
@@ -995,7 +1009,7 @@ function applyGates() {
   layoutAllBars();
   if (lastStatus) updateCursors(lastStatus.msp);
 }
-$$('[name="record.mode"],[name="preset.enabled"]').forEach(el =>
+$$('[name="record.mode"],[name="preset.enabled"],[name="preset.gp_mode"]').forEach(el =>
   el.addEventListener('change', applyGates));
 
 // ---- dirty tracking ----
@@ -1214,7 +1228,7 @@ function renderCams(c) {
   $('#pairfull').hidden = count < 4;
   $('#camtest').disabled = $('#rectest').disabled = !cams.some(x => x.connected);
   { const on = cams.some(x => x.connected && camHex(x.addr) === viewCam);      // the camera on screen is the connected one
-    $$('.zapply').forEach(b => { b.disabled = !on; }); }
+    $$('.zapply,.zcap').forEach(b => { b.disabled = !on; }); }
   $('#forgetall').hidden = count < 2;
 
   const wrap = $('#camlist');

@@ -222,6 +222,7 @@ static void invalidate_cam_values(void)   // spec 8.5 step 1
     s_cs.mode_name.valid = false;
     s_cs.cam_utc_ms.valid = false;
     for (int i = 0; i < GP_PSET_MAX; i++) { s_cs.gp_set[i].valid = false; }
+    s_cs.gp_preset.valid = false;
     s_cs.model[0] = '\0';
     s_cs.gp_apply_zone = 0;
     s_cs.gp_apply_state = GPA_NONE;

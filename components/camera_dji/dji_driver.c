@@ -225,7 +225,14 @@ static esp_err_t dji_select_preset(uint8_t slot)
 {
     const cfg_t *c = cfg_get();
     if (slot >= cfg_zones(c)) { return ESP_ERR_INVALID_ARG; }
-    uint8_t mode = (uint8_t)cfg_zone_id(c, slot);   // DJI: zone id == mode value
+    uint32_t zid = cfg_zone_id(c, slot);            // DJI: zone id == mode value
+    if (zid > 0xFF) {
+        // A camera mode is one byte. A bigger id is not a DJI mode: typically a GoPro preset id that a
+        // newly paired DJI inherited with the other camera's zones. Never truncate it into a random mode.
+        applog_note("dji zone %u: id %lu is not a camera mode -- not sent", slot + 1, (unsigned long)zid);
+        return ESP_ERR_INVALID_ARG;
+    }
+    uint8_t mode = (uint8_t)zid;
     uint8_t p[9]; memset(p, 0, sizeof(p));
     put_u32(p, s_device_id);
     p[4] = mode;

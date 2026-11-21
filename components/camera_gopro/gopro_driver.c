@@ -50,7 +50,8 @@ static const ble_uuid128_t U_QRY_RSP    = GP_UUID(0x77);
 //   setting 2 VIDEO_RESOLUTION  3 FRAMES_PER_SECOND  121 VIDEO_LENS
 enum { ST_BATT_BARS = 2, ST_HOT = 6, ST_BUSY = 8, ST_ENCODING = 10,
        ST_SD_STATUS = 33, ST_REMAIN_VIDEO_S = 35, ST_SD_REMAIN_KB = 54, ST_BATT_PCT = 70,
-       ST_PRESET_GROUP = 96 };   // 1000 VIDEO / 1001 PHOTO / 1002 TIMELAPSE
+       ST_PRESET_GROUP = 96,     // 1000 VIDEO / 1001 PHOTO / 1002 TIMELAPSE
+       ST_PRESET = 97 };         // active preset id: the u32 Load Preset (0x40) takes (StatusId.PRESET @ 0f963572)
 enum { SET_RESOLUTION = 2, SET_FPS = 3, SET_ASPECT = 108, SET_LENS = 121,
        SET_BIT_DEPTH = 183, SET_PROFILE = 184 };
 // Unofficial Video + Protune settings (not in the Open GoPro spec; IDs/options
@@ -64,7 +65,7 @@ enum { SET_ISO_MAX = 13, SET_ISO_MIN = 102, SET_SHUTTER = 145, SET_PROTUNE = 114
 // Statuses the driver consumes: registered for pushes and polled by id.
 static const uint8_t k_st_ids[] = { ST_ENCODING, ST_BUSY, ST_HOT, ST_BATT_PCT,
                                     ST_SD_REMAIN_KB, ST_REMAIN_VIDEO_S,
-                                    ST_SD_STATUS, ST_PRESET_GROUP };
+                                    ST_SD_STATUS, ST_PRESET_GROUP, ST_PRESET };
 static bool poll_full;               // the camera refused a targeted poll: use get-all instead
 static uint8_t poll_err;
 
@@ -523,6 +524,22 @@ static esp_err_t gp_select_preset(uint8_t slot)
     memset(&ap, 0, sizeof(ap));
     ap.slot = slot;
     ap.cur = -1;
+    if (cfg_gp_zone_is_preset(gz)) {
+        // Simple zone: switch to the camera's own preset (Open GoPro Load Preset, 0x40, u32 big-endian
+        // @ 0f963572). Nothing is pushed; the camera's reply is reported by parse_cmd_rsp().
+        uint32_t id = cfg_zone_id(c, slot);
+        if (!id) {
+            ap_publish(GPA_NONE, 0);
+            applog_note("gopro zone %u has no preset chosen -- nothing loaded", slot + 1);
+            return ESP_OK;
+        }
+        if (!h_cmd || !ble_ready) { return ESP_ERR_INVALID_STATE; }
+        uint8_t b[6] = { 0x40, 0x04, (uint8_t)(id >> 24), (uint8_t)(id >> 16), (uint8_t)(id >> 8), (uint8_t)id };
+        wr(h_cmd, b, sizeof(b));
+        ap_publish(GPA_APPLYING, 0);
+        applog_note("gopro zone %u: load preset %lu", slot + 1, (unsigned long)id);
+        return ESP_OK;
+    }
     // Entries in apply order, whatever order cfg stored them in.
     for (int k = 0; k < GP_PSET_MAX; k++) {
         for (int j = 0; j < gz->n && j < GP_PSET_MAX; j++) {
@@ -919,6 +936,10 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
         ESP_LOGI(TAG, "preset group %lu -> %s", (unsigned long)g, mn);
         break;
     }
+    case ST_PRESET:
+        s->gp_preset.valid = true;
+        s->gp_preset.v = be(v, n);
+        break;
     default: break;
     }
 }
@@ -1116,6 +1137,12 @@ static void parse_cmd_rsp(const uint8_t *p, uint16_t len)
             CB->on_ack(want_record_target ? CAM_OP_RECORD_START : CAM_OP_RECORD_STOP, status == 0);
         }
     } else if (cmd_id == 0x40 || cmd_id == 0x3E) {
+        if (cmd_id == 0x40 && ap.state == AP_IDLE) {            // a simple zone's Load Preset: report how it went
+            ap_publish(status == 0 ? GPA_OK : GPA_FAILED, 0);
+            applog_note("gopro zone %u: load preset %s (status %u)", ap.slot + 1,
+                        status == 0 ? "ok" : "refused", status);
+            if (status == 0) { caps_request(300); }             // the preset changes what the camera offers
+        }
         if (CB->on_ack) { CB->on_ack(CAM_OP_SELECT_PRESET, status == 0); }
     }
 }

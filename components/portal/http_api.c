@@ -314,6 +314,7 @@ static esp_err_t h_status(httpd_req_t *r)
           if (cam.gp_apply_fail & (1u << i)) { cJSON_AddItemToArray(fl, cJSON_CreateNumber(gp_pset_id(i))); }
       } }
     cJSON_AddStringToObject(cs, "model", cam.model);
+    if (cam.gp_preset.valid) { cJSON_AddNumberToObject(cs, "preset_id", cam.gp_preset.v); }   // for "capture from camera" in simple zones
     cJSON_AddNumberToObject(cs, "caps_gen", cam_caps_gen());   // portal refetches /api/camera/caps when it changes
     cJSON_AddBoolToObject(cs, "sd_missing", cam.sd_missing);
     cJSON_AddBoolToObject(cs, "sd_full", cam.sd_full);

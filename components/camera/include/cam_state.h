@@ -59,6 +59,7 @@ typedef struct {
     // (gp_pset_id(i)). id is filled by the driver; used to verify an apply and by
     // the portal's "capture from camera".
     struct { uint8_t id; bool valid; uint8_t v; } gp_set[GP_PSET_MAX];
+    val_u32_t gp_preset;        // GoPro status 97: the camera's active preset id (what Load Preset takes)
     char     model[24];         // GoPro model name from Get Hardware Info ("HERO11 Black"); "" until known
     uint8_t  gp_apply_zone;     // 1..3, 0 = none
     uint8_t  gp_apply_state;    // gp_apply_state_t

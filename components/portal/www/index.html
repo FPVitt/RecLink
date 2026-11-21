@@ -199,6 +199,11 @@
           <button type="button" class="ghost auxdetect" data-aux-for="preset.channel">Set AUX</button>
         </span></label>
       <div class="rangebar" id="rb-preset" data-fn="preset"></div>
+      <label id="gp-mode-row" hidden>Zone style
+        <select name="preset.gp_mode">
+          <option value="1">Simple: switch the camera's preset</option>
+          <option value="0">Advanced: push settings</option>
+        </select></label>
       <div id="zone-ids"></div>
       <div class="row">
         <button type="button" class="ghost" id="zone-add">Add zone</button>
@@ -218,6 +223,7 @@
         <p class="muted" id="gp-state"></p>
       </fieldset>
       <p class="muted" id="dji-zone-note" hidden>Each zone applies its DJI mode value. Apply switches the connected camera now (save first).</p>
+      <p class="muted" id="gp-simple-note" hidden>Each zone switches the camera to one of its own presets. Pick the preset on the camera, then press Capture. Apply switches the connected camera now (save first).</p>
     </fieldset>
     <details class="adv adv-only">
       <summary>Advanced &mdash; timing &amp; behaviour</summary>
