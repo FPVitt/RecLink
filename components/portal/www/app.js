@@ -915,12 +915,12 @@ function camselUi() {
     L.forEach(c => { const o = el('option'); o.value = camHex(c.addr);
       o.textContent = c.name + (c.connected ? ' (connected)' : c.active ? ' (active)' : ''); s.appendChild(o); });
   }
-  if (viewCam && !L.some(c => camHex(c.addr) === viewCam)) viewCam = '';      // the chosen camera is gone
+  if (viewCam && !L.some(c => camHex(c.addr) === viewCam)) { viewCam = ''; camAuto = false; }      // the chosen camera is gone: choose again
   s.value = viewCam;
-  if (L.length && !viewCam && !camAuto) {              // reload: go back to the camera chosen last time
-    camAuto = true;
+  if (L.length && !viewCam && !camAuto) {              // nothing chosen yet: the only camera, else the connected one, else the last one chosen
     let m = ''; try { m = localStorage.getItem('camsel') || ''; } catch (e) {}
-    if (L.some(c => camHex(c.addr) === m)) loadConfig(m);
+    const p = L.length === 1 ? L[0] : L.find(c => c.connected) || L.find(c => camHex(c.addr) === m);
+    if (p) { camAuto = true; loadConfig(camHex(p.addr)); }     // else try again on the next poll (a camera may connect)
   }
   const lock = L.length > 0 && !viewCam;              // no camera chosen: the camera pages are grayed out
   ['cam-control', 'osd', 'rid', 'clock'].forEach(id => { const x = $('#' + id); x.inert = lock; x.classList.toggle('camlock', lock); });
@@ -932,6 +932,7 @@ function camselUi() {
 $('#nocam-go').onclick = () => showTab('camera');
 $('#camsel-s').onchange = e => {
   if (document.body.classList.contains('dirty') && !confirm('Discard unsaved changes?')) { e.target.value = viewCam; return; }
+  camAuto = true;                                     // the user chose (even "Select a camera"): stop choosing for them
   loadConfig(e.target.value);
 };
 
