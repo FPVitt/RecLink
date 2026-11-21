@@ -228,7 +228,7 @@ Early development. The firmware builds for both targets and the full feature set
 is implemented, and it has been bench-tested on real ESP32-C3 hardware wired to
 a Betaflight FC and a GoPro HERO11 Black — MSP link, OSD rendering, recording
 triggers, the config portal and the settings-based zone presets all working.
-Version 0.3.1 is a **pre-release and may contain bugs**. Several protocol
+Version 0.3.2 is a **pre-release and may contain bugs**. Several protocol
 constants are still assumed pending verification against a live GoPro / DJI
 capture (see [VERIFY.md](VERIFY.md)). The Remote ID receiver (new in 0.3.0) has
 been built for every board profile and booted on the ESP32-C3 board; its Wi-Fi
