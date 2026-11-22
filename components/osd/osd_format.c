@@ -76,6 +76,8 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
     char tmp[24];
     int arrow_at[2] = { -1, -1 };   // indices of the %rp glyph placeholders in out (-1 = none)
     uint8_t arrow_glyph[2] = { 0, 0 };
+    int bi_at = -1;                 // index of the %bi battery-icon placeholder (digital OSD), patched after the filter
+    uint8_t bi_glyph = 0;
 
     for (const char *p = tmpl; *p && len + 1 < out_cap; p++) {
         if (*p != '%') { if (len + 1 < out_cap) { out[len++] = *p; out[len] = '\0'; } continue; }
@@ -117,17 +119,23 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
         } else if (TOK2('b','i')) {                // battery icon (single glyph)
             p++;
             if (!field_on(cfg, OSD_TOK_BI) || !cam->battery_pct.valid) { continue; }
+            // Betaflight MAX7456 font, verified @ BF drivers/osd_symbols.h
+            // (tag 2025.12.5, commit 7348054): SYM_BATT_FULL 0x90 ..
+            // SYM_BATT_EMPTY 0x96 -- a 7-step "evolution" set, exactly
+            // one glyph per battery state.
+            int lvl = (100 - (int)cam->battery_pct.v) * 7 / 100;
+            if (lvl < 0) { lvl = 0; } else if (lvl > 6) { lvl = 6; }
             if (cfg->osd.type == 1) {
-                // No battery-icon glyph exists in the DJI digital OSD's
-                // ASCII-only subset (spec 9.1) -- fall back to the %bb bar.
-                batt_bar4(tmp, cam->battery_pct.v, true);
+                // Digital OSD: the line filter below keeps only 0x20..0x5F, which used to turn this
+                // token into the %bb bar ("#---"). The goggles' font does have Betaflight's battery
+                // glyphs (Betaflight's own battery element draws them over the same display port), so
+                // like the Remote ID arrow the glyph is patched in AFTER the filter and the clamp.
+                // %bb stays the ASCII bar for anyone who prefers it.
+                bi_at = (int)len;
+                bi_glyph = (uint8_t)(0x90 + lvl);
+                tmp[0] = RID_ARROW_PLACEHOLDER;    // '^': inside 0x20..0x5F, survives the filter
+                tmp[1] = '\0';
             } else {
-                // Betaflight MAX7456 font, verified @ BF drivers/osd_symbols.h
-                // (tag 2025.12.5, commit 7348054): SYM_BATT_FULL 0x90 ..
-                // SYM_BATT_EMPTY 0x96 -- a 7-step "evolution" set, exactly
-                // one glyph per battery state.
-                int lvl = (100 - (int)cam->battery_pct.v) * 7 / 100;
-                if (lvl < 0) { lvl = 0; } else if (lvl > 6) { lvl = 6; }
                 tmp[0] = (char)(0x90 + lvl);
                 tmp[1] = '\0';
             }
@@ -292,6 +300,9 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
         if (arrow_at[k] >= 0 && (size_t)arrow_at[k] < len && out[arrow_at[k]] == RID_ARROW_PLACEHOLDER) {
             out[arrow_at[k]] = (char)arrow_glyph[k];
         }
+    }
+    if (bi_at >= 0 && (size_t)bi_at < len && out[bi_at] == RID_ARROW_PLACEHOLDER) {   // %bi on a digital OSD
+        out[bi_at] = (char)bi_glyph;
     }
     return (int)len;
 }

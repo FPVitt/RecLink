@@ -75,11 +75,40 @@ static void test_digital_and_clamp(void)
     fmt(out, sizeof out, "%sa", &fc, &cam, &c); CHECK(strcmp(out, "Medium") == 0);
 }
 
+// %bi: on an analog OSD the Betaflight battery glyph (0x90 full .. 0x96 empty); on a DIGITAL OSD the same
+// glyph, patched in after the digital filter (which would otherwise have blanked it and used to leave
+// the "#---" bar). Clamped line, field bit and unconfirmed battery still behave.
+static void test_battery_icon(void)
+{
+    cfg_t c; fc_state_t fc; cam_state_t cam; char out[32];
+    for (int digital = 0; digital < 2; digital++) {
+        setup(&c, &fc, &cam, digital);
+        cam.battery_pct.valid = true;
+        cam.battery_pct.v = 100; fmt(out, sizeof out, "%bi", &fc, &cam, &c);
+        CHECK_EQ((unsigned char)out[0], 0x90); CHECK_EQ(out[1], 0);
+        cam.battery_pct.v = 25;  fmt(out, sizeof out, "%bi%bt", &fc, &cam, &c);
+        CHECK_EQ((unsigned char)out[0], 0x90 + (100 - 25) * 7 / 100); CHECK(strcmp(out + 1, "25%") == 0);
+        cam.battery_pct.v = 0;   fmt(out, sizeof out, "[%bi]", &fc, &cam, &c);
+        CHECK_EQ((unsigned char)out[1], 0x96);
+        cam.battery_pct.valid = false; fmt(out, sizeof out, "[%bi]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);
+        cam.battery_pct.valid = true; cam.battery_pct.v = 50;
+        c.osd.fields_mask &= ~(1u << OSD_TOK_BI); fmt(out, sizeof out, "[%bi]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);
+    }
+    // digital: a literal '^' elsewhere in the line is not turned into the glyph, and %bb stays an ASCII bar
+    setup(&c, &fc, &cam, 1); cam.battery_pct.valid = true; cam.battery_pct.v = 50;
+    fmt(out, sizeof out, "^%bi %bb", &fc, &cam, &c);
+    CHECK_EQ(out[0], '^'); CHECK((unsigned char)out[1] >= 0x90 && (unsigned char)out[1] <= 0x96); CHECK(strcmp(out + 3, "##--") == 0 || strcmp(out + 3, "###-") == 0);
+    // a glyph pushed past the 16-char clamp is dropped, not written outside the line
+    fmt(out, sizeof out, "1234567890123456%bi", &fc, &cam, &c);
+    CHECK_EQ(strlen(out), 16);
+}
+
 int main(void)
 {
     RUN(test_each_token);
     RUN(test_blank_when_unconfirmed);
     RUN(test_field_bit);
+    RUN(test_battery_icon);
     RUN(test_digital_and_clamp);
     TEST_MAIN_END();
 }
