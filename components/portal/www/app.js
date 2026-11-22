@@ -348,6 +348,12 @@ const TOKLIST = [
   ['ix','ISO max'],['in','ISO min'],['sh','shutter'],['wb','white bal'],['co','colour'],['sa','sharpness'],['ev','EV comp'],['pt','Protune']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
+// Tokens only one brand can fill (the other brand's driver never reports them, so they would stay blank):
+// the GoPro settings (lens, aspect, profile, bit depth, Protune group). No token is DJI-only today.
+const GOPRO_ONLY = new Set(['ar', 'ln', 'pr', 'bd', 'ix', 'in', 'sh', 'wb', 'co', 'sa', 'ev', 'pt']);
+const DJI_ONLY = new Set();
+const tokOk = t => cfgBrand === 'dji' ? !GOPRO_ONLY.has(t) : cfgBrand === 'gopro' ? !DJI_ONLY.has(t) : true;
+const tokWhy = () => cfgBrand === 'dji' ? 'GoPro only' : 'DJI only';
 
 const model = [[], [], [], []];
 let focusLine = 0;
@@ -383,7 +389,8 @@ function renderChips(i) {
   const w = $('#chips-' + i); w.textContent = '';
   if (!model[i].length) { const e = el('span', 'empty'); e.textContent = '(empty line)'; w.appendChild(e); }
   model[i].forEach((x, j) => {
-    const c = el('span', 'chip' + (x.t ? '' : ' lit'));
+    const c = el('span', 'chip' + (x.t ? '' : ' lit') + (x.t && !tokOk(x.t) ? ' bad' : ''));
+    if (x.t && !tokOk(x.t)) c.title = tokWhy() + ': shows nothing with this camera. Remove it.';
     if (x.t) {
       const b = el('b'); b.textContent = TOKS[x.t]; const s = el('i'); s.textContent = '%' + x.t;
       c.appendChild(b); c.appendChild(s);
@@ -411,7 +418,8 @@ function setFocusLine(i) {
     const b = el('button', 'pchip'); b.type = 'button';
     const s = el('span'); s.textContent = pair[1]; const it = el('i'); it.textContent = '%' + pair[0];
     b.appendChild(s); b.appendChild(it);
-    b.onclick = () => { model[focusLine].push({t: pair[0]}); renderChips(focusLine); commitLine(focusLine); };
+    b.dataset.t = pair[0];
+    b.onclick = () => { if (!tokOk(pair[0])) return; model[focusLine].push({t: pair[0]}); renderChips(focusLine); commitLine(focusLine); };
     pal.appendChild(b);
   });
   const tb = el('button', 'pchip'); tb.type = 'button'; tb.textContent = '＋ text';
@@ -905,6 +913,7 @@ function collectConfig() {
 }
 
 let cfgBrand = '';            // paired camera brand, drives field gating
+let gateBrand = null;         // brand the OSD palette was last gated for
 let rebootBaseline = '';      // msp.baud + swap_pins at last load, to detect reboot-needed
 
 // ---- per-camera settings: Cam control, OSD, Remote ID and Clock belong to one paired camera ----
@@ -1010,6 +1019,11 @@ function applyGates() {
   gate($('#lbl-resync'), isDJI || !cfgBrand, 'DJI only');
   const gp = !!isDJI;
   $$('[name^="gps_push."]').forEach(i => i.disabled = !gp);
+  if (gateBrand !== cfgBrand) {                          // OSD tokens the other brand cannot fill: grayed out, flagged where already used
+    gateBrand = cfgBrand;
+    $$('#palette .pchip[data-t]').forEach(b => { const ok = tokOk(b.dataset.t); b.disabled = !ok; b.title = ok ? '' : tokWhy() + ' (this camera never reports it)'; });
+    for (let i = 0; i < 4; i++) renderChips(i);
+  }
 
   layoutAllBars();
   if (lastStatus) updateCursors(lastStatus.msp);

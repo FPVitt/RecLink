@@ -182,6 +182,8 @@ details.adv label:first-of-type{border-top:1px solid var(--line)}
 .pz input{min-width:80px}
 .pz .zapply{flex:none;padding:6px 14px}
 #hilight-card[hidden],#gp-mode-row[hidden],.zcap[hidden]{display:none}
+.pchip:disabled{opacity:.35;cursor:not-allowed}
+.chip.bad{opacity:.55;outline:1px dashed var(--warn)}
 
 .rangebar{position:relative;height:74px;margin:24px 14px 14px;touch-action:none}
 .rangebar i{font-style:normal}
