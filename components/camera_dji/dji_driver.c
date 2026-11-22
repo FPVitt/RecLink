@@ -51,7 +51,8 @@ static uint16_t s_seq;
 static uint32_t s_device_id;
 static bool     s_first_pair;
 static bool     s_handshaked;
-static duml_reasm_t rz;
+static duml_reasm_t rz, rz5;      // reassembly per notify characteristic (FFF4, FFF5)
+static uint8_t s_dbg_n;           // diagnostic: notifications logged on this link
 static uint32_t s_last_rx_ms;     // last notification, to shed a stale half frame
 static char    s_txt_res[8], s_txt_fps[6];
 static bool    s_txt_valid;
@@ -144,10 +145,14 @@ static void send_connect_request(void)
     put_u32(&p[i], 0x00000000); i += 4;          // fw_version 0 (no FW push)
     p[i++] = 0;                                  // conidx (reserved)
     p[i++] = s_first_pair ? 1 : 0;               // verify_mode
-    p[i++] = 0; p[i++] = 0;                      // verify_data u16
+    // verify_data u16: on a first pairing a random 4-digit code, as DJI's demo and the working debug
+    // tool send ("first pairing: the camera shows a code pop-up"). With 0 the Action 6 showed no
+    // prompt at all and never answered (bench 2026-11-22). Reconnects (verify_mode 0) send 0.
+    uint16_t code = s_first_pair ? (uint16_t)(1000u + esp_random() % 9000u) : 0;
+    p[i++] = (uint8_t)code; p[i++] = (uint8_t)(code >> 8);
     i += 4;                                      // reserved[4]
     tx(DJI_CMD_WAIT_RESULT, CS_COMMON, ID_CONNECT, p, sizeof(p));
-    applog_note("dji connect req id=%08lx verify=%d", (unsigned long)s_device_id, s_first_pair);
+    applog_note("dji connect req id=%08lx verify=%d code=%u", (unsigned long)s_device_id, s_first_pair, code);
 }
 
 static void send_subscribe(void)
@@ -319,7 +324,9 @@ static esp_err_t dji_tick_1s(void)
 // ---- link bring-up --------------------------------------
 static const brand_gatt_t *dji_gatt(void)
 {
-    static const brand_gatt_t g = { .sub = { &U_NOTIFY.u, NULL, NULL, NULL }, .sub_n = 1 };
+    // FFF4 AND FFF5: the camera may answer on either, and the working debug tool subscribes to every
+    // notifiable characteristic. FFF5 is also the write characteristic (read/write-no-rsp/notify/indicate).
+    static const brand_gatt_t g = { .sub = { &U_NOTIFY.u, &U_WRITE.u, NULL, NULL }, .sub_n = 2 };
     return &g;
 }
 
@@ -333,6 +340,8 @@ static esp_err_t dji_link_up(bool first_pair)
         return ESP_FAIL;
     }
     duml_reasm_reset(&rz);
+    duml_reasm_reset(&rz5);
+    s_dbg_n = 0;
     memset(s_pend, 0, sizeof(s_pend));
     s_txt_valid = false; s_model[0] = '\0'; s_asleep = false;
     s_first_pair = first_pair;
@@ -569,14 +578,23 @@ static void handle_msg(const duml_msg_t *m)
 
 static void dji_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
 {
-    if (handle != vh_notify) { return; }
+    // The camera answers on FFF4 and (some models/frames) on FFF5; each characteristic has its own
+    // reassembly buffer so two streams can never splice into one frame.
+    duml_reasm_t *r = handle == vh_notify ? &rz : (handle == h_write && h_write) ? &rz5 : NULL;
+    if (!r) { return; }
+    if (s_dbg_n < 6) {                          // first few frames per link: what arrives, and where (pairing bring-up)
+        char hx[3 * 16 + 1]; int k = 0;
+        for (uint16_t i = 0; i < len && i < 16; i++) { k += snprintf(hx + k, sizeof(hx) - k, "%02x ", data[i]); }
+        ESP_LOGI(TAG, "notify %s len=%u: %s", r == &rz ? "fff4" : "fff5", len, hx);
+        s_dbg_n++;
+    }
     uint32_t now = now_ms();
     // A half frame whose tail never came would swallow the start of the next one: drop it after 2 s.
-    if (rz.have && (int32_t)(now - s_last_rx_ms) > 2000) { duml_reasm_reset(&rz); }
+    if ((rz.have || rz5.have) && (int32_t)(now - s_last_rx_ms) > 2000) { duml_reasm_reset(&rz); duml_reasm_reset(&rz5); }
     s_last_rx_ms = now;
     duml_msg_t m;
-    if (duml_reasm_feed(&rz, data, len, &m)) { handle_msg(&m); }
-    while (duml_reasm_next(&rz, &m)) { handle_msg(&m); }
+    if (duml_reasm_feed(r, data, len, &m)) { handle_msg(&m); }
+    while (duml_reasm_next(r, &m)) { handle_msg(&m); }
 }
 
 // ---- adv match (spec 7.1) ---------------------------------

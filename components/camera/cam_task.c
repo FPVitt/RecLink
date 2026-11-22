@@ -29,6 +29,9 @@ static const char *TAG = "cam";
 // ---- timings (spec 5.2 / 8.5) ----------------------------------------
 #define CAM_RX_TIMEOUT_MS     5000
 #define CONNECT_TIMEOUT_MS   7000
+// A FIRST pairing waits for a person: a DJI shows "allow this device?" on its screen and only
+// answers once it is accepted (a GoPro pairing can wait on its screen too). 7 s cut that off.
+#define FIRST_PAIR_TIMEOUT_MS 45000
 #define TICK_PERIOD_MS        1000
 #define LIVENESS_STALL_MS    30000     // housekeeping-style check, spec 3.5
 #define LIVENESS_STATUS      (-1)      // synthetic DISCONNECTED status: not a controller reason
@@ -694,7 +697,15 @@ static void handle_ble_evt(int ev, int status)
 
     switch (ev) {
     case BLE_EVT_CONNECTED:
-        if (s_cs.link == CAM_LINK_CONNECTING) {
+        if (s_cs.link == CAM_LINK_CONNECTING && s_first_pair && s_drv && strcmp(s_drv->name, "dji") == 0) {
+            // A DJI pairs at application level and starts BLE encryption itself. Initiating security
+            // here as well collided with the camera's own request: the Action 6 showed no pairing
+            // prompt and never answered (bench 2026-11-22). The working debug tool never initiates;
+            // like it, go straight to discovery and let the camera encrypt when it wants to.
+            ESP_LOGI(TAG, "connected (DJI first pairing: not initiating security)");
+            set_link(CAM_LINK_SYNCING);
+            ble_central_discover_all();
+        } else if (s_cs.link == CAM_LINK_CONNECTING) {
             ESP_LOGI(TAG, "connected, securing");
             ble_central_secure();
             // The master slot is free again (ble_gap.c:2654): restart the Remote ID scan now,
@@ -1125,7 +1136,7 @@ static void cam_task(void *arg)
 
         // ---- connect / sync timeout -----------------------------
         if ((s_cs.link == CAM_LINK_CONNECTING || s_cs.link == CAM_LINK_SYNCING) &&
-            (int32_t)(now - s_state_since_ms) > CONNECT_TIMEOUT_MS) {
+            (int32_t)(now - s_state_since_ms) > (s_first_pair ? FIRST_PAIR_TIMEOUT_MS : CONNECT_TIMEOUT_MS)) {
             ESP_LOGW(TAG, "connect/sync timeout -> rescan");
             pen_set_target();
             ble_central_disconnect();
