@@ -148,6 +148,8 @@ body:not(.dirty) footer #save{opacity:.6}
   font-weight:800;letter-spacing:.04em;line-height:1.9;
   color:#fff;text-shadow:-1px 0 1px #000,1px 0 1px #000,0 -1px 1px #000,0 1px 1px #000,0 0 3px rgba(0,0,0,.95)}
 .osdline{white-space:pre;min-height:1.9em;transform:scaleY(1.18);transform-origin:left center}
+.bat{display:inline-block;position:relative;width:1.05em;height:.6em;margin:0 .32em 0 .02em;vertical-align:-.04em;border:.13em solid #fff;border-radius:.08em;box-sizing:border-box;background:linear-gradient(90deg,#fff var(--f),transparent 0)}
+.bat::after{content:"";position:absolute;right:-.3em;top:.1em;width:.15em;height:.2em;background:#fff}
 #osdclip{font-size:12px;margin:6px 0 0}
 .palette{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .pchip{display:inline-flex;align-items:center;gap:6px;background:#11151b;border:1px solid var(--line);

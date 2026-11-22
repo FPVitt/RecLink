@@ -464,11 +464,10 @@ function tokVal(pair, d) {
       if (b > 4) b = 4;
       return d.digital ? '#'.repeat(b) + '-'.repeat(4 - b) : '█'.repeat(b) + '░'.repeat(4 - b); }
     case 'bi':
-      // Real hardware shows Betaflight's battery glyph (analog and digital alike); a shaded block is the
-      // closest approximation here. %bb is the ASCII bar.
+      // Real hardware shows Betaflight's battery glyph, one of 7 steps (code 0x90 full .. 0x96 empty, as in
+      // osd_format.c). Here U+E090..E096 stand for it and are drawn as a small battery. %bb is the ASCII bar.
       if (!d.battery.valid) return '';
-      { let b = Math.floor((d.battery.v + 12) / 25); if (b > 4) b = 4;
-        return ['░', '▒', '▒', '▓', '█'][b]; }
+      return String.fromCharCode(0xE090 + Math.max(0, Math.min(6, Math.floor((100 - d.battery.v) * 7 / 100))));
     case 'rs': return d.resolution.valid ? d.resolution.v : '';
     case 'fp': return d.fps.valid ? d.fps.v : '';
     case 'ln': return d.lens.valid ? d.lens.v : '';
@@ -519,7 +518,7 @@ function withForm(d) {
 function digitalize(s) {
   let o = '';
   for (const ch of s) {
-    if ('░▒▓█'.includes(ch)) { o += ch; continue; }       // the %bi battery glyph is exempt from the filter
+    if (ch >= '\uE090' && ch <= '\uE096') { o += ch; continue; }   // the %bi battery glyph is exempt from the filter
     let c = ch.charCodeAt(0);
     if (c >= 97 && c <= 122) c -= 32;
     o += (c < 0x20 || c > 0x5F) ? ' ' : String.fromCharCode(c);
@@ -596,7 +595,13 @@ function renderPreview() {
   while (box.children.length > lines.length) box.lastChild.remove();
   lines.forEach((t, i) => {
     const c = box.children[i];
-    if (c.textContent !== t) c.textContent = t;
+    if (c.dataset.raw !== t) {
+      c.dataset.raw = t; c.textContent = '';
+      t.split(/([\uE090-\uE096])/).forEach(x => {          // the battery glyph is drawn as a battery (--f = charge)
+        if (/^[\uE090-\uE096]$/.test(x)) { const b = el('i', 'bat'); b.style.setProperty('--f', (6 - (x.charCodeAt(0) - 0xE090)) / 6 * 100 + '%'); c.appendChild(b); }
+        else if (x) c.appendChild(document.createTextNode(x));
+      });
+    }
     if (lab[i]) c.dataset.l = lab[i]; else delete c.dataset.l;
   });
 
