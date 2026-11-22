@@ -103,10 +103,12 @@ static uint32_t   s_recon_since_ms;      // when the first candidate appeared (0
 // A camera whose last attempt failed (no handshake, dropped, went silent soon after READY) is
 // demoted for RECON_PENALTY_MS so a second, working camera wins the pick -- otherwise a powered-down
 // camera that still advertises (DJI standby) and sits next to the board would be chosen forever.
-// If it is the only one heard it is still tried, after a longer gather (RECON_PICK_MS x3).
+// If it is the only one heard it is still tried, after a slightly longer gather (RECON_PICK_MS + 2 s).
 #define RECON_PENALTY_MS 30000
 #define RECON_PENALTY_DB 40
 static uint32_t   s_pen_until[CAM_MAX_BONDS];   // per s_bonds[] index; 0 = none
+static uint8_t    s_quick_drops[CAM_MAX_BONDS]; // consecutive "dropped at once" (HCI 0x3E) per camera; cleared at READY
+static bool       s_skip_pen;                   // the next go_lost() must not demote the camera
 static int        s_recon_eff;           // best candidate's RSSI after the penalty
 static bool       s_recon_pen;           // that candidate is currently demoted
 static bool pen_active(int bi)
@@ -117,6 +119,7 @@ static bool pen_active(int bi)
 static void load_bonds(void)
 {
     memset(s_pen_until, 0, sizeof(s_pen_until));
+    memset(s_quick_drops, 0, sizeof(s_quick_drops));
     s_bond_n = 0;
     for (int i = 0; i < CAM_MAX_BONDS; i++) {
         cam_bond_t b;
@@ -180,6 +183,7 @@ static void set_link(cam_link_state_t st)
     s_state_since_ms = now_ms();
     if (st == CAM_LINK_READY) {
         s_was_ready = true; s_connected_this_session = true;
+        { int qb = bond_match(s_target_addr); if (qb >= 0) { s_quick_drops[qb] = 0; } }
         // Stamp "heard from the camera" BEFORE the commit below: cam_liveness_check() (1 Hz, in
         // housekeeping) reads the committed value, and a stale one made it declare a stall and
         // tear down a link that had been READY for ~200 ms.
@@ -659,7 +663,11 @@ static void go_lost(const char *why, bool silent_hang)
 {
     // Failed before READY, or READY for under a minute: demote it for the next pick. A camera that
     // flew a long time and then dropped (RF dropout) keeps its priority.
-    if (s_cs.link != CAM_LINK_READY || (int32_t)(now_ms() - s_state_since_ms) < 60000) { pen_set_target(); }
+    if (s_skip_pen) { s_skip_pen = false; }
+    else if (s_cs.link != CAM_LINK_READY || (int32_t)(now_ms() - s_state_since_ms) < 60000) { pen_set_target(); }
+    // An attempt that failed before READY (camera still starting, ...) is retried after at most 2 s;
+    // the growing backoff is for a camera that was READY and went away.
+    if (s_cs.link != CAM_LINK_READY && s_backoff_idx > 1) { s_backoff_idx = 1; }
     applog_note("cam LOST: %s", why);
     rtcnv_set_last_disconnect(why);
     ble_central_disconnect();
@@ -733,20 +741,24 @@ static void handle_ble_evt(int ev, int status)
         if (s_cs.link != CAM_LINK_CONNECTING && s_cs.link != CAM_LINK_SYNCING) { break; }   // stale: that attempt is already torn down
         // Timeout / link lost / controller busy while encrypting: the usual result at the edge of
         // range. It says nothing about the bond, so it is never counted towards erasing it.
-        // One exception, hardware-observed on an Osmo Action 6: after the camera forgets us, a bonded
-        // reconnect comes up and is dropped by the camera at once with HCI 0x3E (status 0x23E), and no
-        // key/authentication event ever fires. For a DJI that pattern is counted like a key failure
-        // (3 in a row for the same camera, never airborne) so it ends in "re-pair" instead of looping.
-        if (status == BLESTAT_HCI_BASE + 0x3E && s_drv && strcmp(s_drv->name, "dji") == 0 && !s_first_pair) {
-            ESP_LOGW(TAG, "dji: dropped at once with 0x3E (status %d) -> counted as a possible stale bond", status);
-            goto bond_fail;
+        // HCI 0x3E (status 0x23E), "connection failed to be established": what a camera does that is
+        // still switching on -- it already advertises but cannot hold a link yet (bench 2026-11-22: an
+        // Osmo Action 6 switched on right after a GoPro was switched off dropped twice at once, then
+        // connected). An earlier rule counted these like key failures, which would have erased a good
+        // bond on the third try. They are never counted: retry soon, and the first two such drops per
+        // camera are not demoted either, so the camera is picked again as soon as it is ready.
+        if (status == BLESTAT_HCI_BASE + 0x3E) {
+            int bi = bond_match(s_target_addr);
+            if (bi >= 0 && s_quick_drops[bi] < 255) { s_skip_pen = ++s_quick_drops[bi] <= 2; }
+            ESP_LOGW(TAG, "dropped at once (status %d): camera not ready yet -> retry", status);
+            go_lost("camera not ready", false);
+            break;
         }
         ESP_LOGW(TAG, "encryption failed (status %d, not a key failure) -> retry", status);
         go_lost("encryption failed", false);
         break;
     case BLE_EVT_ENC_FAIL:
         if (s_cs.link != CAM_LINK_CONNECTING && s_cs.link != CAM_LINK_SYNCING) { break; }   // stale
-    bond_fail:
         // On a bonded reconnect, repeated KEY/AUTHENTICATION failures (ble_central classifies them;
         // timeouts and link loss arrive as BLE_EVT_ENC_TRANSIENT) mean the camera dropped its side
         // of the bond -- erasing ours and asking for a re-pair is the only real fix (spec 3.6 / 11.0
@@ -950,6 +962,10 @@ static void cam_task(void *arg)
                     s_backoff_idx = 0;
                     s_bond_fails = 0;
                     bridge_flag_clear(FLAG_REPAIR_NEEDED);
+                    // A new pairing must never inherit the previous camera's name: connect_now() only
+                    // overwrites it when the advert carries a name, and a GoPro's name sits in the scan
+                    // response, so a GoPro paired after an Osmo was stored as "OsmoAction6-...".
+                    s_cs.name[0] = '\0';
                     if (it.pair.has_addr) {
                         // User picked a discovered camera -> bond to that address.
                         s_pair_discover = false;
@@ -959,7 +975,9 @@ static void cam_task(void *arg)
                         xSemaphoreTake(s_found_mux, portMAX_DELAY);
                         for (int i = 0; i < s_found_n; i++) {
                             if (memcmp(s_found[i].addr, it.pair.addr, 6) == 0) {
-                                s_target_addr_type = s_found[i].addr_type; break;
+                                s_target_addr_type = s_found[i].addr_type;
+                                strlcpy(s_cs.name, s_found[i].name, sizeof(s_cs.name));   // name as listed to the user
+                                break;
                             }
                         }
                         xSemaphoreGive(s_found_mux);
@@ -1122,7 +1140,7 @@ static void cam_task(void *arg)
         // Gather bonded-camera adverts for RECON_PICK_MS, then connect to the
         // strongest (or immediately once one is very close).
         if (s_cs.link == CAM_LINK_SCAN && s_recon_have && s_recon_since_ms &&
-            (now - s_recon_since_ms >= (s_recon_pen ? 3 * RECON_PICK_MS : RECON_PICK_MS) ||
+            (now - s_recon_since_ms >= (s_recon_pen ? RECON_PICK_MS + 2000 : RECON_PICK_MS) ||
              (s_recon_rssi >= -50 && !s_recon_pen))) {
             ESP_LOGI(TAG, "reconnect: best of %d bonded at %d dBm -> connecting",
                      s_bond_n, s_recon_rssi);
