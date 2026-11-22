@@ -94,13 +94,37 @@ static void test_battery_icon(void)
         cam.battery_pct.valid = true; cam.battery_pct.v = 50;
         c.osd.fields_mask &= ~(1u << OSD_TOK_BI); fmt(out, sizeof out, "[%bi]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);
     }
-    // digital: a literal '^' elsewhere in the line is not turned into the glyph, and %bb stays an ASCII bar
+    // digital: a literal '^' elsewhere in the line is not turned into the glyph
     setup(&c, &fc, &cam, 1); cam.battery_pct.valid = true; cam.battery_pct.v = 50;
-    fmt(out, sizeof out, "^%bi %bb", &fc, &cam, &c);
-    CHECK_EQ(out[0], '^'); CHECK((unsigned char)out[1] >= 0x90 && (unsigned char)out[1] <= 0x96); CHECK(strcmp(out + 3, "##--") == 0 || strcmp(out + 3, "###-") == 0);
+    fmt(out, sizeof out, "^%bi ^", &fc, &cam, &c);
+    CHECK_EQ(out[0], '^'); CHECK((unsigned char)out[1] >= 0x90 && (unsigned char)out[1] <= 0x96); CHECK_EQ(out[2], ' '); CHECK_EQ(out[3], '^');
     // a glyph pushed past the 16-char clamp is dropped, not written outside the line
     fmt(out, sizeof out, "1234567890123456%bi", &fc, &cam, &c);
     CHECK_EQ(strlen(out), 16);
+}
+
+// %cm: short camera model from the driver's model string; blank when unknown; follows the field bit.
+static void test_cam_model(void)
+{
+    char o[16];
+    struct { const char *in, *want; } k[] = {
+        { "HERO11 Black", "GP11" }, { "HERO11 Black Mini", "GP11M" }, { "HERO9 Black", "GP9" }, { "HERO13 Black", "GP13" },
+        { "Osmo Action 6", "A6" }, { "Osmo Action 4", "A4" }, { "Osmo Action 5 Pro", "A5P" }, { "Osmo 360", "O360" },
+        { "Osmo Pocket 3", "DJI" }, { "", "" }, { "Something", "" },
+    };
+    for (unsigned i = 0; i < sizeof k / sizeof k[0]; i++) {
+        osd_cam_model_short(o, sizeof o, k[i].in);
+        CHECK(strcmp(o, k[i].want) == 0);
+    }
+    osd_cam_model_short(o, 3, "HERO11 Black"); CHECK(strcmp(o, "GP") == 0);      // truncates, always terminated
+    cfg_t c; fc_state_t fc; cam_state_t cam; char out[32]; setup(&c, &fc, &cam, 1);
+    strlcpy(cam.model, "Osmo Action 6", sizeof cam.model);
+    fmt(out, sizeof out, "[%cm]", &fc, &cam, &c); CHECK(strcmp(out, "[A6]") == 0);
+    cam.model[0] = '\0'; fmt(out, sizeof out, "[%cm]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);   // blank-on-unconfirmed
+    strlcpy(cam.model, "HERO11 Black", sizeof cam.model);
+    c.osd.fields_mask &= ~(1u << OSD_TOK_CM); fmt(out, sizeof out, "[%cm]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);
+    // a retired token is no longer special: it is emitted literally (saved lines are cleaned by cfg_osd_retire_tokens)
+    setup(&c, &fc, &cam, 0); fmt(out, sizeof out, "%bb", &fc, &cam, &c); CHECK(strcmp(out, "%b") == 0 || strcmp(out, "%bb") == 0);
 }
 
 int main(void)
@@ -109,6 +133,7 @@ int main(void)
     RUN(test_blank_when_unconfirmed);
     RUN(test_field_bit);
     RUN(test_battery_icon);
+    RUN(test_cam_model);
     RUN(test_digital_and_clamp);
     TEST_MAIN_END();
 }

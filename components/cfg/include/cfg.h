@@ -299,6 +299,9 @@ typedef struct __attribute__((packed)) {
 
 // Pure helpers (cfg_profile.c, host-tested). extract: head fields -> profile (sealed, with CRC).
 // apply: profile -> head fields; false (and *c untouched) if the profile does not validate.
+// Remove the retired OSD tokens (%bb %cn %gs %gf %fb %sp) from the four saved lines, in place.
+void cfg_osd_retire_tokens(cfg_t *c);
+
 void cfg_profile_extract(const cfg_t *c, cfg_profile_t *p);
 bool cfg_profile_apply(cfg_t *c, const cfg_profile_t *p);
 bool cfg_profile_valid(const cfg_profile_t *p);
@@ -333,11 +336,16 @@ static inline cfg_gp_zone_t *cfg_zone_gp_mut(cfg_t *c, int i)
 
 // -------- OSD token bit positions for cfg.osd.fields_mask --------------------
 enum {
-    OSD_TOK_ST = 0, OSD_TOK_ET, OSD_TOK_RT, OSD_TOK_BT, OSD_TOK_BB,
+    // Bit positions are stored in saved masks, so they never move. Tokens retired in 0.3.3 (%bb battery
+    // bar, %cn craft name, %gs GPS sats, %gf GPS fix, %fb FC battery, %sp speed) keep their bit as
+    // OSD_TOK_RETIRED_*: not offered, not formatted, and stripped from saved lines by
+    // cfg_osd_retire_tokens(). OSD_TOK_CM reuses the %bb bit, so a saved all-on mask already has it on.
+    OSD_TOK_ST = 0, OSD_TOK_ET, OSD_TOK_RT, OSD_TOK_BT,
+    OSD_TOK_CM,          // %cm  camera model, short ("GP11", "A6")  -- was %bb (bit 4)
     OSD_TOK_RS, OSD_TOK_FP, OSD_TOK_LN, OSD_TOK_SD, OSD_TOK_MD,
-    OSD_TOK_CN, OSD_TOK_WR,
-    OSD_TOK_AR, OSD_TOK_PR, OSD_TOK_BD, OSD_TOK_CR, OSD_TOK_GS, OSD_TOK_GF,
-    OSD_TOK_FB, OSD_TOK_SP, OSD_TOK_SG,
+    OSD_TOK_RETIRED_CN, OSD_TOK_WR,
+    OSD_TOK_AR, OSD_TOK_PR, OSD_TOK_BD, OSD_TOK_CR, OSD_TOK_RETIRED_GS, OSD_TOK_RETIRED_GF,
+    OSD_TOK_RETIRED_FB, OSD_TOK_RETIRED_SP, OSD_TOK_SG,
     OSD_TOK_BI,
     OSD_TOK_RP,          // Remote ID proximity warning (spec 8.8.7). NOT OR-ed back in by
                          // cfg_validate (that would make it impossible to switch off): set once

@@ -45,19 +45,31 @@ static size_t app(char *out, size_t cap, size_t len, const char *s)
 
 static bool field_on(const cfg_t *cfg, int tok) { return (cfg->osd.fields_mask >> tok) & 1u; }
 
-// Digital-safe 4-segment battery bar. Used by %bb, and as %bi's fallback on
-// digital OSD -- the DJI-goggle font has no true battery-icon glyph.
-static void batt_bar4(char *tmp, int pct, bool digital)
+// Short camera model for %cm: the GoPro / DJI model string the driver stored ("HERO11 Black",
+// "Osmo Action 6") as a code that fits a 16-character OSD line: GP11, GP11M (Mini), A6, A5P (Pro), O360.
+// Anything not recognised gives "GP" / "DJI" by brand prefix, or nothing at all.
+size_t osd_cam_model_short(char *out, size_t cap, const char *model)
 {
-    int bars = (pct + 12) / 25; if (bars > 4) { bars = 4; }
-    // VERIFY: analog bytes 0xFE/0xFA are NOT defined in BF osd_symbols.h @
-    // pin (tag 2025.12.5, commit 7348054f) and are not referenced by
-    // osd_elements.c's bar-drawing code -- placeholder, unconfirmed as a
-    // real solid/empty-block glyph. See VERIFY.md MSP-OSD-SYM-BATTBAR.
-    char full = digital ? '#' : (char)0xFE;
-    char none = digital ? '-' : (char)0xFA;
-    for (int i = 0; i < 4; i++) { tmp[i] = (i < bars) ? full : none; }
-    tmp[4] = '\0';
+    char t[12]; t[0] = '\0';
+    if (!model) { model = ""; }
+    if (strncmp(model, "HERO", 4) == 0) {                         // GoPro HERO 9..13 (+ "Black", "Mini")
+        const char *d = model + 4; int n = 0;
+        while (d[n] >= '0' && d[n] <= '9' && n < 3) { n++; }
+        snprintf(t, sizeof(t), "GP%.*s%s", n, d, strstr(model, "Mini") ? "M" : "");
+    } else if (strncmp(model, "Osmo Action ", 12) == 0) {         // DJI Osmo Action 4 / 5 Pro / 6
+        const char *d = model + 12; int n = 0;
+        while (d[n] >= '0' && d[n] <= '9' && n < 2) { n++; }
+        snprintf(t, sizeof(t), "A%.*s%s", n, d, strstr(model, "Pro") ? "P" : "");
+    } else if (strncmp(model, "Osmo 360", 8) == 0) {
+        snprintf(t, sizeof(t), "O360");
+    } else if (strncmp(model, "Osmo", 4) == 0) {
+        snprintf(t, sizeof(t), "DJI");
+    }
+    if (!cap) { return 0; }
+    size_t n = strlen(t);
+    if (n >= cap) { n = cap - 1; }
+    memcpy(out, t, n); out[n] = '\0';
+    return n;
 }
 
 int osd_format_line(char *out, size_t out_cap, const char *tmpl,
@@ -111,11 +123,6 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
             if (!field_on(cfg, OSD_TOK_BT) || !cam->battery_pct.valid) { continue; }
             snprintf(tmp, sizeof(tmp), "%u%%", cam->battery_pct.v);
             len = app(out, out_cap, len, tmp);
-        } else if (TOK2('b','b')) {                // battery bar glyphs
-            p++;
-            if (!field_on(cfg, OSD_TOK_BB) || !cam->battery_pct.valid) { continue; }
-            batt_bar4(tmp, cam->battery_pct.v, cfg->osd.type == 1);
-            len = app(out, out_cap, len, tmp);
         } else if (TOK2('b','i')) {                // battery icon (single glyph)
             p++;
             if (!field_on(cfg, OSD_TOK_BI) || !cam->battery_pct.valid) { continue; }
@@ -139,6 +146,11 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
                 tmp[0] = (char)(0x90 + lvl);
                 tmp[1] = '\0';
             }
+            len = app(out, out_cap, len, tmp);
+        } else if (TOK2('c','m')) {                // camera model, short (GP11, A6)
+            p++;
+            if (!field_on(cfg, OSD_TOK_CM)) { continue; }
+            osd_cam_model_short(tmp, sizeof(tmp), cam->model);
             len = app(out, out_cap, len, tmp);
         } else if (TOK2('r','s')) {                // resolution
             p++;
@@ -175,10 +187,6 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
             p++;
             if (!field_on(cfg, OSD_TOK_MD) || !cam->mode_name.valid) { continue; }
             len = app(out, out_cap, len, cam->mode_name.v);
-        } else if (TOK2('c','n')) {                // craft name (FC)
-            p++;
-            if (!field_on(cfg, OSD_TOK_CN) || !fc->craft_name[0]) { continue; }
-            len = app(out, out_cap, len, fc->craft_name);
         } else if (TOK2('w','r')) {                // active warning
             p++;
             if (!field_on(cfg, OSD_TOK_WR)) { continue; }
@@ -201,32 +209,6 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
             p++;
             if (!field_on(cfg, OSD_TOK_CR) || cam->link != CAM_LINK_READY) { continue; }
             snprintf(tmp, sizeof(tmp), "%d", cam->rssi);
-            len = app(out, out_cap, len, tmp);
-        } else if (TOK2('g','s')) {                // GPS sat count (FC)
-            p++;
-            if (!field_on(cfg, OSD_TOK_GS) || !fc->gps_present) { continue; }
-            snprintf(tmp, sizeof(tmp), "%u", fc->gps.sats);
-            len = app(out, out_cap, len, tmp);
-        } else if (TOK2('g','f')) {                // GPS fix (2D/3D/NO)
-            p++;
-            if (!field_on(cfg, OSD_TOK_GF) || !fc->gps_present) { continue; }
-            len = app(out, out_cap, len, fc->gps.fix >= 3 ? "3D" : fc->gps.fix == 2 ? "2D" : "NO");
-        } else if (TOK2('f','b')) {                // FC battery state
-            p++;
-            if (!field_on(cfg, OSD_TOK_FB)) { continue; }
-            static const char *bs[] = { "OK", "LOW", "CRIT", "" };
-            len = app(out, out_cap, len, bs[fc->batt_state & 3]);
-        } else if (TOK2('s','p')) {                // ground speed (FC GPS), unit per cfg.osd.units
-            p++;
-            if (!field_on(cfg, OSD_TOK_SP) || !fc->gps_present || fc->gps.fix < 2) { continue; }
-            // cfg.osd.units: 0 = metric (km/h), 1 = imperial (mph)
-            if (cfg->osd.units) {
-                snprintf(tmp, sizeof(tmp), "%luMPH",
-                         (unsigned long)((fc->gps.spd_cm_s * 224u + 5000u) / 10000u));
-            } else {
-                snprintf(tmp, sizeof(tmp), "%luKMH",
-                         (unsigned long)((fc->gps.spd_cm_s * 36u + 500u) / 1000u));
-            }
             len = app(out, out_cap, len, tmp);
         } else if (TOK2('i','x')) {                // ISO max (GoPro setting 13, video only)
             p++;

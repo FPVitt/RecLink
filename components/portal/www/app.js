@@ -341,10 +341,10 @@ $$('.auxdetect').forEach(btn => {
 
 // ==== OSD tab: chip editor + live preview ====
 const TOKLIST = [
-  ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bb','batt bar'],['bi','batt icon'],
+  ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bi','batt icon'],['cm','cam model'],
   ['rs','resolution'],['fp','fps'],['ar','aspect'],['ln','lens'],['pr','profile'],['bd','bit depth'],
-  ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],['gs','GPS sats'],['gf','GPS fix'],
-  ['fb','FC batt'],['sp','speed'],['cn','craft name'],['wr','warning'],['rp','Remote ID proximity warning'],
+  ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],
+  ['wr','warning'],['rp','Remote ID proximity warning'],
   ['ix','ISO max'],['in','ISO min'],['sh','shutter'],['wb','white bal'],['co','colour'],['sa','sharpness'],['ev','EV comp'],['pt','Protune']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
@@ -458,6 +458,12 @@ function activeWarning(d) {
   return '';
 }
 const pv = x => x && x.valid ? x.v : '';
+// mirror osd_format.c osd_cam_model_short(): "HERO11 Black" -> GP11, "Osmo Action 6" -> A6, "Osmo Action 5 Pro" -> A5P
+const camShort = m => { m = m || ''; let x;
+  if ((x = /^HERO(\d{1,3})/.exec(m))) return 'GP' + x[1] + (/Mini/.test(m) ? 'M' : '');
+  if ((x = /^Osmo Action (\d{1,2})/.exec(m))) return 'A' + x[1] + (/Pro/.test(m) ? 'P' : '');
+  if (/^Osmo 360/.test(m)) return 'O360';
+  return /^Osmo/.test(m) ? 'DJI' : ''; };
 // Protune tokens: cam_state key + sample value
 const PROT = {ix: ['iso_max', '1600'], in: ['iso_min', '100'], sh: ['shutter', '1/60'], wb: ['wb', '5500K'],
   co: ['color', 'Flat'], sa: ['sharpness', 'Medium'], ev: ['ev', '0.0'], pt: ['protune', 'ON']};
@@ -468,12 +474,9 @@ function tokVal(pair, d) {
     case 'et': return d.rec_elapsed.valid ? mmss(d.rec_elapsed.v) : '';
     case 'rt': return d.rec_remaining.valid ? remainStr(d.rec_remaining.v) : '';
     case 'bt': return d.battery.valid ? d.battery.v + '%' : '';
-    case 'bb': { if (!d.battery.valid) return ''; let b = Math.floor((d.battery.v + 12) / 25);
-      if (b > 4) b = 4;
-      return d.digital ? '#'.repeat(b) + '-'.repeat(4 - b) : '█'.repeat(b) + '░'.repeat(4 - b); }
     case 'bi':
       // Real hardware shows Betaflight's battery glyph, one of 7 steps (code 0x90 full .. 0x96 empty, as in
-      // osd_format.c). Here U+E090..E096 stand for it and are drawn as a small battery. %bb is the ASCII bar.
+      // osd_format.c). Here U+E090..E096 stand for it and are drawn as a small battery.
       if (!d.battery.valid) return '';
       return String.fromCharCode(0xE090 + Math.max(0, Math.min(6, Math.floor((100 - d.battery.v) * 7 / 100))));
     case 'rs': return d.resolution.valid ? d.resolution.v : '';
@@ -485,19 +488,13 @@ function tokVal(pair, d) {
     case 'sg': return d.sd_remaining_kb.valid
       ? (d.sd_remaining_kb.v / 1024 / 1024).toFixed(1) + 'G' : '';
     case 'md': return d.mode.valid ? d.mode.v : '';
-    case 'cn': return d.craft_name || '';
     case 'wr': { const w = activeWarning(d); return (w && !(d.warn_blink && d.blinkOn)) ? w : ''; }
     case 'rp': return '';                    // the alert text replaces the whole line (simulated below)
     case 'ar': return d.aspect.valid ? d.aspect.v : '';
     case 'pr': return d.profile.valid ? d.profile.v : '';
     case 'bd': return d.bit_depth.valid ? d.bit_depth.v + 'b' : '';
     case 'cr': return d.link ? String(d.rssi) : '';
-    case 'gs': return d.gps_present ? String(d.gps_sats) : '';
-    case 'gf': return d.gps_present ? (d.gps_fix >= 3 ? '3D' : d.gps_fix === 2 ? '2D' : 'NO') : '';
-    case 'fb': return ['OK', 'LOW', 'CRIT', ''][d.fc_batt_state & 3];
-    case 'sp': if (!d.gps_present || d.gps_fix < 2) return '';
-      return d.units ? Math.floor((d.gps_spd * 224 + 5000) / 10000) + 'MPH'
-                     : Math.floor((d.gps_spd * 36 + 500) / 1000) + 'KMH';
+    case 'cm': return camShort(d.model);
     default: return PROT[pair] ? pv(d[PROT[pair][0]]) : null;
   }
 }
@@ -540,7 +537,7 @@ function sampleData() {
     battery: {v: 78, valid: true},
     resolution: {v: '5.3K', valid: true}, fps: {v: '30', valid: true}, aspect: {v: '16:9', valid: true},
     lens: {v: 'Wide', valid: true}, profile: {v: 'HDR', valid: true}, bit_depth: {v: 10, valid: true},
-    mode: {v: 'Video', valid: true},
+    mode: {v: 'Video', valid: true}, model: 'HERO11 Black',
     ...Object.fromEntries(Object.values(PROT).map(([k, v]) => [k, {v, valid: true}])),
     sd_missing: false, sd_full: false, sd_remaining_kb: {v: 60 * 1024 * 1024, valid: true},
     rssi: -52, gps_present: true, gps_fix: 3, gps_sats: 11, gps_spd: 850,

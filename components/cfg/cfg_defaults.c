@@ -39,11 +39,9 @@ void cfg_load_defaults(cfg_t *d)
     d->osd.type        = 1;      // digital -- DJI-goggle-safe glyph subset (default)
     d->osd.corner      = 1;
     strcpy(d->osd.line[0], "%st %et");
-    // No space between %bi and %bt: on digital OSD (the default), %bi falls
-    // back to the 4-char bar (batt_bar4), one char wider than the "BAT" it
-    // replaced -- dropping this space keeps the 2-digit-battery case back
-    // within the 16-char line cut (osd_format.c) for the longest %wr warning
-    // (REC FAIL / LOW BATT / CLK FAIL, 8 chars), matching the old budget.
+    // No space between %bi and %bt: the battery glyph is one char, and dropping the space keeps
+    // the 2-digit-battery case within the 16-char line cut (osd_format.c) for the longest %wr
+    // warning (REC FAIL / LOW BATT / CLK FAIL, 8 chars).
     strcpy(d->osd.line[1], "%bi%bt %wr");
     strcpy(d->osd.line[2], "%rs%fp %ln");
     strcpy(d->osd.line[3], "SD %sd");

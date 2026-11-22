@@ -14,6 +14,11 @@ void osd_set_clock_fail(bool on);
 
 // Pure formatter, unit-testable. Renders one template line into out (<=16 chars
 // + NUL). `blink_phase` toggles blinking warnings. Returns strlen(out).
+// Short model code for the %cm token from the model string a driver stored in cam_state.model:
+// "HERO11 Black" -> GP11, "HERO11 Black Mini" -> GP11M, "Osmo Action 6" -> A6, "Osmo Action 5 Pro" -> A5P.
+// Returns the length written (0 for an unknown / empty model).
+size_t osd_cam_model_short(char *out, size_t cap, const char *model);
+
 int osd_format_line(char *out, size_t out_cap, const char *tmpl,
                     const fc_state_t *fc, const cam_state_t *cam,
                     const cfg_t *cfg, bool blink_phase);

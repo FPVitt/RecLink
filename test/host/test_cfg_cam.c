@@ -108,6 +108,27 @@ static void test_simple_gopro_zone(void)
     CHECK_EQ(cfg_gp_zone_n(&g), 0);                              // never indexes past s[]
 }
 
+// Retired OSD tokens (%bb %cn %gs %gf %fb %sp) are dropped from saved lines, also when a profile is applied.
+static void test_retired_tokens(void)
+{
+    cfg_t c; cfg_load_defaults(&c);
+    strlcpy(c.osd.line[0], "%st %sp %et", sizeof c.osd.line[0]);
+    strlcpy(c.osd.line[1], "%bb%bt %gs%gf", sizeof c.osd.line[1]);
+    strlcpy(c.osd.line[2], "%cn %fb %bi %cm", sizeof c.osd.line[2]);
+    strlcpy(c.osd.line[3], "SD %sd %sp%sp", sizeof c.osd.line[3]);
+    char err[64]; CHECK_EQ(cfg_validate(&c, err, sizeof err), ESP_OK);
+    CHECK(strcmp(c.osd.line[0], "%st  %et") == 0);
+    CHECK(strcmp(c.osd.line[1], "%bt ") == 0);
+    CHECK(strcmp(c.osd.line[2], "  %bi %cm") == 0);
+    CHECK(strcmp(c.osd.line[3], "SD %sd ") == 0);
+    cfg_t d; cfg_load_defaults(&d);
+    strlcpy(d.osd.line[0], "%bb%st", sizeof d.osd.line[0]);
+    cfg_profile_t p; cfg_profile_extract(&d, &p);
+    cfg_t e; cfg_load_defaults(&e);
+    CHECK(cfg_profile_apply(&e, &p));
+    CHECK(strcmp(e.osd.line[0], "%st") == 0);
+}
+
 static void test_switch_saves_and_loads(void)
 {
     fresh();
@@ -268,6 +289,7 @@ int main(void)
 {
     RUN(test_profile_pure);
     RUN(test_simple_gopro_zone);
+    RUN(test_retired_tokens);
     RUN(test_switch_saves_and_loads);
     RUN(test_edit_inactive_camera);
     RUN(test_no_profile_inherits);

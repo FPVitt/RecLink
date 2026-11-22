@@ -538,7 +538,11 @@ static void handle_msg(const duml_msg_t *m)
             case 0xFF66: mn = "Osmo 360"; break;
             default: break;
             }
-            if (mn) { strlcpy(s_model, mn, sizeof(s_model)); applog_note("dji model: %s", mn); }
+            if (mn) {
+                strlcpy(s_model, mn, sizeof(s_model)); applog_note("dji model: %s", mn);
+                strlcpy(cam_scratch()->model, mn, sizeof(cam_scratch()->model));   // %cm on the OSD / portal status
+                if (CB->on_state_dirty) { CB->on_state_dirty(); }
+            }
         }
 
         if (verify_mode == 2 && verify_data == 0) {

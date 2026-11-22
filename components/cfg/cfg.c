@@ -118,6 +118,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     }
 
     CLAMP(c->hilight.channel, 0, 14);
+    cfg_osd_retire_tokens(c);       // tokens removed from the product are dropped from saved lines
 
     CLAMP(c->osd.refresh_hz, 1, 10);
     CLAMP(c->osd.corner, 0, 3);

@@ -32,11 +32,25 @@ bool cfg_profile_valid(const cfg_profile_t *p)
            p->size == sizeof(*p) && p->crc32 == prof_crc(p);
 }
 
+void cfg_osd_retire_tokens(cfg_t *c)
+{
+    static const char *const k_gone[] = { "%bb", "%cn", "%gs", "%gf", "%fb", "%sp" };
+    for (int i = 0; i < 4; i++) {
+        char *l = c->osd.line[i];
+        l[sizeof(c->osd.line[i]) - 1] = '\0';
+        for (size_t t = 0; t < sizeof(k_gone) / sizeof(k_gone[0]); t++) {
+            char *at;
+            while ((at = strstr(l, k_gone[t])) != NULL) { memmove(at, at + 3, strlen(at + 3) + 1); }
+        }
+    }
+}
+
 bool cfg_profile_apply(cfg_t *c, const cfg_profile_t *p)
 {
     if (!cfg_profile_valid(p)) { return false; }
     c->record = p->record;       c->preset = p->preset;     c->hilight = p->hilight;
     c->osd = p->osd;             c->clock = p->clock;       c->n_zones = p->n_zones;
+    cfg_osd_retire_tokens(c);
     memcpy(c->bands_x, p->bands_x, sizeof(c->bands_x));
     memcpy(c->gp_preset, p->gp_preset, sizeof(c->gp_preset));
     memcpy(c->gp_preset_x, p->gp_preset_x, sizeof(c->gp_preset_x));
