@@ -108,7 +108,10 @@ static uint32_t   s_recon_since_ms;      // when the first candidate appeared (0
 #define RECON_PENALTY_DB 40
 static uint32_t   s_pen_until[CAM_MAX_BONDS];   // per s_bonds[] index; 0 = none
 static uint8_t    s_quick_drops[CAM_MAX_BONDS]; // consecutive "dropped at once" (HCI 0x3E) per camera; cleared at READY
-static bool       s_skip_pen;                   // the next go_lost() must not demote the camera
+static bool       s_off_pending;                // driver saw the camera switch off: drop the link at the end of this pass
+static uint8_t    s_off_streak;                 // consecutive off-drops with no healthy READY between them
+static uint32_t   s_off_hold_ms;                // minimum LOST time after an off-drop
+static bool       s_skip_pen;                 // the next go_lost() must not demote the camera
 static int        s_recon_eff;           // best candidate's RSSI after the penalty
 static bool       s_recon_pen;           // that candidate is currently demoted
 static bool pen_active(int bi)
@@ -155,6 +158,8 @@ static bool     s_was_ready;      // link reached READY since the last go_lost
 // bond is dead and every retry fails identically -- so after a few, erase the
 // bond and raise FLAG_REPAIR_NEEDED instead of hammering forever.
 static int      s_bond_fails;
+static bool     s_dji_disc_wait;                // DJI reconnect: GATT discovery has not finished yet
+#define DJI_DISC_STALL_MS 2500                  // a healthy DJI reconnect finishes discovery well inside this
 static uint8_t  s_bond_fail_addr[6];     // the camera s_bond_fails counts for
 // Portal scan-pause exemption: set when the link reaches READY, re-armed at the
 // start of each portal session (see cam_ble_pause_scan / scan_wanted / apply_scan).
@@ -258,7 +263,16 @@ static void cb_paired(const uint8_t addr[6], const char *name, uint32_t dji_id)
     xQueueSend(s_evq, &e, 0);
     applog_note("camera paired: %s %s", s_drv->name, name ? name : "");
 }
+// A DJI that reports power_mode 3 has been switched off / put to sleep but keeps its BLE link for a
+// while. Drop the link now (demoted, so a second camera wins the next pick) and hold the rescan a few
+// seconds, longer on every repeat, so an Osmo that stays asleep is not reconnected in a tight loop.
+static void cb_camera_off(void)
+{
+    if (s_cs.link != CAM_LINK_READY || s_off_pending) { return; }
+    s_off_pending = true;
+}
 static const camera_cbs_t k_cbs = {
+    .on_camera_off = cb_camera_off,
     .on_link_state = cb_link_state,
     .on_state_dirty = cb_state_dirty,
     .on_ack = cb_ack,
@@ -629,6 +643,7 @@ const char *cam_scan_state(void) { return s_scan_state; }
 
 static void begin_scan(void)
 {
+    s_off_hold_ms = 0;
     invalidate_cam_values();
     s_recon_have = false;
     s_recon_since_ms = 0;
@@ -668,6 +683,7 @@ static void go_lost(const char *why, bool silent_hang)
     // An attempt that failed before READY (camera still starting, ...) is retried after at most 2 s;
     // the growing backoff is for a camera that was READY and went away.
     if (s_cs.link != CAM_LINK_READY && s_backoff_idx > 1) { s_backoff_idx = 1; }
+    s_off_pending = false;
     applog_note("cam LOST: %s", why);
     rtcnv_set_last_disconnect(why);
     ble_central_disconnect();
@@ -705,13 +721,16 @@ static void handle_ble_evt(int ev, int status)
 
     switch (ev) {
     case BLE_EVT_CONNECTED:
-        if (s_cs.link == CAM_LINK_CONNECTING && s_first_pair && s_drv && strcmp(s_drv->name, "dji") == 0) {
-            // A DJI pairs at application level and starts BLE encryption itself. Initiating security
-            // here as well collided with the camera's own request: the Action 6 showed no pairing
-            // prompt and never answered (bench 2026-11-22). The working debug tool never initiates;
-            // like it, go straight to discovery and let the camera encrypt when it wants to.
-            ESP_LOGI(TAG, "connected (DJI first pairing: not initiating security)");
+        if (s_cs.link == CAM_LINK_CONNECTING && s_drv && strcmp(s_drv->name, "dji") == 0) {
+            // A DJI never gets security initiated by us, on a first pairing or on a reconnect. It pairs
+            // at application level and starts BLE encryption itself when it wants it. Initiating it as
+            // well collided with the camera's own request on a first pairing (Action 6: no prompt, no
+            // answer, bench 2026-11-22). On a reconnect the camera starts encryption when it wants it.
+            // The working debug tool never initiates either.
+            ESP_LOGI(TAG, "connected (DJI: not initiating security)");
             set_link(CAM_LINK_SYNCING);
+            s_dji_disc_wait = !s_first_pair;
+            if (!s_first_pair && rid_scan_wanted()) { apply_scan(); }
             ble_central_discover_all();
         } else if (s_cs.link == CAM_LINK_CONNECTING) {
             ESP_LOGI(TAG, "connected, securing");
@@ -754,6 +773,22 @@ static void handle_ble_evt(int ev, int status)
             go_lost("camera not ready", false);
             break;
         }
+        // A DJI that answers its own encryption request with silence (status 520, or no discovery
+        // within DJI_DISC_STALL_MS) has lost its side of the bond: bench 2026-11-22/23, after a full
+        // shutdown the Osmo stayed on and awake and never connected until it was re-paired, every
+        // time. Our stored key is then worthless: drop just that key at the first such failure, keep
+        // the camera in the config, and let it pair afresh on the next connect. No user action: the
+        // pairing prompt belongs to the application-level request, not to this link key. Never while
+        // the aircraft may be airborne (a weak-signal timeout looks the same), and never on a first
+        // pairing. On the ground a wrongly dropped key only costs one automatic re-pair.
+        if (s_drv && strcmp(s_drv->name, "dji") == 0 && !s_first_pair && !flight_may_be_airborne()) {
+            ble_central_forget_bond_any(s_target_addr);
+            applog_note("cam: DJI silent during encryption -- dropped its link key, will re-pair");
+            s_skip_pen = true;
+            s_backoff_idx = 0;
+            go_lost("link key dropped", false);
+            break;
+        }
         ESP_LOGW(TAG, "encryption failed (status %d, not a key failure) -> retry", status);
         go_lost("encryption failed", false);
         break;
@@ -793,6 +828,7 @@ static void handle_ble_evt(int ev, int status)
         // A discovery that finishes after its attempt was torn down (timeout / disconnect) must not
         // run the driver's link_up against a half-empty table.
         if (s_cs.link != CAM_LINK_SYNCING) { break; }
+        s_dji_disc_wait = false;
         // subscribe the brand's notify chars, then hand to the driver.
         const brand_gatt_t *g = s_drv->gatt ? s_drv->gatt() : NULL;
         if (g) {
@@ -984,8 +1020,8 @@ static void cam_task(void *arg)
                         ESP_LOGI(TAG, "pair select: %s %02x:%02x:%02x:%02x:%02x:%02x",
                                  it.pair.brand, it.pair.addr[0], it.pair.addr[1], it.pair.addr[2],
                                  it.pair.addr[3], it.pair.addr[4], it.pair.addr[5]);
-                    } else if (strcmp(it.pair.brand, "gopro") == 0) {
-                        // Start discovery: list brand matches, don't connect.
+                    } else if (d->adv_match) {
+                        // Start discovery: list brand matches (GoPro and DJI), don't connect.
                         s_pair_discover = true;
                         s_pair_target_set = false;
                         s_discover_until = now_ms() + 45000;
@@ -994,7 +1030,7 @@ static void cam_task(void *arg)
                         xSemaphoreGive(s_found_mux);
                         ESP_LOGI(TAG, "pair discover: %s", it.pair.brand);
                     } else {
-                        // Legacy first-match pairing (DJI).
+                        // A driver without an advert matcher: connect to the first match.
                         s_pair_discover = false;
                         s_pair_target_set = false;
                         ESP_LOGI(TAG, "pairing: %s", it.pair.brand);
@@ -1110,6 +1146,7 @@ static void cam_task(void *arg)
                     go_lost("rx timeout 5 s", true);
                 } else if ((int32_t)(now - s_state_since_ms) > 30000) {
                     s_hang_fails = 0;   // a READY link that has held 30 s is healthy
+                    s_off_streak = 0;
                 }
             }
 
@@ -1152,6 +1189,13 @@ static void cam_task(void *arg)
             now = now_ms();
         }
 
+        // ---- DJI reconnect stuck before discovery: the camera is not answering our key ----
+        if (s_cs.link == CAM_LINK_SYNCING && s_dji_disc_wait && !s_first_pair &&
+            (int32_t)(now - s_state_since_ms) > DJI_DISC_STALL_MS) {
+            s_dji_disc_wait = false;
+            handle_ble_evt(BLE_EVT_ENC_TRANSIENT, BLESTAT_HCI_BASE + 0x08);
+        }
+
         // ---- connect / sync timeout -----------------------------
         if ((s_cs.link == CAM_LINK_CONNECTING || s_cs.link == CAM_LINK_SYNCING) &&
             (int32_t)(now - s_state_since_ms) > (s_first_pair ? FIRST_PAIR_TIMEOUT_MS : CONNECT_TIMEOUT_MS)) {
@@ -1162,11 +1206,24 @@ static void cam_task(void *arg)
             begin_scan();
         }
 
+        // ---- camera switched off (DJI power_mode 3) -> drop the link now ----
+        if (s_off_pending) {
+            s_off_pending = false;
+            if (s_cs.link == CAM_LINK_READY) {
+                pen_set_target();                    // demote it for the next pick, however long it was READY
+                s_skip_pen = true;                   // go_lost must not demote a second time
+                s_off_hold_ms = 5000u << (s_off_streak < 3 ? s_off_streak : 3);   // 5, 10, 20, 40 s
+                if (s_off_streak < 255) { s_off_streak++; }
+                go_lost("camera switched off", false);
+            }
+        }
+
         // ---- LOST backoff -> rescan ----------------------------
         // begin_scan()/apply_scan() picks the radio mode (aggressive / gentle /
         // off); the backoff just paces the re-entry.
         if (s_cs.link == CAM_LINK_LOST) {
             uint32_t wait_ms = k_backoff_s[s_backoff_idx] * 1000;
+            if (wait_ms < s_off_hold_ms) { wait_ms = s_off_hold_ms; }
             if ((int32_t)(now - s_state_since_ms) >= (int32_t)wait_ms) {
                 if (s_backoff_idx < (int)(sizeof(k_backoff_s)/sizeof(k_backoff_s[0])) - 1) {
                     s_backoff_idx++;

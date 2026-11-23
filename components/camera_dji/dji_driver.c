@@ -436,6 +436,7 @@ static void parse_status_push(const uint8_t *p, uint16_t n)
         s->recording = TRIBOOL_UNKNOWN;
         s->pre_record = TRIBOOL_UNKNOWN;
         if (CB->on_state_dirty) { CB->on_state_dirty(); }
+        if (CB->on_camera_off) { CB->on_camera_off(); }     // cam_task drops the link: it is off, not just quiet
         return;
     }
     s_asleep = false;

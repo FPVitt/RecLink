@@ -33,6 +33,7 @@ typedef struct {
     void (*on_state_dirty)(void);              // wake osd_task
     void (*on_ack)(cam_op_t op, bool ok);      // record/preset verify
     void (*on_paired)(const uint8_t addr[6], const char *name, uint32_t dji_id);
+    void (*on_camera_off)(void);               // the camera reports it is asleep / switched off while its BLE link is still up
 } camera_cbs_t;
 
 // GATT characteristics a brand needs. cam_task owns the generic BLE sequence
