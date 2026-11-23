@@ -914,7 +914,7 @@ let gateBrand = null;         // brand the OSD palette was last gated for
 let rebootBaseline = '';      // msp.baud + swap_pins at last load, to detect reboot-needed
 
 // ---- per-camera settings: Cam control, OSD, Remote ID and Clock belong to one paired camera ----
-let viewCam = '', camStored = true, camSig = '', camAuto = false;   // viewCam: 12 hex digits of the camera on screen ('' = none chosen)
+let viewCam = '', camStored = true, camSig = '', camAuto = false, camConn = '';   // viewCam: 12 hex digits of the camera on screen ('' = none chosen)
 const camHex = a => (a || '').replace(/:/g, '').toLowerCase();
 const camList = () => (lastStatus && lastStatus.camera && lastStatus.camera.cameras) || [];
 const camAct = () => camList().find(c => c.active);
@@ -940,6 +940,12 @@ function camselUi() {
     let m = ''; try { m = localStorage.getItem('camsel') || ''; } catch (e) {}
     const p = L.length === 1 ? L[0] : L.find(c => c.connected) || L.find(c => camHex(c.addr) === m);
     if (p) { camAuto = true; loadConfig(camHex(p.addr)); }     // else try again on the next poll (a camera may connect)
+  }
+  const cc = (L.find(c => c.connected) || {}).addr;   // a camera that has just connected takes the screen, unless edits are pending
+  const ch = cc ? camHex(cc) : '';
+  if (ch !== camConn) {
+    camConn = ch;
+    if (ch && ch !== viewCam && !document.body.classList.contains('dirty')) { camAuto = true; loadConfig(ch); }
   }
   const lock = L.length > 0 && !viewCam;              // no camera chosen: the camera pages are grayed out
   ['cam-control', 'osd', 'rid', 'clock'].forEach(id => { const x = $('#' + id); x.inert = lock; x.classList.toggle('camlock', lock); });
@@ -1113,25 +1119,32 @@ $('#ask-cancel').onclick = askClose;
 $('#ask').onclick = e => { if (e.target.id === 'ask') askClose(); };
 $('#ask-yes').onclick = () => { const cb = askCb; askClose(); if (cb) cb(); };
 
-// GoPro: guided pairing modal. DJI: inline request.
+// Pairing modal, GoPro and DJI
 let pairPhase = '';       // '' | 'discover' | 'bonding'
-let pairStart = 0, pairPicked = '';
+let pairStart = 0, pairPicked = '', pairBrand = 'gopro';
+const pairNm = () => pairBrand === 'dji' ? 'DJI camera' : 'GoPro';
+const pairSteps = () => pairBrand === 'dji'
+  ? '<li>Switch the <b>Osmo</b> on and wake its screen. Keep it within a metre of the RecLink.</li>'
+  + '<li>Close the DJI app on any phone: the camera takes one connection.</li>'
+  + '<li>Press <b>Scan now</b>, tap your camera in the list, then <b>confirm the request on the camera&rsquo;s screen</b>.</li>'
+  : '<li>On the camera: swipe down &rarr; <b>Preferences</b> &rarr; <b>Connections</b>.</li>'
+  + '<li><b>Connect Device</b> &rarr; <b>The Remote</b>.</li>'
+  + '<li>When the camera shows it&rsquo;s pairing, press <b>Scan now</b>.</li>';
 const pairCardHTML = $('#pair .modal-card').innerHTML;   // restored on reopen (success panel replaces it)
 function startPair(brand) {
-  if (brand === 'gopro') {
-    if (!$('#pair-ask')) $('#pair .modal-card').innerHTML = pairCardHTML;
-    $('#pair-cancel').onclick = pairClose;
-    $('#pair-go').onclick = pairGo;
-    pairPhase = '';
-    pairPicked = '';
-    $('#pair-msg').textContent = '';
-    $('#pair-list').textContent = '';
-    $('#pair-ask').hidden = false;
-    $('#pair').hidden = false;
-    return;
-  }
-  post('/api/camera/pair', {brand}).then(r =>
-    msg(r.ok ? 'pairing… put the DJI into pairing mode now' : 'pair request failed'));
+  pairBrand = brand === 'dji' ? 'dji' : 'gopro';
+  if (!$('#pair-ask')) $('#pair .modal-card').innerHTML = pairCardHTML;
+  $('#pair-cancel').onclick = pairClose;
+  $('#pair-go').onclick = pairGo;
+  $('#pair-title').textContent = 'Pair a ' + (pairBrand === 'dji' ? 'DJI camera' : 'GoPro');
+  $('#pair-steps').innerHTML = pairSteps();
+  $('#pair-qr').hidden = pairBrand === 'dji';
+  pairPhase = '';
+  pairPicked = '';
+  $('#pair-msg').textContent = '';
+  $('#pair-list').textContent = '';
+  $('#pair-ask').hidden = false;
+  $('#pair').hidden = false;
 }
 $$('[data-pair]').forEach(b => b.onclick = () => {
   const cam = lastStatus && lastStatus.camera;
@@ -1150,13 +1163,13 @@ function pairClose() { $('#pair').hidden = true; pairPhase = ''; }
 $('#pair-cancel').onclick = pairClose;
 $('#pair').onclick = e => { if (e.target.id === 'pair') pairClose(); };
 async function pairGo() {
-  const r = await post('/api/camera/pair', {brand:'gopro'});
+  const r = await post('/api/camera/pair', {brand: pairBrand});
   if (!r.ok) { $('#pair-msg').textContent = 'Pair request failed.'; return; }
   pairPicked = '';
   $('#pair-list').textContent = '';
   pairPhase = 'discover';
   pairStart = Date.now();
-  $('#pair-msg').textContent = 'Searching for GoPros in pairing mode…';
+  $('#pair-msg').textContent = pairBrand === 'dji' ? 'Searching for DJI cameras…' : 'Searching for GoPros in pairing mode…';
 }
 $('#pair-go').onclick = pairGo;
 function pairPick(addr, name) {
@@ -1165,7 +1178,7 @@ function pairPick(addr, name) {
   pairStart = Date.now();
   $('#pair-list').textContent = '';
   $('#pair-msg').textContent = 'Pairing with ' + pairPicked + '…';
-  post('/api/camera/pair', {brand:'gopro', addr});
+  post('/api/camera/pair', {brand: pairBrand, addr});
 }
 function renderFound(list) {
   const w = $('#pair-list');
@@ -1179,7 +1192,7 @@ function renderFound(list) {
       b.appendChild(el('b')); b.appendChild(el('small'));
       w.appendChild(b);
     }
-    const nm = f.name || 'GoPro', sig = f.addr + '  ·  ' + f.rssi + ' dBm';
+    const nm = f.name || pairNm(), sig = f.addr + '  ·  ' + f.rssi + ' dBm';
     if (b.firstChild.textContent !== nm) b.firstChild.textContent = nm;
     if (b.lastChild.textContent !== sig) b.lastChild.textContent = sig;
   });
@@ -1395,23 +1408,19 @@ $('#flash-go').onclick = () => {
 };
 
 // ---- live status ----
-const P = [['armed','Aircraft'],['camlink','Camera link'],['rec','Recording'],['warn','Warnings']];
-const D = [['fc','Flight controller'],['canvas','OSD grid (cols×rows)'],['gps','GPS'],['sig','Camera signal'],
-           ['tleft','Time left'],['batt','Camera battery'],['sd','SD card'],['mode','Mode'],
-           ['res','Resolution'],['prof','Profile'],
-           ['isomax','ISO max'],['isomin','ISO min'],['shut','Shutter angle'],['ptune','Protune'],
-           ['wb','White balance'],['color','Color'],['sharp','Sharpness'],['ev','EV comp'],
-           ['p10','Protune 10-bit'],['zap','Zone settings']];
+const D = [['prof','Profile'],['isomax','ISO max'],['isomin','ISO min'],['shut','Shutter angle'],['ptune','Protune'],
+           ['wb','White balance'],['color','Color'],['sharp','Sharpness'],['ev','EV comp'],['p10','Protune 10-bit'],['zap','Zone settings']];
 function buildGrid(el, list) {
   el.innerHTML = list.map(r =>
     `<div class="k">${r[1]}</div><div class="v" id="s-${r[0]}">—</div>`).join('');
 }
-buildGrid($('#stat-primary'), P);
-buildGrid($('#stat-detail'), D);
+$('#stat-detail').innerHTML = D.map(r =>
+  `<div class="kv" data-h hidden><span>${r[1]}</span><span id="s-${r[0]}"></span></div>`).join('');
 function put(id, text, cls) {
   const el = $('#s-' + id); if (!el) return;
   if (el.textContent !== text) el.textContent = text;
   el.className = 'v' + (cls ? ' ' + cls : '');
+  const q = el.parentNode; if (q.dataset.h !== undefined) q.hidden = text === '\u2014';   // status tab: hide what has no value
 }
 function fmtT(s) { s = s|0; return s >= 3600 ? (s/3600|0)+'h'+((s%3600/60)|0)+'m'
                                              : (s/60|0)+':'+String(s%60).padStart(2,'0'); }
@@ -1422,7 +1431,7 @@ let lastFlags = '', lastCounters = '', lastDbg = '', lastRecDbg = '', lastBleDbg
 function setOffline(off) {
   document.body.classList.toggle('offline', off);
   $('#conn').hidden = !off;
-  if (off) { $('#fw').textContent = 'offline'; updateCursors(null); document.body.classList.remove('rec'); }
+  if (off) { $('#fw').textContent = 'offline'; updateCursors(null); document.body.classList.remove('rec', 'camup'); }
 }
 
 async function poll() {
@@ -1446,10 +1455,13 @@ async function poll() {
     if (pairPhase === 'discover') {
       renderFound(c && c.found);
       const n = (c && c.found) ? c.found.length : 0;
-      $('#pair-msg').textContent = n ? 'Tap the camera to pair:' : 'Searching for GoPros in pairing mode…';
+      $('#pair-msg').textContent = n ? 'Tap the camera to pair:'
+        : pairBrand === 'dji' ? 'Searching for DJI cameras…' : 'Searching for GoPros in pairing mode…';
       if (!n && Date.now() - pairStart > 50000) {
         pairPhase = '';
-        $('#pair-msg').textContent = 'No GoPro found. Make sure it is in remote-pairing mode, then press Scan now again.';
+        $('#pair-msg').textContent = pairBrand === 'dji'
+          ? 'No DJI camera found. Make sure it is on and awake, then press Scan now again.'
+          : 'No GoPro found. Make sure it is in remote-pairing mode, then press Scan now again.';
       }
     } else if (pairPhase === 'bonding') {
       if (link === 'READY') {
@@ -1466,61 +1478,85 @@ async function poll() {
         pairPhase = '';
         $('#pair-msg').textContent = 'Could not pair with ' + pairPicked + '. Try again.';
       } else {
-        $('#pair-msg').textContent = 'Pairing with ' + pairPicked + '… (' + (link ? link.toLowerCase() : 'connecting') + ')';
+        $('#pair-msg').textContent = pairBrand === 'dji' && link === 'SYNCING'
+          ? 'Look at ' + pairPicked + ' and confirm the pairing request on its screen…'
+          : 'Pairing with ' + pairPicked + '… (' + (link ? link.toLowerCase() : 'connecting') + ')';
       }
     }
   }
 
-  // primary
-  if (!fcUp) put('armed', 'FC offline', 'warn');
-  else put('armed', m.armed ? 'ARMED' : 'disarmed', m.armed ? 'bad' : 'ok');
-
-  put('camlink', paired ? (c.brand.toUpperCase() + ' · ' + c.link + (c.name ? ' · ' + c.name : ''))
-                        : 'no camera paired', paired && c.link === 'READY' ? 'ok'
-                        : paired && c.link === 'LOST' ? 'bad' : '');
-
-  const recTxt = !paired ? '—'
-    : cs.recording === 'true' ? 'REC ' + (cs.elapsed_s != null ? fmtT(cs.elapsed_s) : '') + (cs.hot ? ' ⚠ HOT' : '')
-    : cs.recording === 'false' ? 'stopped' : 'unknown';
-  put('rec', recTxt, cs && cs.recording === 'true' ? (cs.hot ? 'bad' : 'ok') : '');
-  document.body.classList.toggle('rec', !!(cs && cs.recording === 'true'));
-
-  const w = [];
-  if (paired) {
-    if (cs.sd_missing) w.push('no SD card');
-    else if (cs.sd_full) w.push('SD full');
-    if (cs.hot) w.push('camera hot');
-    if (cs.battery_pct.valid && cs.battery_pct.v <= 15) w.push('camera battery ' + cs.battery_pct.v + '%');
+  // verdict banner + fact tiles: whatever needs attention is listed first, empty values stay hidden
+  const ready = !!(c && c.link === 'READY'), isRec = !!(cs && cs.recording === 'true');
+  const camNm = paired ? (c.name || c.brand.toUpperCase()) : '';
+  const iss = [];                                                  // [text, 'bad'|'warn', acknowledgeable]
+  if (!fcUp) iss.push(['No FC link', 'warn']);
+  if (!paired) iss.push(['No camera paired', 'warn']);
+  else if (!ready) iss.push([c.link === 'LOST' ? 'Camera lost' : 'No camera', c.link === 'LOST' ? 'bad' : 'warn']);
+  if (ready) {
+    if (cs.sd_missing) iss.push(['No SD card', 'bad']); else if (cs.sd_full) iss.push(['SD card full', 'bad']);
+    if (cs.hot) iss.push(['Camera hot', 'bad']);
+    if (cs.battery_pct.valid && cs.battery_pct.v <= 15) iss.push(['Camera battery ' + cs.battery_pct.v + '%', 'warn']);
   }
-  if (fcUp && m.gps.present && !m.gps.good) w.push('GPS no fix');
-  put('warn', w.length ? w.join(', ') : 'none', w.length ? 'warn' : 'ok');
+  if (fcUp && m.gps.present && !m.gps.good) iss.push(['GPS: no fix', 'warn']);
+  const names = {
+    CFG_RESET:'Settings were reset to defaults', REPAIR_NEEDED:'Camera re-pair needed',
+    OSD_UNSUPPORTED:'FC too old for custom OSD', CLOCK_SYNC_FAIL:'Clock sync failed',
+    RID_FAULT:'Remote ID receiver stopped (RID RX FAIL) \u2014 reboot to restore', WDT_RECOVERED:'Recovered from a watchdog reset'
+  };
+  for (const f of s.flags || []) if (f !== 'FC_OFFLINE') {
+    iss.push([names[f] || f, f === 'REPAIR_NEEDED' || f === 'RID_FAULT' ? 'bad' : 'warn', f === 'WDT_RECOVERED']);
+  }
+  const shoot = ready && cs.resolution.valid ? cs.resolution.v + (cs.fps.v || '') : '';
+  const left = ready && cs.rec_remaining_s.valid ? fmtT(cs.rec_remaining_s.v) + ' left' : '';
+  const info = [camNm, shoot, left].filter(Boolean).join(' \u00b7 ');
+  $('#hero').className = 'hero ' + (isRec ? 'rec' : iss.some(x => x[1] === 'bad') ? 'bad' : iss.length ? 'warn' : 'ok');
+  $('#hero-t').textContent = isRec ? 'REC ' + (cs.elapsed_s != null ? fmtT(cs.elapsed_s) : '') : iss.length ? 'Not ready' : 'Ready';
+  $('#hero-s').textContent = isRec || !iss.length ? info : '';
+  const fj = JSON.stringify(iss);
+  if (fj !== lastFlags) {
+    lastFlags = fj;
+    $('#flags').innerHTML = iss.map(f => f[2] ? `<span class="ackflag" title="click to acknowledge">${f[0]} \u2715</span>`
+      : `<span class="${f[1]}">${f[0]}</span>`).join('');
+    const af = $('#flags').querySelector('.ackflag');
+    if (af) af.onclick = async () => { await post('/api/flags/ack'); poll(); };
+  }
+  const tile = (id, v, cls, s1, s2) => {
+    $('#t-' + id).className = 'tile ' + cls;
+    $('#t-' + id + '-v').textContent = v; $('#t-' + id + '-s').textContent = s1;
+    const g = $('#t-' + id + '-g'); if (g) g.textContent = s2 || '';
+  };
+  tile('ac', !fcUp ? 'No FC' : m.armed ? 'ARMED' : 'Disarmed', !fcUp ? 'warn' : m.armed ? 'bad' : 'ok',
+       fcUp ? m.variant + ' \u00b7 MSP ' + m.api + ' \u00b7 OSD ' + m.canvas : 'Waiting for the flight controller',
+       !fcUp ? '' : m.gps.present ? 'GPS ' + (m.gps.good ? 'fix' : 'no fix') + ' \u00b7 ' + m.gps.sats + ' sats' : 'No GPS on the FC');
+  const scan = paired && c.link === 'SCAN';                        // hunting: no brand or model yet
+  tile('cam', scan ? 'Scanning' : paired ? camNm : 'None', ready ? 'ok' : paired ? (c.link === 'LOST' ? 'bad' : 'warn') : '',
+       scan ? '' : paired ? c.brand.toUpperCase() + ' \u00b7 ' + (ready ? 'connected \u00b7 ' + c.rssi + ' dBm' : c.link.toLowerCase())
+              : 'Pair one on the Binding tab');
+  { const sg = $('#sig'); sg.hidden = !ready; const rs = c ? c.rssi : 0; sg.className = 'sig s' + (rs > -60 ? 4 : rs > -70 ? 3 : rs > -80 ? 2 : 1); }
+  $('#c-cam').hidden = !paired;
 
-  // detail
-  put('fc', fcUp ? (m.variant + ' · MSP ' + m.api) : 'offline', fcUp ? '' : 'warn');
-  put('canvas', fcUp ? m.canvas : '—');
-  put('gps', !fcUp ? '—' : !m.gps.present ? 'no GPS on FC'
-      : ('fix ' + m.gps.fix + ' · ' + m.gps.sats + ' sats' + (m.gps.good ? ' · good' : '')),
-      fcUp && m.gps.present ? (m.gps.good ? 'ok' : 'warn') : '');
-  put('sig', paired && c.link === 'READY' ? (c.rssi + ' dBm') : '—');
-  put('tleft', paired && cs.rec_remaining_s.valid ? fmtT(cs.rec_remaining_s.v) : '—');
-  put('batt', paired && cs.battery_pct.valid ? cs.battery_pct.v + '%' : '—');
-  put('sd', !paired ? '—' : cs.sd_missing ? 'NO CARD' : cs.sd_full ? 'FULL'
-      : cs.sd_remaining_kb.valid ? (cs.sd_remaining_kb.v/1024/1024).toFixed(1) + ' GB' : '—',
-      paired && (cs.sd_missing || cs.sd_full) ? 'bad' : '');
-  put('mode', paired && cs.mode.valid ? cs.mode.v : '—');
-  put('res', paired && cs.resolution.valid
-      ? (cs.resolution.v + (cs.fps.v || '') + (cs.aspect.valid ? ' ' + cs.aspect.v : '')) : '—');
-  put('prof', paired && cs.profile.valid
-      ? (cs.profile.v + (cs.bit_depth.valid ? ' ' + cs.bit_depth.v + 'bit' : '')) : '—');
+  put('batt', ready && cs.battery_pct.valid ? cs.battery_pct.v + '%' : '\u2014', ready && cs.battery_pct.valid && cs.battery_pct.v <= 15 ? 'bad' : '');
+  { const bi = $('#m-bat'), bp = ready && cs.battery_pct.valid ? cs.battery_pct.v : 0;
+    bi.style.width = bp + '%'; bi.className = bp <= 15 ? 'low' : ''; }
+  put('sd', !ready ? '\u2014' : cs.sd_missing ? 'NO CARD' : cs.sd_full ? 'FULL'
+      : cs.sd_remaining_kb.valid ? (cs.sd_remaining_kb.v/1024/1024).toFixed(1) + ' GB' : '\u2014',
+      ready && (cs.sd_missing || cs.sd_full) ? 'bad' : '');
+  put('tleft', ready && cs.rec_remaining_s.valid ? fmtT(cs.rec_remaining_s.v) : '\u2014');
+  put('res', ready && cs.resolution.valid
+      ? (cs.resolution.v + (cs.fps.v || '') + (cs.aspect.valid ? ' ' + cs.aspect.v : '')) : '\u2014');
+  put('prof', ready && cs.profile.valid
+      ? (cs.profile.v + (cs.bit_depth.valid ? ' ' + cs.bit_depth.v + 'bit' : '')) : '\u2014');
+  document.body.classList.toggle('rec', isRec);
+  document.body.classList.toggle('camup', ready);
 
   for (const [id, k] of [['isomax','iso_max'],['isomin','iso_min'],['ptune','protune'],
                          ['wb','wb'],['color','color'],['sharp','sharpness'],['ev','ev'],['p10','tune_10bit']]) {
-    put(id, paired && cs[k] && cs[k].valid ? cs[k].v : '—');
+    put(id, ready && cs[k] && cs[k].valid ? cs[k].v : '\u2014');
   }
   { // shutter as an angle where the frame rate is known: "180° (1/60)"
     const sh = cs && cs.shutter, fpsN = cs && cs.fps && cs.fps.valid ? +cs.fps.v : 0;
     const m = sh && sh.valid ? /^1\/(\d+)$/.exec(sh.v) : null;
-    put('shut', !paired || !sh || !sh.valid ? '\u2014'
+    put('shut', !ready || !sh || !sh.valid ? '\u2014'
         : m && fpsN ? fmtAngle(Math.round(360 * fpsN / +m[1] * 10) / 10) + ' (' + sh.v + ')' : sh.v); }
 
   { const rdy = !!(c && c.link === 'READY') && viewIsActive();                 // capabilities only mean something while connected
@@ -1534,27 +1570,12 @@ async function poll() {
   { const za = cs && cs.zone_apply, t = paired ? gpApplyText(za) : '\u2014';
     put('zap', t, za && (za.state === 'partial' || za.state === 'failed') ? 'warn' : za && za.state === 'ok' ? 'ok' : '');
     const gs = $('#gp-state'); if (gs.textContent !== t) gs.textContent = paired ? 'Last apply \u2014 ' + t : ''; }
+  $('#stat-more').hidden = !$('#stat-detail .kv:not([hidden])');
 
   $('#aux').textContent = (fcUp && m.aux && m.aux.length)
     ? m.aux.map((v, i) => 'ch' + (i + 1) + ':' + v).join('  ') : '—';
   updateCursors(m);
   auxDetectCheck(m);
-
-  const fj = JSON.stringify(s.flags || []);
-  if (fj !== lastFlags) {
-    lastFlags = fj;
-    const names = {
-      CFG_RESET:'Settings were reset to defaults', REPAIR_NEEDED:'Camera re-pair needed',
-      OSD_UNSUPPORTED:'FC too old for custom OSD', FC_OFFLINE:'No FC link',
-      CLOCK_SYNC_FAIL:'Clock sync failed', RID_FAULT:'Remote ID receiver stopped (RID RX FAIL) \u2014 reboot to restore', WDT_RECOVERED:'Recovered from a watchdog reset'
-    };
-    $('#flags').innerHTML = (s.flags || []).map(f =>
-      f === 'WDT_RECOVERED'
-        ? `<span class="ackflag" title="click to acknowledge">${names[f]} ✕</span>`
-        : `<span>${names[f] || f}</span>`).join('');
-    const af = $('#flags').querySelector('.ackflag');
-    if (af) af.onclick = async () => { await post('/api/flags/ack'); poll(); };
-  }
 
   // AP still on the factory password: nag to change it (unless suppressed).
   if (s.wifi && s.wifi.default_pw && !s.wifi.pw_nag_off && !setupDismissed && $('#setup').hidden) {

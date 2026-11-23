@@ -16,11 +16,14 @@ header{display:flex;flex-direction:column;align-items:center;gap:3px;
 .wordmark{font-family:"Avenir Next","Avenir",ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-weight:900;letter-spacing:-.01em;font-size:30px;line-height:1}
 #fw{font-size:11px;text-align:center}
-/* logo aperture dot flashes red while the camera is recording (body.rec set
-   from /api/status). Opacity-only; steady red under reduced-motion. */
+/* logo aperture dot: white with no camera connected, green (body.camup) while one is, and
+   flashing red while it is recording (body.rec, from /api/status). Opacity-only motion;
+   steady red under reduced-motion. */
+.logo .dot{fill:#fff}
+body.camup .logo .dot{fill:#3fb950}
 body.rec .logo .dot{fill:var(--dng);animation:rk-rec 1.1s ease-in-out infinite}
 @keyframes rk-rec{50%{opacity:.2}}
-@media (prefers-reduced-motion:reduce){body.rec .logo .dot{animation:none}}
+@media (prefers-reduced-motion:reduce){body.rec .logo .dot,.hero.rec .h1::before{animation:none}}
 h3{margin:16px 0 8px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 .card h3:first-child{margin-top:0}
 
@@ -88,6 +91,7 @@ button.auxdetect.active{background:var(--acc);color:var(--acc-fg);border-color:v
 .modal-card ol.steps{margin:0 0 12px;padding-left:20px;font-size:14px;line-height:1.6}
 .qrbox{display:flex;flex-direction:column;gap:10px;align-items:center;background:#11151b;
   border:1px solid var(--line);border-radius:8px;padding:14px;margin:0 0 12px}
+.qrbox[hidden]{display:none}
 .qrbox .qr{width:min(220px,60vw);height:auto;display:block;border-radius:4px;image-rendering:pixelated}
 .qrbox p{margin:0;font-size:12px;text-align:center}
 #pair-list{margin:0 0 10px}
@@ -115,10 +119,41 @@ progress::-moz-progress-bar{background:var(--acc)}
 .grid .v.warn{color:var(--warn)}
 .kv{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:4px 0}
 
-.flags{margin:10px 0 0;display:flex;gap:6px;flex-wrap:wrap}
+.flags{margin:12px 0 0;display:flex;gap:6px;flex-wrap:wrap}
 .flags:empty{display:none}
-.flags span{background:#5a3a13;color:#f1c27a;border-radius:4px;padding:3px 9px;font-size:12px}
-.flags .ackflag{cursor:pointer;background:var(--dng);color:#fff}
+.flags span{background:#5a3a13;color:#f1c27a;border-radius:99px;padding:4px 11px;font-size:13px;font-weight:600}
+.flags .bad,.flags .ackflag{background:var(--dng);color:#fff}
+.flags .ackflag{cursor:pointer}
+/* status tab: one verdict banner, two fact tiles, one camera card; empty values are hidden */
+.hero{border:1px solid var(--line);border-left:6px solid var(--mut);border-radius:12px;padding:16px;margin:0 0 12px;background:var(--card)}
+.hero .h1{font-size:30px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.hero .h2{margin-top:6px;font-size:14px;color:var(--mut)}
+.hero .h2:empty{display:none}
+.hero.ok{border-color:var(--acc);background:#12251a}
+.hero.warn{border-color:var(--warn);background:#2a2110}
+.hero.bad,.hero.rec{border-color:var(--dng);background:#2d1416}
+.hero.rec .h1::before{content:"";display:inline-block;width:.55em;height:.55em;border-radius:50%;background:var(--dng);margin-right:.4em;vertical-align:.05em;animation:rk-rec 1.1s ease-in-out infinite}
+.tiles,.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
+.tile,.st{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.st{background:#11151b}
+.tile small,.st small{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.tile b,.st b{display:block;margin:4px 0 2px;font-size:20px;line-height:1.15;overflow-wrap:anywhere}
+.tile span{display:block;font-size:12px;color:var(--mut)}
+.tile.ok{border-color:#2a6a3a}.tile.ok b{color:var(--acc)}
+.tile.warn b{color:var(--warn)}
+.tile.bad{border-color:var(--dng)}.tile.bad b{color:var(--dng)}
+.stats{margin:0 0 4px}
+.kv[hidden]{display:none}.kv .ok{color:var(--acc)}.kv .warn{color:var(--warn)}.st b.bad{color:var(--dng)}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc)}
+.bar i.low{background:var(--dng)}
+.sig{display:inline-flex;align-items:flex-end;gap:2px;height:14px;margin-top:6px}
+.sig[hidden]{display:none}
+.sig s{width:5px;background:var(--acc);opacity:.25}
+.sig s:nth-child(1){height:5px}.sig s:nth-child(2){height:8px}.sig s:nth-child(3){height:11px}.sig s:nth-child(4){height:14px}
+.s1 s:nth-child(-n+1),.s2 s:nth-child(-n+2),.s3 s:nth-child(-n+3),.s4 s{opacity:1}
+.s1 s{background:var(--dng)}.s2 s{background:var(--warn)}
+#stat-more{margin:6px 0 0}
 #counters{margin:8px 0 0;font-size:12px;color:var(--mut)}
 
 details summary{cursor:pointer;color:var(--mut);font-size:13px;padding:8px 0}

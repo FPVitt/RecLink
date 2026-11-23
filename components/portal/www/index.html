@@ -48,13 +48,13 @@
 
 <div id="pair" class="modal" hidden>
   <div class="modal-card">
-    <h3>Pair a GoPro</h3>
-    <ol class="steps">
+    <h3 id="pair-title">Pair a GoPro</h3>
+    <ol class="steps" id="pair-steps">
       <li>On the camera: swipe down &rarr; <b>Preferences</b> &rarr; <b>Connections</b>.</li>
       <li><b>Connect Device</b> &rarr; <b>The Remote</b>.</li>
       <li>When the camera shows it&rsquo;s pairing, press <b>Scan now</b>.</li>
     </ol>
-    <div class="qrbox">
+    <div class="qrbox" id="pair-qr">
       <img class="qr" width="200" height="200" alt="GoPro Labs !PR pairing QR" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAK4AAACuAQMAAACVwqStAAAABlBMVEUAAAD///+l2Z/dAAAAAnRSTlP//8i138cAAAAJcEhZcwAACxIAAAsSAdLdfvwAAADMSURBVEiJ7ZZLDgQhCERJOIBH8uoeiQOYMBb0b2ZcW72Q2La+VUUKRXwasvHGv1gQVU3csFIext9qL02tHlsWNgGIGUrZWIq/BKu/AEfShnF8ksul+DQyvDzx90Kcod702pBwpAvS+vjK8wSX48iVQ2Bzq0zsrUvaZwhszsOnOu+oJybuUUxZ2f02MgFnKGoLF7DzcBb3sPAY47SIOC+8NDKeRyLORyCaBazZOKT9C+TgaKDupBGwZwMVxW1MfBg5xuPqJeBJbLzxV3wAPHWo/340L+gAAAAASUVORK5CYII=">
       <p class="muted"><b>GoPro Labs shortcut:</b> point the camera at this code (needs GoPro Labs firmware installed).</p>
     </div>
@@ -127,16 +127,28 @@
   <p class="muted" id="camsel-n"></p>
 </div>
 <section id="status" class="tab on">
-  <div class="card">
-    <h3>Now</h3>
-    <div class="grid" id="stat-primary"></div>
+  <div class="hero" id="hero">
+    <div class="h1" id="hero-t">&hellip;</div>
+    <div class="h2" id="hero-s"></div>
     <div id="flags" class="flags"></div>
-    <div class="row"><button type="button" id="rectest" class="ghost">Test record (3 s)</button></div>
   </div>
-  <div class="card">
-    <h3>Details</h3>
-    <div class="grid" id="stat-detail"></div>
-    <div class="row"><button type="button" id="camrefresh">Refresh camera state</button></div>
+  <div class="tiles">
+    <div class="tile" id="t-ac"><small>Aircraft</small><b id="t-ac-v">&mdash;</b><span id="t-ac-s"></span><span id="t-ac-g"></span></div>
+    <div class="tile" id="t-cam"><small>Camera</small><b id="t-cam-v">&mdash;</b><span id="t-cam-s"></span><i class="sig" id="sig" hidden><s></s><s></s><s></s><s></s></i></div>
+  </div>
+  <div class="card" id="c-cam" hidden>
+    <h3>Camera</h3>
+    <div class="stats">
+      <div class="st" data-h hidden><small>Battery</small><b id="s-batt"></b><div class="bar"><i id="m-bat"></i></div></div>
+      <div class="st" data-h hidden><small>SD free</small><b id="s-sd"></b></div>
+      <div class="st" data-h hidden><small>Time left</small><b id="s-tleft"></b></div>
+      <div class="st" data-h hidden><small>Shooting</small><b id="s-res"></b></div>
+    </div>
+    <details id="stat-more" hidden><summary>Camera settings</summary><div id="stat-detail"></div></details>
+    <div class="row">
+      <button type="button" id="rectest" class="ghost">Test record (3 s)</button>
+      <button type="button" id="camrefresh" class="ghost">Refresh</button>
+    </div>
   </div>
   <div class="card adv-only">
     <h3>Diagnostics</h3>
