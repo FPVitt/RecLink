@@ -54,7 +54,7 @@ PIDs, or navigation.
   the camera, press *Capture*); on a DJI each zone selects a camera mode. Zones and their settings are built in the
   portal, with option lists that follow what the camera actually allows.
 - **Highlight tags** (GoPro) punched into the recording from a momentary switch. A DJI has no highlight tag.
-- **Up to 4 paired cameras.** Any mix of GoPro and (experimental) DJI. On power-up RecLink
+- **Up to 4 paired cameras.** Any mix of GoPro and DJI. On power-up RecLink
   connects to whichever paired camera has the strongest signal — one at a time.
 - **Camera clock sync** from the FC's GPS time, so your footage timestamps are
   right.
@@ -75,7 +75,7 @@ PIDs, or navigation.
 | Brand | Models | Protocol |
 |---|---|---|
 | GoPro | **Supported:** HERO 9 / 10 / 11 / 12 / 13 (and newer with the same BLE API); HERO11 Black is the bench-tested one. **Mission 1 / Mission 1 Pro: expected, unverified** (may need two-byte setting ids this firmware does not speak; BLE advertising unknown). HERO8 and older are not supported (no Open GoPro BLE) | [Open GoPro](https://gopro.github.io/OpenGoPro/) BLE |
-| DJI | **Experimental / unverified:** Osmo Action 4 / 5 Pro / 6 and Osmo 360 — only one DJI camera, an Osmo Action 6, has been bench-tested (pairing, connecting, status, a short test recording); record, mode switch and status are implemented from DJI's open-source demo (the Action-line protocol), but behaviour per model is not confirmed. **Osmo Nano: not expected to work** — it speaks a different DJI protocol that this driver does not implement | DUML over BLE |
+| DJI | **Supported:** Osmo Action 4 / 5 Pro / 6 and Osmo 360. Only one DJI camera, an Osmo Action 6, has been bench-tested (pairing, connecting, status, a short test recording); record, mode switch and status are implemented from DJI's open-source demo (the Action-line protocol), but behaviour per model is not confirmed. **Osmo Nano: not expected to work** — it speaks a different DJI protocol that this driver does not implement | DUML over BLE |
 
 ### Requirements
 
@@ -248,8 +248,7 @@ a reworked Status tab with the camera state in the logo, and a tidier OSD token
 set (six tokens retired — `%bb %cn %gs %gf %fb %sp` — and `%cm` for the camera
 model; `%bi` now draws the battery glyph on a digital OSD too, **not yet checked
 on real goggles**). The portal's web files have grown to about 45.1 KB gzipped,
-over the 44,000 B budget in the spec; whether to raise the budget or trim them
-is still to be decided. Version 0.3.2 (the multi-camera reconnect hardening, the
+under the 46,000 B budget in the spec (raised from 44,000 B on 2026-11-23). Version 0.3.2 (the multi-camera reconnect hardening, the
 first Osmo Action 6 session and the *Apply* button on DJI zones) was a
 pre-release as well. Several protocol
 constants are still assumed pending verification against a live GoPro / DJI

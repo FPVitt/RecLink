@@ -417,7 +417,8 @@ static void found_add(const ble_adv_t *a)
         memcpy(f->addr, a->addr, 6);
         f->addr_type = a->addr_type;
         f->rssi = a->rssi;
-        strlcpy(f->name, a->name[0] ? a->name : "GoPro", sizeof(f->name));
+        // A nameless advert gets its brand as a placeholder (a DJI used to be listed, and then stored, as "GoPro").
+        strlcpy(f->name, a->name[0] ? a->name : (s_drv && strcmp(s_drv->name, "dji") == 0 ? "DJI camera" : "GoPro"), sizeof(f->name));
     }
     xSemaphoreGive(s_found_mux);
 }
