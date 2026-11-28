@@ -6,18 +6,20 @@ idf_component_register(
              esp_hw_support esp_system esp_app_format esp_timer
 )
 
-# Portal assets: gzip at build time, embed into the app image (spec 10.3:
-# "gzip-precompressed", "< 40 KB total transferred"). Raw sources are checked in;
-# the .gz artefacts are build outputs.
+# Portal assets: comments dropped, then gzipped at build time and embedded into the app image
+# (spec 10.3: "gzip-precompressed", budget 46,000 B transferred -- measured on these .gz
+# outputs). Raw sources (with their comments) are checked in; the .gz artefacts are build
+# outputs. www_pack.py: JS whole-line // comments and CSS /* */ blocks only.
 set(WWW "${CMAKE_CURRENT_SOURCE_DIR}/www")
+idf_build_get_property(python PYTHON)
 set(GZS "")
 foreach(f index.html app.js style.css)
     set(out "${CMAKE_CURRENT_BINARY_DIR}/${f}.gz")
     add_custom_command(
         OUTPUT "${out}"
-        COMMAND gzip -9 -n -c "${WWW}/${f}" > "${out}"
-        DEPENDS "${WWW}/${f}"
-        COMMENT "gzip ${f}"
+        COMMAND ${python} "${CMAKE_CURRENT_SOURCE_DIR}/www_pack.py" "${WWW}/${f}" "${out}"
+        DEPENDS "${WWW}/${f}" "${CMAKE_CURRENT_SOURCE_DIR}/www_pack.py"
+        COMMENT "pack ${f}"
         VERBATIM)
     list(APPEND GZS "${out}")
 endforeach()

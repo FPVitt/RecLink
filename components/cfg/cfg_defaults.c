@@ -33,6 +33,10 @@ void cfg_load_defaults(cfg_t *d)
     d->preset.bands[1].max_us = 1700; d->preset.bands[1].id = 0x00000001u;
     d->preset.bands[2].max_us = 2100; d->preset.bands[2].id = 0x00000002u;   // top zone, fixed edge
     d->n_zones = PRESET_ZONES_DEFAULT;
+    // GoPro zone style: simple (each zone loads one of the camera's own presets) by default,
+    // owner request 2026-11-28. Every zone, tail included, so a zone added later matches.
+    for (int i = 0; i < 3; i++) { d->gp_preset[i].n = GP_ZONE_PRESET; }
+    for (int i = 0; i < PRESET_ZONES_MAX - 3; i++) { d->gp_preset_x[i].n = GP_ZONE_PRESET; }
 
     // osd (spec 9.2 default layout)
     d->osd.refresh_hz  = 4;

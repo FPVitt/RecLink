@@ -114,6 +114,24 @@ static uint32_t   s_off_hold_ms;                // minimum LOST time after an of
 static bool       s_skip_pen;                 // the next go_lost() must not demote the camera
 static int        s_recon_eff;           // best candidate's RSSI after the penalty
 static bool       s_recon_pen;           // that candidate is currently demoted
+// ---- asleep cameras (GoPro) ----------------------------------------
+// A GoPro that is switched off keeps advertising for hours and says in each advert whether it is awake
+// (camera.h adv_awake). Connecting to an asleep one wakes it, so the reconnect leaves it alone -- the
+// user switched it off -- and only shows "asleep", unless one of two things allows the wake:
+//   * wake on boot (CAM_POLL_WAKE, Binding tab, one camera): that camera only, until the first READY;
+//   * a recording asked for while no camera is connected (ctrl_record -> cam_wake_for_record).
+// The power state is kept per bond: the scan response of the same advertiser carries no manufacturer
+// data, and must not reconnect a camera that its advert has just reported asleep.
+#define ADV_PWR_FRESH_MS 20000           // an advert's power state counts this long
+static int8_t     s_adv_awake[CAM_MAX_BONDS];     // -1 unknown, 0 asleep, 1 awake
+static uint32_t   s_adv_awake_ms[CAM_MAX_BONDS];
+static bool       s_wake_boot;                    // wake-on-boot still pending (cleared at the first READY)
+static bool       s_wake_boot_bond[CAM_MAX_BONDS]; // per bond: its CAM_POLL_WAKE bit is set
+static volatile bool s_wake_rec;                  // ctrl_task: recording wanted, camera not connected
+void cam_wake_for_record(bool on) { s_wake_rec = on; }
+static volatile uint32_t s_wake_portal_until;    // portal test record on an asleep camera; 0 = none
+void cam_wake_now(void) { uint32_t t = now_ms() + 30000u; s_wake_portal_until = t ? t : 1; }
+
 static bool pen_active(int bi)
 {
     return s_pen_until[bi] && (int32_t)(s_pen_until[bi] - now_ms()) > 0;
@@ -123,6 +141,9 @@ static void load_bonds(void)
 {
     memset(s_pen_until, 0, sizeof(s_pen_until));
     memset(s_quick_drops, 0, sizeof(s_quick_drops));
+    memset(s_adv_awake, -1, sizeof(s_adv_awake));
+    // Bond indices can shift on a reload (pair / forget): a boot wake still pending is dropped.
+    memset(s_wake_boot_bond, 0, sizeof(s_wake_boot_bond)); s_wake_boot = false;
     s_bond_n = 0;
     for (int i = 0; i < CAM_MAX_BONDS; i++) {
         cam_bond_t b;
@@ -178,16 +199,84 @@ static StaticSemaphore_t s_found_mux_buf;
 // callbacks it invokes all mutate *cam_scratch()*; cam_state_commit() publishes.
 #define s_cs (*cam_scratch())
 
+// Power state of bonded camera bi from this advert (or, for a report that does not carry it, from the
+// last one that did, if recent). -1 = unknown: treated as awake, as before this rule existed.
+static int adv_power(int bi, const camera_driver_t *d, const ble_adv_t *a)
+{
+    int aw = d->adv_awake ? d->adv_awake(a) : -1;
+    if (aw >= 0) {
+        // Bench evidence for the advert bit (VERIFY GOPRO-ADV-AWAKE): log every change with the raw byte.
+        if (s_adv_awake[bi] != aw) {
+            ESP_LOGI(TAG, "bond %d advert: %s (status byte mfg[3]=0x%02x)", bi, aw ? "awake" : "asleep", a->mfg[3]);
+        }
+        s_adv_awake[bi] = (int8_t)aw; s_adv_awake_ms[bi] = now_ms(); return aw;
+    }
+    if (s_adv_awake[bi] >= 0 && now_ms() - s_adv_awake_ms[bi] < ADV_PWR_FRESH_MS) { return s_adv_awake[bi]; }
+    return -1;
+}
+static bool wake_allowed(int bi)
+{
+    uint32_t pu = s_wake_portal_until;
+    if (pu && (int32_t)(pu - now_ms()) <= 0) { s_wake_portal_until = pu = 0; }
+    return s_wake_rec || pu || (s_wake_boot && s_wake_boot_bond[bi]);
+}
+static void publish_dirty(void);
+// s_cs.asleep: not connected, a bonded camera was recently heard asleep and none was heard awake.
+// Which bonded cameras are asleep right now, for the portal (cam_is_asleep). Written here only,
+// read by the portal task under the spinlock (copy in / out only).
+static portMUX_TYPE s_asleep_mux = portMUX_INITIALIZER_UNLOCKED;
+static uint8_t s_asleep_addr[CAM_MAX_BONDS][6];
+static uint8_t s_asleep_n;
+bool cam_is_asleep(const uint8_t addr[6])
+{
+    bool r = false;
+    portENTER_CRITICAL(&s_asleep_mux);
+    for (int i = 0; i < s_asleep_n && !r; i++) { r = memcmp(s_asleep_addr[i], addr, 6) == 0; }
+    portEXIT_CRITICAL(&s_asleep_mux);
+    return r;
+}
+static void update_asleep(void)
+{
+    bool asleep = false, awake = false;
+    {   // per camera: fresh "asleep" advert and not the camera we are connected to
+        uint8_t a[CAM_MAX_BONDS][6]; uint8_t n = 0;
+        bool up = s_cs.link != CAM_LINK_SCAN && s_cs.link != CAM_LINK_LOST && s_cs.link != CAM_LINK_IDLE;
+        for (int i = 0; i < s_bond_n; i++) {
+            if (s_adv_awake[i] != 0 || now_ms() - s_adv_awake_ms[i] >= ADV_PWR_FRESH_MS) { continue; }
+            if (up && memcmp(s_bonds[i].addr, s_target_addr, 6) == 0) { continue; }
+            memcpy(a[n++], s_bonds[i].addr, 6);
+        }
+        portENTER_CRITICAL(&s_asleep_mux);
+        memcpy(s_asleep_addr, a, sizeof(a)); s_asleep_n = n;
+        portEXIT_CRITICAL(&s_asleep_mux);
+    }
+    if (s_cs.link == CAM_LINK_SCAN || s_cs.link == CAM_LINK_LOST) {
+        for (int i = 0; i < s_bond_n; i++) {
+            if (s_adv_awake[i] < 0 || now_ms() - s_adv_awake_ms[i] >= ADV_PWR_FRESH_MS) { continue; }
+            if (s_adv_awake[i]) { awake = true; } else { asleep = true; }
+        }
+    }
+    asleep = asleep && !awake;
+    if (asleep != s_cs.asleep) {
+        s_cs.asleep = asleep;
+        ESP_LOGI(TAG, "camera %s", asleep ? "asleep (not woken)" : "no longer reported asleep");
+        publish_dirty();
+    }
+}
+
 // ---- helpers ----------------------------------------------------
 static void set_link(cam_link_state_t st)
 {
     if (s_cs.link == st) { return; }
     s_cs.link = st;
+    if (st != CAM_LINK_SCAN && st != CAM_LINK_LOST) { s_cs.asleep = false; }
     // s_hunt_active (spec 8.8.3): adverts reach s_iq only while the camera is in SCAN.
     ble_central_forward_adverts(st == CAM_LINK_SCAN);
     s_state_since_ms = now_ms();
     if (st == CAM_LINK_READY) {
         s_was_ready = true; s_connected_this_session = true;
+        if (s_wake_boot) { s_wake_boot = false; ESP_LOGI(TAG, "wake on boot: done (first connection)"); }
+        s_wake_portal_until = 0;
         { int qb = bond_match(s_target_addr); if (qb >= 0) { s_quick_drops[qb] = 0; } }
         // Stamp "heard from the camera" BEFORE the commit below: cam_liveness_check() (1 Hz, in
         // housekeeping) reads the committed value, and a stale one made it declare a stall and
@@ -886,6 +975,16 @@ static void cam_task(void *arg)
 
     const cfg_t *cfg = cfg_get();
     load_bonds();
+    // Wake on boot: read per bond (the global CAM_POLL_WAKE bit), not from the active camera's
+    // settings: the active camera is whichever connected last, and the reconnect pick does not
+    // prefer it, so a GoPro set to wake could sit behind a DJI that happened to be active.
+    for (int i = 0; i < s_bond_n; i++) {
+        s_wake_boot_bond[i] = cfg_cam_wake_on_boot(s_bonds[i].addr);
+        if (s_wake_boot_bond[i]) {
+            s_wake_boot = true;
+            ESP_LOGI(TAG, "wake on boot: pending for bond %d '%s'", i, s_bonds[i].name);
+        }
+    }
     if (bridge_flag_get(FLAG_REPAIR_NEEDED)) {
         ESP_LOGW(TAG, "REPAIR_NEEDED: staying IDLE until re-pair");
         set_link(CAM_LINK_IDLE);
@@ -958,6 +1057,18 @@ static void cam_task(void *arg)
                 if (bi < 0) { break; }
                 const camera_driver_t *bd = camera_by_name(s_bonds[bi].brand);
                 if (!bd) { break; }
+                if (adv_power(bi, bd, &it.adv) == 0) {
+                    bool wake = wake_allowed(bi);
+                    update_asleep();
+                    if (!wake) { break; }                // switched off by the user: leave it off
+                    static uint32_t wake_log_ms;
+                    if (now_ms() - wake_log_ms > 3000) {
+                        wake_log_ms = now_ms();
+                        applog_note("cam: waking asleep camera (%s)", s_wake_rec ? "recording requested" : s_wake_portal_until ? "portal test" : "wake on boot");
+                    }
+                } else {
+                    update_asleep();
+                }
                 if (s_bond_n == 1) {
                     ESP_LOGI(TAG, "reconnect '%s' -> connecting", it.adv.name);
                     connect_now(it.adv.addr, it.adv.addr_type,
@@ -1171,6 +1282,7 @@ static void cam_task(void *arg)
                 apply_scan();              // Remote ID scan supervision: restart after DISC_COMPLETE
             }
 
+            update_asleep();
             publish_dirty();
         }
 

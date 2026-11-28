@@ -37,7 +37,7 @@ static const char *TAG = "api";
 static union {
     uint8_t     ota[OTA_BUF];
     char        logs[APPLOG_RING_BYTES + 1];
-    cam_caps_t  caps;
+    struct { cam_caps_t c; cam_preset_t p[CAM_PRESETS_MAX]; } caps;
     rid_snapshot_t rid;          // GET /api/rid: the Remote ID table copy (spec 8.8.4 / 12.1)
 } s_scratch;
 _Static_assert(sizeof(((typeof(s_scratch) *)0)->logs) <= OTA_BUF, "log dump must fit the shared scratch");
@@ -185,6 +185,7 @@ static esp_err_t h_status(httpd_req_t *r)
     cJSON_AddStringToObject(c, "brand", cfg->camera.brand);
     const char *ls_names[] = { "IDLE","SCAN","CONNECTING","BONDING","SYNCING","READY","LOST" };
     cJSON_AddStringToObject(c, "link", ls_names[cam.link <= CAM_LINK_LOST ? cam.link : 0]);
+    cJSON_AddBoolToObject(c, "asleep", cam.asleep);
     {   // the user's name for the camera if it has one
         char nick[CAM_NICK_LEN];
         cJSON_AddStringToObject(c, "name", cfg_cam_nick_get(cam.addr, nick) ? nick : cam.name);
@@ -215,7 +216,9 @@ static esp_err_t h_status(httpd_req_t *r)
         bool is_active = memcmp(b.addr, cfg->camera.addr, 6) == 0 && cfg->camera.bonded;
         cJSON_AddBoolToObject(ce, "active", is_active);
         cJSON_AddBoolToObject(ce, "connected", is_active && link_up_now);
+        if (cam_is_asleep(b.addr)) { cJSON_AddBoolToObject(ce, "asleep", true); }   // switched off (GoPro advert)
         cJSON_AddNumberToObject(ce, "poll_ds", poll_ds);   // deciseconds
+        cJSON_AddBoolToObject(ce, "wake", cfg_cam_wake_on_boot(b.addr));   // wake at power-up (one camera at most)
         cJSON_AddItemToArray(cams, ce);
     }
 
@@ -294,7 +297,7 @@ static esp_err_t h_status(httpd_req_t *r)
     #define VS(name, field) do { cJSON *o = cJSON_AddObjectToObject(cs, name); \
         cJSON_AddStringToObject(o, "v", cam.field.v); cJSON_AddBoolToObject(o, "valid", cam.field.valid); } while (0)
     VS("iso_max", iso_max); VS("iso_min", iso_min); VS("shutter", shutter);
-    VS("protune", protune); VS("wb", wb); VS("color", color);
+    VS("protune", protune); VS("wb", wb); VS("color", color); VS("preset_name", preset_name);
     VS("sharpness", sharpness); VS("ev", ev); VS("tune_10bit", tune_10bit);
     #undef VS
     // Raw option values of the settings a zone can push ({"<id>": value}), for the
@@ -617,15 +620,20 @@ static esp_err_t h_cam_poll(httpd_req_t *r)
     free(body);
     const cJSON *ad = j ? cJSON_GetObjectItem(j, "addr") : NULL;
     const cJSON *ps = j ? cJSON_GetObjectItem(j, "poll_ds") : NULL;
+    const cJSON *wk = j ? cJSON_GetObjectItem(j, "wake") : NULL;      // wake at power-up (this camera only)
     esp_err_t e = ESP_ERR_INVALID_ARG;
     uint8_t a[6];
-    if (cJSON_IsString(ad) && cJSON_IsNumber(ps) &&
+    if (cJSON_IsString(ad) && (cJSON_IsNumber(ps) || cJSON_IsBool(wk)) &&
         sscanf(ad->valuestring, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
                &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) == 6) {
-        int v = (int)ps->valuedouble;
-        if (v < CAM_POLL_DS_MIN) { v = CAM_POLL_DS_MIN; }
-        if (v > CAM_POLL_DS_MAX) { v = CAM_POLL_DS_MAX; }
-        e = cfg_cam_set_poll(a, (uint8_t)v);
+        e = ESP_OK;
+        if (cJSON_IsNumber(ps)) {
+            int v = (int)ps->valuedouble;
+            if (v < CAM_POLL_DS_MIN) { v = CAM_POLL_DS_MIN; }
+            if (v > CAM_POLL_DS_MAX) { v = CAM_POLL_DS_MAX; }
+            e = cfg_cam_set_poll(a, (uint8_t)v);
+        }
+        if (e == ESP_OK && cJSON_IsBool(wk)) { e = cfg_cam_set_wake(a, cJSON_IsTrue(wk)); }
     }
     cJSON_Delete(j);
     cJSON *resp = cJSON_CreateObject();
@@ -639,8 +647,9 @@ static esp_err_t h_cam_poll(httpd_req_t *r)
 // this is ~400 nodes, far too much for the heap.
 static esp_err_t h_cam_caps(httpd_req_t *r)
 {
-    cam_caps_t *caps = &s_scratch.caps;     // shared scratch: httpd runs one handler at a time
+    cam_caps_t *caps = &s_scratch.caps.c;   // shared scratch: httpd runs one handler at a time
     cam_caps_get(caps);
+    int np = cam_caps_presets(s_scratch.caps.p, CAM_PRESETS_MAX);
     portal_note_client_activity();
     jstream_t js;
     js_open(&js, r);
@@ -663,6 +672,14 @@ static esp_err_t h_cam_caps(httpd_req_t *r)
         js_put(&js, b, n);
     }
     js_put(&js, "}", 1);
+    // The camera's video presets, [[id,"name"],...] (names are sanitised printable ASCII).
+    js_put(&js, ",\"presets\":[", 12);
+    for (int i = 0; i < np; i++) {
+        n = snprintf(b, sizeof(b), "%s[%lu,\"%s\"]", i ? "," : "",
+                     (unsigned long)s_scratch.caps.p[i].id, s_scratch.caps.p[i].name);
+        js_put(&js, b, n);
+    }
+    js_put(&js, "]", 1);
     return js_close(&js, cJSON_CreateObject());
 }
 
@@ -718,6 +735,15 @@ static void test_stop_cb(void *arg) { (void)arg; cam_submit(CAM_OP_RECORD_STOP, 
 static esp_err_t h_cam_test(httpd_req_t *r)
 {
     if (reject_if_armed(r) != ESP_OK) { return ESP_OK; }
+    cam_state_t cam; cam_state_get(&cam);
+    if (cam.link != CAM_LINK_READY && cam.asleep) {
+        // Asleep GoPro: wake it; the page runs the test again once the camera is connected.
+        cam_wake_now();
+        cJSON *resp = cJSON_CreateObject();
+        cJSON_AddBoolToObject(resp, "ok", true);
+        cJSON_AddBoolToObject(resp, "waking", true);
+        return send_json(r, resp, NULL);
+    }
     cam_submit(CAM_OP_RECORD_START, 0);
     // One timer, reused (a new one per press was never deleted).
     static esp_timer_handle_t s_test_timer;

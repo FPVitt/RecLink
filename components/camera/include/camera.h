@@ -53,6 +53,9 @@ typedef struct {
     const char *name;                          // "gopro" / "dji"
 
     bool (*adv_match)(const ble_adv_t *adv);
+    // Optional: the camera's power state as its advert reports it. 1 = awake, 0 = asleep (still
+    // advertising and connectable; connecting wakes it), -1 = this advert does not say.
+    int  (*adv_awake)(const ble_adv_t *adv);
     const brand_gatt_t *(*gatt)(void);
 
     esp_err_t (*link_up)(bool first_pair);     // post-discovery protocol sync
@@ -106,6 +109,9 @@ void      cam_throttle(bool on);                // slow driver polling (portal u
 bool      cam_portal_up(void);                  // the portal AP is up (set by cam_throttle)
 void      cam_ble_pause_scan(bool on);          // pause the camera hunt (portal AP up; keeps a READY link)
 void      cam_rid_scan_update(void);            // Remote ID listening changed: re-apply the scan (8.8.3)
+void      cam_wake_for_record(bool on);         // ctrl: recording was asked for while not connected -> may wake an asleep camera
+bool      cam_is_asleep(const uint8_t addr[6]);  // portal: this bonded camera's advert says asleep (recent)
+void      cam_wake_now(void);                   // portal: wake an asleep camera (allowed for 30 s or until READY)
 uint32_t  cam_notify_drops(void);              // BLE notifications lost to a full queue (monotonic)
 uint32_t  cam_link_age_ms(void);              // time in the current link state
 const char *cam_scan_state(void);             // "off" / "active" / "gentle" / "rid"

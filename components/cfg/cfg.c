@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -76,6 +77,7 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
     CLAMP(c->record.sw.channel, 0, 14);
     CLAMP(c->record.sw.threshold_us, 900, 2100);
     CLAMP(c->record.sw.mode, RECSW_SWITCH, RECSW_BUTTON);
+    c->record.sw.flags = 0;                      // reserved (see cfg.h)
 
     CLAMP(c->preset.channel, 0, 14);
     CLAMP(c->preset.dwell_ms, 50, 5000);
@@ -190,9 +192,14 @@ esp_err_t cfg_validate(cfg_t *c, char *err, size_t errlen)
             c->cam_poll_ds[i] = 0;
         }
         if (b->brand[0]) {
-            if (c->cam_poll_ds[i] == 0) { c->cam_poll_ds[i] = CAM_POLL_DS_DEFAULT; }
-            CLAMP(c->cam_poll_ds[i], CAM_POLL_DS_MIN, CAM_POLL_DS_MAX);
+            uint8_t w = c->cam_poll_ds[i] & CAM_POLL_WAKE, p = c->cam_poll_ds[i] & (uint8_t)~CAM_POLL_WAKE;
+            if (p == 0) { p = CAM_POLL_DS_DEFAULT; }
+            CLAMP(p, CAM_POLL_DS_MIN, CAM_POLL_DS_MAX);
+            c->cam_poll_ds[i] = (uint8_t)(p | w);
         }
+    }
+    for (int i = 0, seen = 0; i < CAM_MAX_BONDS; i++) {      // wake at power-up: one camera at most
+        if (c->cam_poll_ds[i] & CAM_POLL_WAKE) { if (seen++) { c->cam_poll_ds[i] &= (uint8_t)~CAM_POLL_WAKE; } }
     }
     for (int i = 0, w = 0; i < CAM_MAX_BONDS; i++) {
         if (c->cams[i].brand[0]) {
@@ -559,8 +566,26 @@ static esp_err_t cam_set_poll_impl(const uint8_t addr[6], uint8_t poll_ds)
     int i = bond_index_of(&c, addr);
     if (i < 0) { return ESP_ERR_NOT_FOUND; }
     CLAMP(poll_ds, CAM_POLL_DS_MIN, CAM_POLL_DS_MAX);
-    c.cam_poll_ds[i] = poll_ds;
+    c.cam_poll_ds[i] = (uint8_t)(poll_ds | (c.cam_poll_ds[i] & CAM_POLL_WAKE));
     return commit_locked(&c, false);
+}
+
+static esp_err_t cam_set_wake_impl(const uint8_t addr[6], bool on)
+{
+    cfg_t c = s_live;
+    int i = bond_index_of(&c, addr);
+    if (i < 0) { return ESP_ERR_NOT_FOUND; }
+    for (int k = 0; k < CAM_MAX_BONDS; k++) { c.cam_poll_ds[k] &= (uint8_t)~CAM_POLL_WAKE; }
+    if (on) { c.cam_poll_ds[i] |= CAM_POLL_WAKE; }
+    return commit_locked(&c, false);
+}
+
+esp_err_t cfg_cam_set_wake(const uint8_t addr[6], bool on)
+{
+    wlock();
+    esp_err_t e = cam_set_wake_impl(addr, on);
+    wunlock();
+    return e;
 }
 
 esp_err_t cfg_cam_set_poll(const uint8_t addr[6], uint8_t poll_ds)
@@ -576,7 +601,7 @@ uint16_t cfg_active_poll_ms(void)
     uint8_t p = CAM_POLL_DS_DEFAULT;
     if (s_live.camera.bonded) {
         int i = bond_index_of(&s_live, s_live.camera.addr);
-        if (i >= 0) { p = s_live.cam_poll_ds[i]; }
+        if (i >= 0) { p = s_live.cam_poll_ds[i] & (uint8_t)~CAM_POLL_WAKE; }
     }
     if (p < CAM_POLL_DS_MIN || p > CAM_POLL_DS_MAX) { p = CAM_POLL_DS_DEFAULT; }
     return (uint16_t)p * 100u;   // deciseconds -> ms
@@ -594,7 +619,7 @@ bool cfg_cam_at(int i, cam_bond_t *out, uint8_t *poll_ds)
     if (i < 0 || i >= CAM_MAX_BONDS || !s_live.cams[i].brand[0]) { return false; }
     if (out) { *out = s_live.cams[i]; }
     if (poll_ds) {
-        uint8_t p = s_live.cam_poll_ds[i];
+        uint8_t p = s_live.cam_poll_ds[i] & (uint8_t)~CAM_POLL_WAKE;
         *poll_ds = (p >= CAM_POLL_DS_MIN && p <= CAM_POLL_DS_MAX) ? p : CAM_POLL_DS_DEFAULT;
     }
     return true;
@@ -665,6 +690,14 @@ bool cfg_rid_any_enabled(void)
         if (prof_load(s_live.cams[i].addr, &p) && cfg_profile_apply(&t, &p) && t.rid.enabled) { return true; }
     }
     return false;
+}
+
+// "Wake at power-up" for bonded camera addr: its CAM_POLL_WAKE bit in the global per-bond table
+// (set on the Binding tab, at most one camera). false if addr is not bonded.
+bool cfg_cam_wake_on_boot(const uint8_t addr[6])
+{
+    int i = bond_index_of(&s_live, addr);
+    return i >= 0 && (s_live.cam_poll_ds[i] & CAM_POLL_WAKE) != 0;
 }
 
 esp_err_t cfg_factory_erase(void)

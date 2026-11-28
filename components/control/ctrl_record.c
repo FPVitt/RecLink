@@ -47,6 +47,8 @@ static struct {
                                  // desired transition or a reconnect (review H1)
     bool     desired_prev;
     bool     reconcile_pending;  // waiting for cam.recording != UNKNOWN (review H3)
+    bool     wake;               // a recording was asked for while the camera was not connected:
+                                 // cam_task may wake an asleep camera (cleared at READY / desired off)
     uint32_t reconcile_by;
 } S;
 
@@ -75,7 +77,7 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
 {
     const cfg_t *cfg = c->cfg;
     uint8_t mode = cfg->record.mode;
-    if (mode == REC_OFF) { S.phase = PH_IDLE; return; }
+    if (mode == REC_OFF) { S.phase = PH_IDLE; if (S.wake) { S.wake = false; cam_wake_for_record(false); } return; }
 
     // ---- switch/button decode (spec 8.2): 40 us threshold hysteresis, no
     // debounce. "switch": the AUX level directly mirrors desired recording --
@@ -87,8 +89,11 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
     bool raw_rising = !S.raw_active && raw;
     S.raw_active = raw;
 
+    bool asleep = !cam_ready(c) && c->cam.asleep;
     if (cfg->record.sw.mode == RECSW_BUTTON) {
-        if (raw_rising) { S.latch = !S.latch; }
+        // A press while the camera is asleep (switched off, or it shut itself off) always means
+        // "start": the latch may still say "recording" from before the camera went off.
+        if (raw_rising) { S.latch = asleep ? true : !S.latch; }
         S.sw_active = S.latch;
     } else {
         S.sw_active = raw;
@@ -118,6 +123,16 @@ void ctrl_record_tick(const ctrl_ctx_t *c)
         if (S.combi_cut) { desired = false; }
     }
     S.desired = desired;
+    // Wake an asleep camera (GoPro) only on a fresh request to record: desired turning on, or a press
+    // of the record switch / button while it already is. A camera switched off while desired stays on
+    // is left off -- the user switched it off.
+    bool uses_sw = (mode == REC_SWITCH || mode == REC_ARM_AND_SWITCH || mode == REC_STRICT_AND);
+    if (!cam_ready(c) && desired && (!S.desired_prev || (uses_sw && raw_rising))) {
+        if (!S.wake) { applog_note("rec requested, camera not connected -> wake allowed"); }
+        S.wake = true;
+    }
+    if (!desired || cam_ready(c)) { S.wake = false; }
+    cam_wake_for_record(S.wake);
     if (desired != S.desired_prev) { S.gave_up = false; }   // fresh intent, retry
     S.desired_prev = desired;
 

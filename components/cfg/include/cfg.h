@@ -33,6 +33,10 @@
 #define CAM_POLL_DS_MIN     5u    // 0.5 s ("fast")
 #define CAM_POLL_DS_MAX     15u   // 1.5 s ("slow")
 #define CAM_POLL_DS_DEFAULT 10u   // 1.0 s ("normal")
+// cam_poll_ds[i] bit 7 (the poll rate uses the low bits): wake this camera at power-up if it is
+// asleep (GoPro). Global, not per-camera settings, so it can be on for ONE bond at most: a
+// camera's Cam control settings are copied to a newly paired one. No CFG_VERSION bump.
+#define CAM_POLL_WAKE       0x80u
 
 #define CFG_DEFAULT_WIFI_PW "reclinkfpv"   // AP password on factory defaults
 
@@ -72,6 +76,9 @@ enum { REC_OFF = 0, REC_ARM = 1, REC_SWITCH = 2, REC_ARM_AND_SWITCH = 3, REC_STR
 //             threshold) TOGGLES the desired state once; letting go does
 //             nothing, so a non-latching control can still start AND stop.
 enum { RECSW_SWITCH = 0, RECSW_BUTTON = 1 };
+// record.sw.flags: reserved, kept 0. Bit 0 was WAKE_ON_BOOT until 2026-11-28 (unreleased); that
+// choice now lives in cam_poll_ds bit 7 (CAM_POLL_WAKE), one camera at most.
+// Only until the first camera connection after power-up; a camera switched off later stays off.
 // -------- portal trigger ----------------------------------------------------
 enum { PORTAL_TRIG_BUTTON = 0, PORTAL_TRIG_ALWAYS_DISARMED = 1 };
 // -------- RF transmit power presets (wifi_tx_power / ble_tx_power) ----------
@@ -140,7 +147,8 @@ typedef struct __attribute__((packed)) {
             uint8_t  mode;        // RECSW_* -- was the low byte of a removed
                                    // debounce_ms (2026-08-30); same 2-byte size,
                                    // so old blobs load as mode=0 (switch).
-            uint8_t  _rsvd;
+            uint8_t  flags;       // reserved, kept 0 (cfg_validate); the high byte of the old
+                                   // debounce_ms. Wake at power-up lives in cam_poll_ds (CAM_POLL_WAKE)
         } sw;
     } record;
 
@@ -339,11 +347,13 @@ enum {
     // Bit positions are stored in saved masks, so they never move. Tokens retired in 0.3.3 (%bb battery
     // bar, %cn craft name, %gs GPS sats, %gf GPS fix, %fb FC battery, %sp speed) keep their bit as
     // OSD_TOK_RETIRED_*: not offered, not formatted, and stripped from saved lines by
-    // cfg_osd_retire_tokens(). OSD_TOK_CM reuses the %bb bit, so a saved all-on mask already has it on.
+    // cfg_osd_retire_tokens(). OSD_TOK_CM reuses the %bb bit and OSD_TOK_PN the %cn bit, so a saved all-on
+    // mask already has them on.
     OSD_TOK_ST = 0, OSD_TOK_ET, OSD_TOK_RT, OSD_TOK_BT,
     OSD_TOK_CM,          // %cm  camera model, short ("GP11", "A6")  -- was %bb (bit 4)
     OSD_TOK_RS, OSD_TOK_FP, OSD_TOK_LN, OSD_TOK_SD, OSD_TOK_MD,
-    OSD_TOK_RETIRED_CN, OSD_TOK_WR,
+    OSD_TOK_PN,          // %pn  GoPro: current preset name ("POV", "Custom 2") -- was %cn (bit 10)
+    OSD_TOK_WR,
     OSD_TOK_AR, OSD_TOK_PR, OSD_TOK_BD, OSD_TOK_CR, OSD_TOK_RETIRED_GS, OSD_TOK_RETIRED_GF,
     OSD_TOK_RETIRED_FB, OSD_TOK_RETIRED_SP, OSD_TOK_SG,
     OSD_TOK_BI,
@@ -437,6 +447,10 @@ esp_err_t cfg_cam_settings_commit(const uint8_t addr[6], const cfg_t *cand);
 // the Remote ID RAM is allocated at boot only then, so a camera that is switched to later can
 // start it without a reboot (spec 8.8.8).
 bool cfg_rid_any_enabled(void);
+// Wake at power-up (CAM_POLL_WAKE): is it on for bonded camera addr? Set it for addr (clearing it
+// on every other camera) or clear it. ESP_ERR_NOT_FOUND if addr is not bonded.
+bool cfg_cam_wake_on_boot(const uint8_t addr[6]);
+esp_err_t cfg_cam_set_wake(const uint8_t addr[6], bool on);
 
 // Factory reset: erase cfg + caller erases nimble_bond, then reboot.
 esp_err_t cfg_factory_erase(void);

@@ -23,7 +23,7 @@ static void remain_str(char *b, size_t n, uint32_t secs)
 const char *osd_active_warning(const fc_state_t *fc, const cam_state_t *cam, const cfg_t *cfg)
 {
     (void)fc;
-    if (cam->link != CAM_LINK_READY) { return "CAM LOST"; }
+    if (cam->link != CAM_LINK_READY) { return cam->asleep ? "CAM ASLEEP" : "CAM LOST"; }
     if (cam->sd_missing)             { return "NO SD"; }
     if (cam->sd_full)                { return "SD FULL"; }
     if (s_rec_fail)                  { return "REC FAIL"; }
@@ -183,6 +183,10 @@ int osd_format_line_rp(char *out, size_t out_cap, const char *tmpl,
             snprintf(tmp, sizeof(tmp), "%lu.%luG",
                      (unsigned long)(gx10 / 10), (unsigned long)(gx10 % 10));
             len = app(out, out_cap, len, tmp);
+        } else if (TOK2('p','n')) {                // GoPro: current preset name (blank for DJI / unknown)
+            p++;
+            if (!field_on(cfg, OSD_TOK_PN) || !cam->preset_name.valid) { continue; }
+            len = app(out, out_cap, len, cam->preset_name.v);
         } else if (TOK2('m','d')) {                // mode name
             p++;
             if (!field_on(cfg, OSD_TOK_MD) || !cam->mode_name.valid) { continue; }
@@ -309,7 +313,8 @@ void osd_compose_lines(char line[4][20], const fc_state_t *fc, const cam_state_t
     if (cam->link != CAM_LINK_READY) {
         bool searching = (cam->link == CAM_LINK_CONNECTING || cam->link == CAM_LINK_SYNCING ||
                           cam->link == CAM_LINK_SCAN);
-        const char *s0 = searching ? (blink ? "" : "CAM ?") : "CAM LOST";
+        // A camera switched off but still advertising (GoPro) is not lost: say so, steady.
+        const char *s0 = cam->asleep ? "CAM ASLEEP" : searching ? (blink ? "" : "CAM ?") : "CAM LOST";
         snprintf(line[0], 20, "%s", s0);
         line[1][0] = line[2][0] = line[3][0] = '\0';
     } else {

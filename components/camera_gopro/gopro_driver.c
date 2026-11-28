@@ -4,6 +4,7 @@
 #include "camera_gopro.h"
 #include "gopro_tlv.h"
 #include "gopro_enums.h"
+#include "gopro_presets.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -292,7 +293,7 @@ static void caps_on_tlv(uint8_t qid, const uint8_t *p, uint16_t len)
 //
 // Video settings only apply to a VIDEO preset, so the apply waits until the
 // camera is in one (status 96) instead of firing writes that would be refused.
-enum { AP_IDLE, AP_WAIT, AP_SEND, AP_HOLD, AP_VERIFY };
+enum { AP_IDLE, AP_WAIT, AP_SEND, AP_HOLD, AP_VERIFY, AP_REFRESH };
 enum { APS_PEND, APS_SENT, APS_REJ, APS_BAD };   // BAD = accepted, not confirmed
 #define AP_WRITE_TIMEOUT_MS   3000
 #define AP_VERIFY_TIMEOUT_MS  2000
@@ -302,6 +303,13 @@ enum { APS_PEND, APS_SENT, APS_REJ, APS_BAD };   // BAD = accepted, not confirme
 // refused. Also: status 0 on a setting write means "accepted", not "applied", so let the
 // camera settle before the next write and before the read-back. Both fail open.
 #define AP_SETTLE_MS          300
+// After the colour profile (184): a HERO12 then restores its own saved resolution / fps /
+// lens / ISO / WB / colour for that profile, a moment AFTER acknowledging the write (bench
+// 2026-11-28: the shutter written right after it was reset to Auto). Wait longer, then read
+// the camera's settings again before deciding what is left to write (the last report is stale;
+// rewriting everything instead took ~10 s per zone).
+#define AP_PROFILE_SETTLE_MS  1500
+#define GP_SET_PROFILE        184
 #define AP_BUSY_WAIT_MS       3000
 
 static struct {
@@ -311,6 +319,9 @@ static struct {
     uint8_t  val[GP_PSET_MAX];
     uint8_t  st[GP_PSET_MAX];
     uint8_t  tries[GP_PSET_MAX];        // rejected writes already retried
+    bool     force;                     // the profile changed and no fresh read came: write everything
+    bool     refresh;                   // the profile changed: re-read the settings after the hold
+    uint16_t settle_ms;                 // how long the current hold lasts at least
     uint32_t t_ms;                      // when the current phase started
 } ap;
 
@@ -345,7 +356,8 @@ static void ap_finish(void)
 }
 
 // Read back every setting we wrote (one get-values request with the id list).
-static void ap_request_verify(void)
+static void ap_next(void);
+static void ap_request_read(uint8_t state)
 {
     uint8_t b[1 + GP_PSET_MAX];
     int n = 0;
@@ -353,12 +365,13 @@ static void ap_request_verify(void)
     for (int i = 0; i < ap.n; i++) {
         if (ap.st[i] != APS_REJ) { b[1 + n++] = gp_pset_id(ap.idx[i]); }
     }
-    if (n == 0) { ap_finish(); return; }
+    if (n == 0) { if (state == AP_VERIFY) { ap_finish(); } else { ap_next(); } return; }
     wr(h_qry, b, (uint16_t)(1 + n));
     q12_push(Q12_VERIFY);
-    ap.state = AP_VERIFY;
+    ap.state = state;
     ap.t_ms = now_ms();
 }
+static void ap_request_verify(void) { ap_request_read(AP_VERIFY); }
 
 // Pause before the next write / the read-back: let the camera settle and, if it is
 // busy, wait (capped) until it is not. ap_pump() ends the hold.
@@ -366,6 +379,7 @@ static void ap_hold(void)
 {
     ap.cur = -1;
     ap.state = AP_HOLD;
+    ap.settle_ms = AP_SETTLE_MS;
     ap.t_ms = now_ms();
 }
 
@@ -376,7 +390,7 @@ static void ap_next(void)
     for (int i = 0; i < ap.n; i++) {
         if (ap.st[i] != APS_PEND) { continue; }
         int k = ap.idx[i];
-        if (s->gp_set[k].valid && s->gp_set[k].v == ap.val[i]) { ap.st[i] = APS_SENT; continue; }
+        if (!ap.force && s->gp_set[k].valid && s->gp_set[k].v == ap.val[i]) { ap.st[i] = APS_SENT; continue; }
         uint8_t b[3] = { gp_pset_id(k), 0x01, ap.val[i] };
         wr(h_set, b, 3);
         ap.cur = (int8_t)i;
@@ -399,6 +413,7 @@ static void ap_evaluate(void)
         if (ap.pass == 0) { ap.st[i] = APS_PEND; retry = true; }   // e.g. a later write undid it
         else              { ap.st[i] = APS_BAD; }
     }
+    ap.force = false;                               // the read-back above is fresh
     if (retry) { ap.pass = 1; ap_hold(); }
     else       { ap_finish(); }
 }
@@ -418,6 +433,7 @@ static void ap_on_set_rsp(uint8_t id, uint8_t status)
         applog_note("gopro zone %u: setting %u rejected (status %u)", ap.slot + 1, id, status);
     }
     ap_hold();
+    if (id == GP_SET_PROFILE && status == 0) { ap.refresh = true; ap.settle_ms = AP_PROFILE_SETTLE_MS; }
 }
 
 static void ap_pump(void)
@@ -431,6 +447,7 @@ static void ap_pump(void)
         if (s->mode.valid && s->mode.v != 0) { return; }       // photo / timelapse: wait for video
         if (s->busy == TRIBOOL_TRUE && t - ap.t_ms < AP_BUSY_WAIT_MS) { return; }
         ap.pass = 0;
+        ap.force = false;
         ap_publish(GPA_APPLYING, 0);
         ap_next();
         break;
@@ -446,11 +463,17 @@ static void ap_pump(void)
     case AP_HOLD: {
         const cam_state_t *s = cam_scratch();
         uint32_t e = t - ap.t_ms;
-        if (e >= AP_SETTLE_MS && (s->busy != TRIBOOL_TRUE || e >= AP_BUSY_WAIT_MS)) { ap_next(); }
+        if (e >= ap.settle_ms && (s->busy != TRIBOOL_TRUE || e >= AP_BUSY_WAIT_MS)) {
+            if (ap.refresh) { ap.refresh = false; ap_request_read(AP_REFRESH); }
+            else            { ap_next(); }
+        }
         break;
     }
     case AP_VERIFY:
         if (t - ap.t_ms >= AP_VERIFY_TIMEOUT_MS) { ap_evaluate(); }
+        break;
+    case AP_REFRESH:                                // no fresh read: write everything that is left
+        if (t - ap.t_ms >= AP_VERIFY_TIMEOUT_MS) { ap.force = true; ap_next(); }
         break;
     default:
         break;
@@ -496,9 +519,65 @@ static void lw_pump(void)
     uint8_t b[3] = { lw[0].id, 0x01, lw[0].val };
     wr(h_set, b, 3);
     memmove(lw, lw + 1, --lw_n * sizeof(lw[0]));
-    lw_next_ms = t + 250;
+    lw_next_ms = t + (b[0] == GP_SET_PROFILE ? AP_PROFILE_SETTLE_MS : 250);
     lw_since_ms = t;
-    caps_request(400);
+    caps_request(b[0] == GP_SET_PROFILE ? AP_PROFILE_SETTLE_MS + 300 : 400);
+}
+
+// ---- the camera's own preset list (simple zones) ------------------------------------------
+// Get Available Presets (protobuf 0xF5 0x72 on the query characteristic, reply 0xF5 0xF2,
+// see gopro_presets.h). The portal's simple zones and the OSD's %pn use it: asked for once per
+// link, again when the camera is on a video preset the list does not have (a new custom one --
+// once per such id), at most 3 tries in a row, 15 s apart.
+#define PR_RETRY_MS 15000
+static uint32_t pr_req_ms;
+static uint8_t  pr_tries;
+static cam_preset_t pr_list[CAM_PRESETS_MAX];   // cam_task only
+static int      pr_n = -1;                  // -1 = not received this link
+static uint32_t pr_asked_for = 0xFFFFFFFFu; // the missing preset id the last request was for
+// cam_state.preset_name from the current preset id and the list (blank-on-unconfirmed, spec 9.4).
+static void preset_name_update(void)
+{
+    cam_state_t *s = cam_scratch();
+    const char *nm = "";
+    if (s->gp_preset.valid && s->mode.valid && s->mode.v == 0) {
+        for (int i = 0; i < pr_n; i++) { if (pr_list[i].id == s->gp_preset.v) { nm = pr_list[i].name; break; } }
+    }
+    if (s->preset_name.valid != (*nm != 0) || strncmp(s->preset_name.v, nm, sizeof(s->preset_name.v) - 1) != 0) {   // stored value may be cut short
+        val_str_set(&s->preset_name, nm);
+        if (!*nm) { s->preset_name.valid = false; }
+        if (CB && CB->on_state_dirty) { CB->on_state_dirty(); }
+    }
+}
+static void presets_pump(void)
+{
+    if (!ble_ready || !h_qry || pr_tries >= 3) { return; }
+    uint32_t t = now_ms();
+    if (pr_req_ms && t - pr_req_ms < PR_RETRY_MS) { return; }
+    bool want = pr_n < 0;
+    const cam_state_t *s = cam_scratch();
+    if (!want && s->gp_preset.valid && s->mode.valid && s->mode.v == 0 && s->gp_preset.v != pr_asked_for) {
+        want = true;                                                       // video preset not in the list
+        for (int i = 0; i < pr_n; i++) { if (pr_list[i].id == s->gp_preset.v) { want = false; break; } }
+        if (want) { pr_asked_for = s->gp_preset.v; }
+    }
+    if (!want) { return; }
+    uint8_t b[2] = { 0xF5, 0x72 };              // RequestGetPresetStatus, empty: no registration
+    wr(h_qry, b, 2);
+    pr_req_ms = t ? t : 1;
+    pr_tries++;
+}
+static void presets_on_rsp(const uint8_t *p, uint16_t n)
+{
+    static cam_preset_t tmp[CAM_PRESETS_MAX];   // cam_task only; parsed here so a bad reply leaves pr_list alone
+    int k = gopro_presets_parse(p, n, tmp, CAM_PRESETS_MAX);
+    if (k < 0) { applog_note("gopro: preset list did not parse (%u bytes)", n); return; }
+    pr_n = k;
+    memcpy(pr_list, tmp, (size_t)k * sizeof(tmp[0]));
+    pr_tries = 0;
+    cam_caps_publish_presets(tmp, k);
+    preset_name_update();
+    ESP_LOGI(TAG, "preset list: %d video preset(s), %u bytes", k, n);
 }
 
 // Called by cam_task on every pass (<= 100 ms) while READY: the timer-driven parts
@@ -511,8 +590,9 @@ static void gp_tick_fast(void)
     lw_pump();
     caps_pump();
     bool pu = cam_portal_up();
-    if (pu && !portal_prev) { caps_request(0); }                // portal just opened: the builder needs fresh lists
+    if (pu && !portal_prev) { caps_request(0); pr_tries = 0; }  // portal just opened: the builder needs fresh lists
     portal_prev = pu;
+    presets_pump();
 }
 
 static esp_err_t gp_select_preset(uint8_t slot)
@@ -527,12 +607,9 @@ static esp_err_t gp_select_preset(uint8_t slot)
     if (cfg_gp_zone_is_preset(gz)) {
         // Simple zone: switch to the camera's own preset (Open GoPro Load Preset, 0x40, u32 big-endian
         // @ 0f963572). Nothing is pushed; the camera's reply is reported by parse_cmd_rsp().
+        // Every id is a preset, 0 included (bench 2026-11-28: a HERO12's "Video" preset is id 0);
+        // an id the camera does not have is refused by the camera and reported.
         uint32_t id = cfg_zone_id(c, slot);
-        if (!id) {
-            ap_publish(GPA_NONE, 0);
-            applog_note("gopro zone %u has no preset chosen -- nothing loaded", slot + 1);
-            return ESP_OK;
-        }
         if (!h_cmd || !ble_ready) { return ESP_ERR_INVALID_STATE; }
         uint8_t b[6] = { 0x40, 0x04, (uint8_t)(id >> 24), (uint8_t)(id >> 16), (uint8_t)(id >> 8), (uint8_t)id };
         wr(h_cmd, b, sizeof(b));
@@ -797,6 +874,9 @@ static void gp_link_down(void)
     memset(&cp, 0, sizeof(cp));
     memset(&wk, 0, sizeof(wk));
     cam_caps_publish(&wk);          // stale capabilities must not outlive the link
+    cam_caps_publish_presets(NULL, 0);
+    pr_n = -1; pr_req_ms = 0; pr_tries = 0; pr_asked_for = 0xFFFFFFFFu;
+    cam_scratch()->preset_name.valid = false;
     lw_n = 0; q12_n = 0;
     want_record_ack = false;
     ble_ready = false;      // re-probe 0x3C on the next connection
@@ -933,12 +1013,15 @@ static void apply_status(cam_state_t *s, uint8_t id, const uint8_t *v, uint8_t n
             s->framerate.valid = false;
             s->aspect.valid = false;
         }
-        ESP_LOGI(TAG, "preset group %lu -> %s", (unsigned long)g, mn);
+        static uint32_t g_logged = 0xFFFFFFFFu;    // every status poll repeats it: log a change only
+        if (g != g_logged) { g_logged = g; ESP_LOGI(TAG, "preset group %lu -> %s", (unsigned long)g, mn); }
+        preset_name_update();                       // %pn is for video presets only
         break;
     }
     case ST_PRESET:
         s->gp_preset.valid = true;
         s->gp_preset.v = be(v, n);
+        preset_name_update();
         break;
     default: break;
     }
@@ -1159,6 +1242,10 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
     } else if (handle == vh_qry_rsp) {
         if (gopro_reasm_feed(&rz_qry, data, len, &pl, &pll) && pll >= 2) {
             uint8_t qid = pl[0];
+            if (qid == 0xF5) {                                   // protobuf (feature 0xF5): only the preset list
+                if (pl[1] == 0xF2) { presets_on_rsp(pl + 2, (uint16_t)(pll - 2)); }
+                return;
+            }
             if (qid == 0x32 || qid == 0x62 || qid == 0xA2) {    // capabilities, not statuses
                 caps_on_tlv(qid, pl + 2, (uint16_t)(pll - 2));
                 return;
@@ -1176,6 +1263,7 @@ static void gp_on_notify(uint16_t handle, const uint8_t *data, uint16_t len)
             if (qid == 0x12) {
                 if (q12_pop() == Q12_VERIFY) {
                     if (ap.state == AP_VERIFY) { ap_evaluate(); }
+                    else if (ap.state == AP_REFRESH) { ap_next(); }       // gp_set is fresh now
                     return;
                 }
             }
@@ -1204,11 +1292,23 @@ static bool gp_adv_match(const ble_adv_t *adv)
     return false;
 }
 
+// Open GoPro BLE spec, "BLE Setup > Advertisements" (gopro/OpenGoPro gh-pages, read 2026-11-27): the
+// advertising data carries manufacturer data = company id 0x02F2 (little-endian on air: F2 02), schema
+// version, then the camera status byte whose bit 0 is the processor state (0 low power, 1 awake). The
+// camera keeps advertising for 8 h after it goes to sleep, and connecting to it then wakes it and boots
+// it. The scan response (name, service data) has no manufacturer data: -1 there. VERIFY on a HERO11.
+static int gp_adv_awake(const ble_adv_t *adv)
+{
+    if (adv->mfg_len < 4 || adv->mfg[0] != 0xF2 || adv->mfg[1] != 0x02) { return -1; }
+    return (adv->mfg[3] & 0x01) ? 1 : 0;
+}
+
 const camera_driver_t *gopro_driver(void)
 {
     static const camera_driver_t d = {
         .name = "gopro",
         .adv_match = gp_adv_match,
+        .adv_awake = gp_adv_awake,
         .gatt = gp_gatt,
         .link_up = gp_link_up,
         .link_down = gp_link_down,

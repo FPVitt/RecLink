@@ -15,7 +15,7 @@ function showTab(name) {
 }
 $$('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
 
-// portal prefs: cfg.ui_flags (bit0 advanced, bit1 no pw nag); device-persisted, localStorage is a paint cache
+// cfg.ui_flags: bit0 advanced, bit1 no pw nag (localStorage = paint cache)
 let uiFlags = 0;
 const advmode = $('#advmode');
 function persistFlags() {
@@ -62,7 +62,7 @@ function buildZoneRows() {
       `<div class="pz" data-z="${i}"><span class="zlab">Zone ${i + 1}</span>` +
       (i < presetN - 1 ? `<input type="hidden" name="preset.bands.${i}.max_us">` : '') +
       `<label class="zid"><span class="zt">Mode ID</span>
-         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"></label>` +
+         <input type="number" inputmode="numeric" name="preset.bands.${i}.id" min="0" step="1"><select class="zsel" aria-label="Camera preset" hidden></select></label>` +
       `<button type="button" class="ghost zcap" data-z="${i}" title="Use the preset the camera is on now" hidden>Capture</button>` +
       `<button type="button" class="ghost zapply" data-z="${i}" title="Switch the connected camera to this zone now">Apply</button></div>`);
   }
@@ -70,17 +70,32 @@ function buildZoneRows() {
   $('#zone-del').disabled = presetN <= ZONES_MIN;
 }
 buildZoneRows();
-// DJI zones: switch the connected camera to this zone's mode now (saved settings, like the test buttons).
+// GoPro simple zones: the camera's presets by name
+let gpPre = [];
+function zselRender() {
+  const on = gpPre.length > 0 && cfgBrand === 'gopro' && getField('preset.gp_mode') === 1;
+  $$('#zone-ids .pz').forEach(r => {
+    const inp = r.querySelector('input[type=number]'), sel = r.querySelector('.zsel'), v = +inp.value || 0;
+    inp.hidden = on; sel.hidden = !on; if (!on) return;
+    const o = gpPre.some(p => p[0] === v) ? gpPre : gpPre.concat([[v, '']]);
+    const h = o.map(p => `<option value="${p[0]}">${p[1] || 'Preset ' + p[0]}</option>`).join('');
+    if (sel.dataset.sig !== h) { sel.dataset.sig = h; sel.innerHTML = h; }
+    sel.value = v;
+  });
+}
+zwrap.addEventListener('change', e => { const s = e.target.closest('.zsel');
+  if (s) setNum(s.parentNode.querySelector('input').name, +s.value); });
 zwrap.addEventListener('click', async e => {
   const cp = e.target.closest('.zcap');                 // GoPro simple zone: take the camera's current preset id
   if (cp) {
     const id = lastStatus && lastStatus.cam_state && lastStatus.cam_state.preset_id;
-    if (!id) return msg('The camera has not reported its preset yet.');
-    setNum('preset.bands.' + cp.dataset.z + '.id', id);
-    return msg('zone ' + (+cp.dataset.z + 1) + ' = preset ' + id + '. Save to keep it.');
+    if (id === undefined) return msg('The camera has not reported its preset yet.');
+    setNum('preset.bands.' + cp.dataset.z + '.id', id); zselRender();
+    const p = gpPre.find(x => x[0] === id);
+    return msg('zone ' + (+cp.dataset.z + 1) + ' = ' + (p && p[1] ? p[1] : 'preset ' + id));
   }
   const b = e.target.closest('.zapply'); if (!b) return;
-  if (document.body.classList.contains('dirty')) return msg('Save first: Apply uses the saved zone.');
+  await autoSave();                                     // Apply uses the saved zone
   const i = +b.dataset.z;
   msg((await post('/api/camera/preset', { slot: i })).ok ? 'zone ' + (i + 1) + ' applied' : 'failed');
 });
@@ -267,7 +282,7 @@ function setZoneCount(n) {
   if (gpSel >= n) gpSel = n - 1;
   buildBar($('#rb-preset'));
   applyGates();
-  gpRender(); setDirty(true);
+  gpRender(); camEdited();
 }
 $('#zone-add').onclick = () => { if (presetN < ZONES_MAX) { setZoneCount(presetN + 1); gpSelectZone(presetN - 1, true); } };
 $('#zone-del').onclick = () => {
@@ -339,107 +354,201 @@ $$('.auxdetect').forEach(btn => {
   if (sel) { btn.onclick = () => auxDetectStart(btn, sel); }
 });
 
-// ==== OSD tab: chip editor + live preview ====
+// ==== OSD tab: drag-and-drop line editor + live preview ====
 const TOKLIST = [
   ['st','REC state'],['et','elapsed'],['rt','time left'],['bt','batt %'],['bi','batt icon'],['cm','cam model'],
   ['rs','resolution'],['fp','fps'],['ar','aspect'],['ln','lens'],['pr','profile'],['bd','bit depth'],
-  ['sd','SD left'],['sg','SD GB left'],['md','mode'],['cr','cam RSSI'],
-  ['wr','warning'],['rp','Remote ID proximity warning'],
+  ['sd','SD left'],['sg','SD GB left'],['md','mode'],['pn','preset'],['cr','cam RSSI'],
+  ['wr','warning'],['rp','Remote ID warning'],
   ['ix','ISO max'],['in','ISO min'],['sh','shutter'],['wb','white bal'],['co','colour'],['sa','sharpness'],['ev','EV comp'],['pt','Protune']
 ];
 const TOKS = {}; TOKLIST.forEach(t => TOKS[t[0]] = t[1]);
-// Tokens only one brand can fill (the other brand's driver never reports them, so they would stay blank):
-// the GoPro settings (lens, aspect, profile, bit depth, Protune group). No token is DJI-only today.
-const GOPRO_ONLY = new Set(['ar', 'ln', 'pr', 'bd', 'ix', 'in', 'sh', 'wb', 'co', 'sa', 'ev', 'pt']);
+const PGRP = [['Recording', 'st et rt wr'], ['Camera', 'bt bi sd sg cm md pn cr'], ['Video', 'rs fp ar ln pr bd'],
+  ['Protune (GoPro)', 'ix in sh wb co sa ev pt'], ['Remote ID', 'rp']];
+// Tokens only one brand can fill (GoPro settings); none is DJI-only.
+const GOPRO_ONLY = new Set(['pn', 'ar', 'ln', 'pr', 'bd', 'ix', 'in', 'sh', 'wb', 'co', 'sa', 'ev', 'pt']);
 const DJI_ONLY = new Set();
 const tokOk = t => cfgBrand === 'dji' ? !GOPRO_ONLY.has(t) : cfgBrand === 'gopro' ? !DJI_ONLY.has(t) : true;
 const tokWhy = () => cfgBrand === 'dji' ? 'GoPro only' : 'DJI only';
 
-const model = [[], [], [], []];
+let model = [[], [], [], []];
 let focusLine = 0;
 let lastStatus = null;
 
+// A line is a list of items: {t: token} or {lit: text}; every space is an item of its own.
 function parseTmpl(str) {
   str = str || ''; const out = []; let lit = '';
+  const flush = () => { lit.split(/( )/).forEach(x => x && out.push({lit: x})); lit = ''; };
   for (let p = 0; p < str.length; p++) {
     if (str[p] === '%') {
       const pr = str.substr(p + 1, 2);
-      if (pr.length === 2 && TOKS[pr]) { if (lit) { out.push({lit}); lit = ''; } out.push({t: pr}); p += 2; continue; }
+      if (pr.length === 2 && TOKS[pr]) { flush(); out.push({t: pr}); p += 2; continue; }
     }
     lit += str[p];
   }
-  if (lit) out.push({lit});
+  flush();
   return out;
 }
 const serialTmpl = toks => toks.map(x => x.t ? '%' + x.t : x.lit).join('');
 
-function commitLine(i) {
-  const s = serialTmpl(model[i]);
-  $(`[name="osd.lines.${i}"]`).value = s;
-  setDirty(true);
+function commit() {
+  for (let i = 0; i < 4; i++) $(`[name="osd.lines.${i}"]`).value = serialTmpl(model[i]);
+  camEdited();
   renderPreview();
-}
-function moveChip(i, j, d) {
-  const a = model[i], n = j + d;
-  if (n < 0 || n >= a.length) return;
-  const t = a[j]; a[j] = a[n]; a[n] = t;
-  renderChips(i); commitLine(i);
 }
 function renderChips(i) {
   const w = $('#chips-' + i); w.textContent = '';
-  if (!model[i].length) { const e = el('span', 'empty'); e.textContent = '(empty line)'; w.appendChild(e); }
+  if (!model[i].length) { const e = el('span', 'empty'); e.textContent = 'Drop tokens here'; w.appendChild(e); }
   model[i].forEach((x, j) => {
-    const c = el('span', 'chip' + (x.t ? '' : ' lit') + (x.t && !tokOk(x.t) ? ' bad' : ''));
-    if (x.t && !tokOk(x.t)) c.title = tokWhy() + ': shows nothing with this camera. Remove it.';
-    if (x.t) {
-      const b = el('b'); b.textContent = TOKS[x.t]; const s = el('i'); s.textContent = '%' + x.t;
-      c.appendChild(b); c.appendChild(s);
-    } else {
-      const lb = el('i'); lb.textContent = 'text'; c.appendChild(lb);
-      const inp = el('input'); inp.value = x.lit; inp.size = Math.max(2, x.lit.length);
-      inp.oninput = () => { model[i][j].lit = inp.value; inp.size = Math.max(2, inp.value.length); commitLine(i); };
+    const bad = x.t && !tokOk(x.t), c = el('span', 'chip' + (x.t ? '' : x.lit === ' ' ? ' sp' : ' lit') + (bad ? ' bad' : ''));
+    c.tabIndex = 0;
+    c.title = bad ? tokWhy() + ': shows nothing with this camera. Remove it.' : x.t ? '%' + x.t : '';
+    if (x.t) { const b = el('b'); b.textContent = TOKS[x.t]; c.appendChild(b); }
+    else if (x.lit === ' ') { c.textContent = '␣'; c.title = 'space'; }
+    else {
+      const inp = el('input'); inp.value = x.lit; inp.size = Math.max(2, x.lit.length); inp.placeholder = 'text';
+      inp.oninput = () => { x.lit = inp.value; inp.size = Math.max(2, inp.value.length); commit(); };
       c.appendChild(inp);
     }
-    const mk = (txt, fn) => { const b = el('button', 'x'); b.type = 'button'; b.textContent = txt;
-      b.onclick = ev => { ev.stopPropagation(); fn(); }; return b; };
-    c.appendChild(mk('◀', () => moveChip(i, j, -1)));
-    c.appendChild(mk('▶', () => moveChip(i, j, 1)));
-    c.appendChild(mk('✕', () => { model[i].splice(j, 1); renderChips(i); commitLine(i); }));
+    const b = el('button', 'x'); b.type = 'button'; b.textContent = '✕'; b.title = 'Remove';
+    b.onclick = ev => { ev.stopPropagation(); model[i].splice(j, 1); renderChips(i); commit(); };
+    c.appendChild(b);
+    c.onkeydown = ev => {                                 // keyboard: arrows move, Delete removes
+      if (ev.target !== c) return;
+      const k = ev.key, a = model[i], n = j + (k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0);
+      if (k === 'Delete' || k === 'Backspace') a.splice(j, 1);
+      else if (n !== j && n >= 0 && n < a.length) { a[j] = a[n]; a[n] = x; }
+      else return;
+      ev.preventDefault(); renderChips(i); commit();
+      const cs = $$('#chips-' + i + ' .chip'); (cs[Math.min(n === j ? j : n, cs.length - 1)] || {focus() {}}).focus();
+    };
     w.appendChild(c);
   });
 }
 function setFocusLine(i) {
   focusLine = i;
   $$('.oline').forEach(o => o.classList.toggle('foc', +o.dataset.i === i));
+  renderPreview();
 }
-(function buildPalette() {
-  const pal = $('#palette');
-  TOKLIST.forEach(pair => {
+const palItem = d => d.t ? {t: d.t} : {lit: d.k === 'sp' ? ' ' : ''};
+let dragDone = 0;
+function buildPalette() {
+  const pal = $('#palette'), sd = sampleData(), EX = {bi: '▮', wr: 'LOW BATT', rp: '!RID1', st: 'REC'};
+  const add = (box, txt, ex, set) => {
     const b = el('button', 'pchip'); b.type = 'button';
-    const s = el('span'); s.textContent = pair[1]; const it = el('i'); it.textContent = '%' + pair[0];
-    b.appendChild(s); b.appendChild(it);
-    b.dataset.t = pair[0];
-    b.onclick = () => { if (!tokOk(pair[0])) return; model[focusLine].push({t: pair[0]}); renderChips(focusLine); commitLine(focusLine); };
-    pal.appendChild(b);
-  });
-  const tb = el('button', 'pchip'); tb.type = 'button'; tb.textContent = '＋ text';
-  tb.onclick = () => {
-    model[focusLine].push({lit: ' '}); renderChips(focusLine); commitLine(focusLine);
-    const ins = $('#chips-' + focusLine).querySelectorAll('.chip.lit input');
-    if (ins.length) ins[ins.length - 1].focus();
+    const s = el('span'); s.textContent = txt; b.appendChild(s);
+    if (ex) { const it = el('i'); it.textContent = ex; b.appendChild(it); }
+    Object.assign(b.dataset, set); if (set.t) b.title = '%' + set.t;
+    b.onclick = () => {                                   // tap: add to the selected line
+      if (Date.now() - dragDone < 300 || b.disabled) return;
+      const x = palItem(b.dataset); model[focusLine].push(x); renderChips(focusLine); commit();
+      if (x.lit === '') $$('#chips-' + focusLine + ' .lit input').pop().focus();
+    };
+    box.appendChild(b);
   };
-  pal.appendChild(tb);
-})();
+  PGRP.concat([['Text', '']]).forEach(([g, ts]) => {
+    const d = el('div', 'pgrp'), h = el('b'); h.textContent = g; d.appendChild(h);
+    ts.split(' ').filter(Boolean).forEach(t => add(d, TOKS[t], EX[t] || tokVal(t, sd), {t}));
+    if (!ts) { add(d, 'space', '␣', {k: 'sp'}); add(d, 'text', 'abc', {k: 'tx'}); }
+    pal.appendChild(d);
+  });
+}
 $$('.oline').forEach(o => o.addEventListener('click', () => setFocusLine(+o.dataset.i)));
 $('#osdsim').onclick = renderPreview;
+$('#osdlines').onclick = e => { const l = e.target.closest('.osdline'); if (l && l.dataset.i) setFocusLine(+l.dataset.i); };
+
+// Drag: palette items and line chips, with mouse or touch (hold ~0.3 s on touch, so the page still scrolls).
+// While dragging, the preview shows the line as it would be after the drop; dropping a chip off the lines removes it.
+let pd = null, drag = null, osdD;
+const caret = el('div', 'dcaret');
+function dropAt(x, y) {
+  const t = document.elementFromPoint(x, y), o = t && t.closest('.oline'), pl = t && t.closest('.osdline[data-i]');
+  if (pl) {                                              // on the preview: at the character it was dropped on
+    const i = +pl.dataset.i, r = pl.getBoundingClientRect(), cw = r.width / 16, col = (x - r.left) / cw;
+    const a = model[i].filter((_, k) => !drag.src || drag.src[0] !== i || drag.src[1] !== k);
+    let at = a.length, c = 0;
+    for (let k = 0; k < a.length; k++) {
+      const w = expandTmpl(serialTmpl([a[k]]), osdD).length;
+      if (col < c + w / 2) { at = k; break; }
+      c += w;
+    }
+    Object.assign(caret.style, {left: r.left + Math.min(c, 16) * cw - 1 + 'px', top: r.top + 'px', height: r.height + 'px'});
+    return [i, at];
+  }
+  if (!o) return null;
+  const i = +o.dataset.i, cs = $$('#chips-' + i + ' .chip:not(.drg)');
+  let at = cs.length, r;
+  for (let k = 0; k < cs.length; k++) {
+    r = cs[k].getBoundingClientRect();
+    if (y < r.top || (y <= r.bottom && x < r.left + r.width / 2)) { at = k; break; }
+  }
+  const box = $('#chips-' + i).getBoundingClientRect(), c = cs[at] || cs[at - 1];
+  r = c ? c.getBoundingClientRect() : box;
+  Object.assign(caret.style, {left: (c ? (cs[at] ? r.left - 4 : r.right + 2) : box.left + 4) + 'px', top: r.top + 'px', height: (c ? r.height : 36) + 'px'});
+  return [i, at];
+}
+function dragMove(e) {
+  const g = drag.ghost, x = e.clientX, y = e.clientY;
+  g.style.transform = `translate(${x - drag.dx}px,${y - drag.dy}px)`;
+  if (y < $('#tabs').offsetHeight + 24) scrollBy(0, -10); else if (y > innerHeight - 70) scrollBy(0, 10);
+  const at = dropAt(x, y), tmp = model.map(a => a.slice());
+  if (drag.src) tmp[drag.src[0]].splice(drag.src[1], 1);
+  if (at) tmp[at[0]].splice(at[1], 0, drag.item);
+  drag.tmp = tmp; drag.at = at;
+  caret.hidden = !at;
+  g.classList.toggle('del', !at && !!drag.src);
+  $$('.oline').forEach(o => o.classList.toggle('hov', !!at && +o.dataset.i === at[0]));
+  renderPreview();
+}
+function dragBegin() {
+  const c = pd.c, r = c.getBoundingClientRect(), g = c.cloneNode(true);
+  clearTimeout(pd.timer);
+  drag = pd; pd = null;
+  drag.dx = drag.x - r.left; drag.dy = drag.y - r.top;
+  g.className += ' dghost'; g.style.width = r.width + 'px';
+  document.body.append(g, caret); drag.ghost = g;
+  if (drag.src) c.classList.add('drg');
+  document.body.classList.add('dragging');
+  if (navigator.vibrate && drag.touch) navigator.vibrate(10);
+  dragMove({clientX: drag.x, clientY: drag.y});
+}
+function dragEnd(ok) {
+  const d = drag; drag = null;
+  d.ghost.remove(); caret.remove();
+  document.body.classList.remove('dragging');
+  $$('.oline.hov').forEach(o => o.classList.remove('hov'));
+  dragDone = Date.now();
+  const ch = ok && (d.at || d.src) && d.tmp.map(serialTmpl).join('\n') !== model.map(serialTmpl).join('\n');
+  if (ch) model = d.tmp;
+  if (ok && d.at) focusLine = d.at[0];
+  for (let i = 0; i < 4; i++) renderChips(i);
+  if (ch) commit(); setFocusLine(focusLine);
+}
+document.addEventListener('pointerdown', e => {
+  const c = e.target.closest('#osd .pchip:not(:disabled),#osd .chip');
+  if (!c || e.button > 0 || drag || e.target.closest('input,.x')) return;
+  const w = c.parentNode, src = c.classList.contains('chip') ? [+w.id.slice(6), [...w.querySelectorAll('.chip')].indexOf(c)] : null;
+  pd = {c, src, item: src ? model[src[0]][src[1]] : palItem(c.dataset), x: e.clientX, y: e.clientY, touch: e.pointerType === 'touch'};
+  if (pd.touch) pd.timer = setTimeout(dragBegin, 300);
+});
+document.addEventListener('pointermove', e => {
+  if (drag) return dragMove(e);
+  if (!pd) return;
+  if (Math.hypot(e.clientX - pd.x, e.clientY - pd.y) > (pd.touch ? 8 : 5)) {
+    if (pd.touch) { clearTimeout(pd.timer); pd = null; } else dragBegin();   // touch moved early: it is a scroll
+  }
+});
+document.addEventListener('pointerup', () => { if (drag) dragEnd(1); else if (pd) { clearTimeout(pd.timer); pd = null; } });
+document.addEventListener('pointercancel', () => { if (drag) dragEnd(0); else if (pd) { clearTimeout(pd.timer); pd = null; } });
+document.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, {passive: false});
+document.addEventListener('contextmenu', e => { if (pd || drag) e.preventDefault(); });
+document.addEventListener('keydown', e => { if (drag && e.key === 'Escape') dragEnd(0); });
 
 function osdLoad() {
   for (let i = 0; i < 4; i++) {
-    const v = $(`[name="osd.lines.${i}"]`).value || '';
-    model[i] = parseTmpl(v); renderChips(i);
+    model[i] = parseTmpl($(`[name="osd.lines.${i}"]`).value || ''); renderChips(i);
   }
   setFocusLine(0);
-  renderPreview();
 }
 
 // ---- token expander (mirrors osd_format.c) ----
@@ -458,7 +567,7 @@ function activeWarning(d) {
   return '';
 }
 const pv = x => x && x.valid ? x.v : '';
-// mirror osd_format.c osd_cam_model_short(): "HERO11 Black" -> GP11, "Osmo Action 6" -> A6, "Osmo Action 5 Pro" -> A5P
+// mirrors osd_format.c osd_cam_model_short()
 const camShort = m => { m = m || ''; let x;
   if ((x = /^HERO(\d{1,3})/.exec(m))) return 'GP' + x[1] + (/Mini/.test(m) ? 'M' : '');
   if ((x = /^Osmo Action (\d{1,2})/.exec(m))) return 'A' + x[1] + (/Pro/.test(m) ? 'P' : '');
@@ -466,7 +575,7 @@ const camShort = m => { m = m || ''; let x;
   return /^Osmo/.test(m) ? 'DJI' : ''; };
 // Protune tokens: cam_state key + sample value
 const PROT = {ix: ['iso_max', '1600'], in: ['iso_min', '100'], sh: ['shutter', '1/60'], wb: ['wb', '5500K'],
-  co: ['color', 'Flat'], sa: ['sharpness', 'Medium'], ev: ['ev', '0.0'], pt: ['protune', 'ON']};
+  co: ['color', 'Flat'], sa: ['sharpness', 'Medium'], ev: ['ev', '0.0'], pt: ['protune', 'ON'], pn: ['preset_name', 'Standard']};
 function tokVal(pair, d) {
   switch (pair) {
     case 'st': if (!d.link) return ''; if (d.pre_record) return 'PRE';
@@ -475,8 +584,7 @@ function tokVal(pair, d) {
     case 'rt': return d.rec_remaining.valid ? remainStr(d.rec_remaining.v) : '';
     case 'bt': return d.battery.valid ? d.battery.v + '%' : '';
     case 'bi':
-      // Real hardware shows Betaflight's battery glyph, one of 7 steps (code 0x90 full .. 0x96 empty, as in
-      // osd_format.c). Here U+E090..E096 stand for it and are drawn as a small battery.
+      // BF battery glyph 0x90..0x96 (osd_format.c), drawn from U+E090..E096
       if (!d.battery.valid) return '';
       return String.fromCharCode(0xE090 + Math.max(0, Math.min(6, Math.floor((100 - d.battery.v) * 7 / 100))));
     case 'rs': return d.resolution.valid ? d.resolution.v : '';
@@ -581,13 +689,12 @@ function renderPreview() {
     if (!sim.checked) { d.link = false; d.searching = false; }
   }
 
-  let lines;
-  if (!d.link) { lines = [d.searching ? 'CAM ?' : 'CAM LOST', '', '', '']; }
-  else { lines = [0, 1, 2, 3].map(i => expandTmpl($(`[name="osd.lines.${i}"]`).value || '', d)); }
-  if (d.digital) lines = lines.map(digitalize);   // mirror the firmware digital filter
-
-  const clipped = [];
-  lines = lines.map((t, i) => { if (t.length > 16) { clipped.push({n: i + 1, full: t}); return t.slice(0, 16); } return t; });
+  // the lines as the camera fills them (while dragging: as they would be after the drop); counted even when the link is down
+  const dc = osdD = d.link ? d : sampleData(), tm = i => drag ? serialTmpl(drag.tmp[i]) : $(`[name="osd.lines.${i}"]`).value || '';
+  const full = [0, 1, 2, 3].map(i => { const t = expandTmpl(tm(i), dc); return dc.digital ? digitalize(t) : t; });   // mirror the firmware digital filter
+  full.forEach((t, i) => { const c = $$('.olh .cnt')[i]; c.textContent = t.length + '/16'; c.classList.toggle('over', t.length > 16);
+    c.title = t.length > 16 ? 'Too long: the OSD cuts it after 16 characters' : ''; });
+  let lines = d.link ? full.map(t => t.slice(0, 16)) : [d.searching ? 'CAM ?' : 'CAM LOST', '', '', ''];
 
   // simulate the Remote ID messages on the line that holds %rp (script in ridDemo)
   const ri = sim.checked ? ridRpLine() : -1, lab = [];
@@ -608,19 +715,20 @@ function renderPreview() {
       });
     }
     if (lab[i]) c.dataset.l = lab[i]; else delete c.dataset.l;
+    const li = lines.length === 4 && d.link ? i : -1;    // which editor line this is (not while Remote ID lines are inserted)
+    if (li >= 0) c.dataset.i = li; else delete c.dataset.i;
+    c.classList.toggle('foc', li >= 0 && li === (drag && drag.at ? drag.at[0] : focusLine));
   });
-
-  const clipEl = $('#osdclip');
-  clipEl.textContent = clipped.length
-    ? clipped.map(c => 'Line ' + c.n + ' is ' + c.full.length + ' chars — clipped to “' + c.full.slice(0, 16) + '”').join('   ')
-    : '';
 }
 ['input', 'change'].forEach(ev => document.addEventListener(ev, e => {
   if (e.target.closest && e.target.closest('#osd')) renderPreview();
 }));
+buildPalette();
+const navH = () => document.body.style.setProperty('--navh', $('#tabs').offsetHeight + 'px');   // the preview sticks below the tab bar
+addEventListener('resize', navH); navH();
 
 // ============ GoPro zone settings builder ============
-// A GoPro zone pushes these to the active video preset: preset.bands[N].gp = {settingId: value} (gp_preset.h).
+// preset.bands[N].gp = {settingId: value} (gp_preset.h)
 const GP_SET = {
   2: ["Resolution", [[1,"4K"],[4,"2.7K"],[6,"2.7K 4:3"],[7,"1440"],[9,"1080"],[12,"720"],[18,"4K 4:3"],[21,"5.6K"],[24,"5K"],[25,"5K 4:3"],[26,"5.3K 8:7"],[27,"5.3K 4:3"],[28,"4K 8:7"],[31,"8K"],[35,"5.3K 21:9"],[36,"4K 21:9"],[37,"4K 1:1"],[38,"900"],[39,"4K SPH"],[40,"8K 4:3"],[44,"1440 4:3"],[100,"5.3K"],[107,"5.3K 8:7 V2"],[108,"4K 8:7 V2"],[109,"4K 9:16 V2"],[110,"1080 9:16 V2"],[111,"2.7K 4:3 V2"],[112,"4K 4:3 V2"],[113,"5.3K 4:3 V2"]]],
   108: ["Aspect ratio", [[0,"4:3"],[1,"16:9"],[3,"8:7"],[4,"9:16"],[5,"21:9"],[6,"1:1"]], ["HERO12 Black", "HERO13 Black", "MAX 2", "Mission 1 Pro", "Mission 1", "LIT HERO"]],
@@ -639,19 +747,17 @@ const GP_SET = {
   118: ["EV comp", [[0,"+2.0"],[1,"+1.5"],[2,"+1.0"],[3,"+0.5"],[4,"0.0"],[5,"-0.5"],[6,"-1.0"],[7,"-1.5"],[8,"-2.0"]]],
   174: ["10-bit", [[0,"Off"],[1,"On"]]],
 };
-// GP_SET[id] = [label, options, models?]. `models` lists cameras that have the setting (others hide it);
-// settings without a list are always shown.
-const GP_GROUPS = [['Video', [2,108,3,121,135,183,184]],
+// GP_SET[id] = [label, options, models that have it (none = all)]
+const GP_GROUPS = [['Video', [184,183,108,2,3,121,135]],
                    ['Protune', [114,13,102,145,115,116,117,118,174]]];
 let gpz = [{}, {}, {}], gpSel = 0, gpModel = '';
 try { gpModel = localStorage.getItem('gpmodel') || ''; } catch (e) {}
 const gpSupported = id => { const m = GP_SET[id][2]; return !m || !gpModel || m.includes(gpModel); };
 
 // ---- shutter angle ----
-// Setting 145 is stored as the camera's raw option (1/60...); the UI shows/edits it as an ANGLE (180 deg = 1/(2 x fps)),
-// derived from the option names and the frame rate.
+// 145 is stored raw (1/60...), shown as an angle from the frame rate.
 const GP_FPS = {0:240,1:120,2:100,3:90,5:60,6:50,8:30,9:25,10:24,13:200,15:400,16:360,17:300,18:480,19:960,20:800};
-const GP_ANGLES = [360, 180, 90, 45, 22.5];
+const GP_ANGLES = [360, 180, 90, 45, 22.5, 11.25, 5.625, 2.8125];
 const gpDenom = v => { const o = GP_SET[145][1].find(x => x[0] === v), m = o && /^1\/(\d+)$/.exec(o[1]);
                        return m ? +m[1] : 0; };                                  // 0 = Auto / unknown
 const gpAngleOf = (v, fps) => { const d = gpDenom(v); return d ? Math.round(360 * fps / d * 10) / 10 : 0; };
@@ -665,15 +771,13 @@ function gpFpsNum(z) {
   return gs && gs[3] !== undefined ? GP_FPS[gs[3]] || 0 : 0;
 }
 // ---- capabilities (what the camera offers right now) ----
-// /api/camera/caps: the options the camera accepts now; trusted only while connected in a video preset.
 let gpCaps = null, gpCapsGen = -1, gpCamReady = false, gpSyncing = false;
-let gpLive = true;
-try { gpLive = localStorage.getItem('gplive') !== '0'; } catch (e) {}
 const gpCapsOn = () => !!(gpCamReady && gpCaps && gpCaps[2]);
 async function gpLoadCaps() {
   try {
     const r = await fetch('/api/camera/caps').then(x => x.json());
     gpCaps = r && r.caps && Object.keys(r.caps).length ? r.caps : null;
+    gpPre = (r && r.presets) || []; zselRender();
   } catch (e) { return; }
   gpSyncing = false;
   gpRender();
@@ -710,15 +814,16 @@ function gpRank(id, o) {
 function gpOpts(id) {
   const all = GP_SET[id][1];
   let o = all.slice();
-  const c = gpCapsOn() && gpCaps[id];
-  if (c) {
-    o = o.filter(x => c.includes(x[0]));
-    c.forEach(v => { if (!all.some(x => x[0] === v)) o.push([v, 'option ' + v]); });
-  }
-  return o.sort((a, b) => gpRank(id, a) - gpRank(id, b) || a[0] - b[0]);
+  if (gpCapsOn()) { const c = gpCaps[id] || []; o = o.filter(x => c.includes(x[0])); }   // unnamed values are never offered
+  o.sort((a, b) => gpRank(id, a) - gpRank(id, b) || a[0] - b[0]);
+  if (+id !== 2) return o;
+  const sh = o.map(x => gpResName(x[1], 1));                   // short unless two clash
+  return o.map((x, i) => [x[0], sh.indexOf(sh[i]) !== sh.lastIndexOf(sh[i]) ? gpResName(x[1]) : sh[i]]);
 }
-// Show a setting? Ticked always; with live caps only what the camera lists.
-const gpShown = (id, v) => v !== undefined || (gpCapsOn() ? !!gpCaps[id] : gpSupported(id));
+// No "V2"; size only when the Aspect row sets the aspect
+const gpResName = (n, short) => (n = n.replace(' V2', ''), short && gpCapsOn() && gpCaps[108] ? n.split(' ')[0] : n);
+const gpKnown = (id, v) => GP_SET[id][1].some(x => x[0] === v);
+const gpShown = (id, v) => v !== undefined ? gpKnown(id, v) : gpCapsOn() ? gpOpts(id).length > 0 : gpSupported(id);
 
 function gpFillShutter(sel, z) {
   const fps = gpFpsNum(z), v = z[145], allowed = gpOpts(145);
@@ -754,11 +859,13 @@ function gpRender() {
   if (!$('#gp-rows').firstChild) gpBuild();
   const z = gpz[gpSel], capsOn = gpCapsOn();
   $$('#gp-rows .gpr').forEach(r => {
-    const id = r.dataset.id, v = z[id], sel = r.querySelector('select');
+    const id = r.dataset.id, sel = r.querySelector('select');
+    if (z[id] !== undefined && !gpKnown(id, z[id])) delete z[id];   // an unnamed value (Color in Log): never shown or pushed
+    const v = z[id];
     let opts = id === '145' ? gpFillShutter(sel, z) : gpOpts(id).map(o => [o[0], o[1]]);
     if (id !== '145' && v !== undefined && !opts.some(o => o[0] === v)) {
       const base = GP_SET[id][1].find(x => x[0] === v);        // stored value the camera does not offer now
-      opts.push([v, (base ? base[1] : 'option ' + v) + (capsOn ? ' (not available now)' : '')]);
+      opts.push([v, (base ? gpResName(base[1]) : 'option ' + v) + (capsOn ? ' (not available now)' : '')]);
     }
     const sig = JSON.stringify(opts);
     if (sel.dataset.sig !== sig) {                              // rebuild only on change: keeps an open list open
@@ -767,7 +874,7 @@ function gpRender() {
     }
     if (v !== undefined) sel.value = v;
     r.classList.toggle('on', v !== undefined);
-    r.classList.toggle('bad', v !== undefined && capsOn && gpCaps[id] && !gpCaps[id].includes(v));
+    r.classList.toggle('bad', v !== undefined && capsOn && !(gpCaps[id] || []).includes(v));
     r.querySelector('input').checked = v !== undefined;
     r.hidden = !gpShown(id, v);
     r.title = v !== undefined && !capsOn && !gpSupported(id) ? gpModel + ' does not list this setting' : '';
@@ -776,12 +883,12 @@ function gpRender() {
     }
   });
   gpGate();
-  $('#gp-model').textContent = !gpCamReady ? 'Connect the camera to edit zone settings.' : gpSyncing ? 'Syncing with the camera…'
+  $('#gp-sync').classList.toggle('on', gpSyncing);             // a spinner: swapping the text reflowed the view
+  $('#gp-model').textContent = !gpCamReady ? 'Connect the camera to edit zone settings.'
     : capsOn ? 'Showing what ' + (gpModel || 'the camera') + ' offers right now' +
-        (gpLive ? ' — edits are also sent to the camera so dependent lists stay correct.' : '.')
+        ' — edits are also sent to the camera so dependent lists stay correct.'
     : gpModel ? 'Showing the settings ' + gpModel + ' supports. Connect the camera (in a video preset) to filter the options too.'
     : 'Connect the camera to hide settings and options it does not support.';
-  $('#gp-live').checked = gpLive;
   const zt = $('#gp-zt');
   while (zt.children.length < presetN) {
     const i = zt.children.length, b = el('button', 'ghost');
@@ -794,9 +901,19 @@ function gpRender() {
     b.textContent = 'Zone ' + (i + 1) + (Object.keys(gpz[i] || {}).length ? ' \u00b7 ' + Object.keys(gpz[i]).length : '');
   });
 }
-// Write these to the camera in order (disarmed, not recording).
+// After a live edit, ticked settings follow what the camera changes itself (a few s)
+let gpFollow = null;
+function gpFollowCam(gs) {
+  if (!gpFollow || !gs || !gpCamReady) return;
+  if (Date.now() > gpFollow.until) { gpFollow = null; return; }
+  const z = gpz[gpFollow.zone]; let ch = 0;
+  for (const id in z) if (!gpFollow.ids.includes(id) && gs[id] !== undefined && gs[id] !== gpFollow.base[id] && gs[id] !== z[id] && gpKnown(id, gs[id])) { z[id] = gs[id]; ch++; }
+  if (ch) { gpRender(); camEdited(); }
+}
 async function gpPushLive(ids, gapMs) {
   const z = gpz[gpSel];
+  const gs = lastStatus && lastStatus.cam_state && lastStatus.cam_state.gp_set;
+  gpFollow = ids.length < 4 && gs ? { zone: gpSel, ids: ids.map(String), base: { ...gs }, until: Date.now() + 9000 } : null;
   gpSyncing = true; gpRender();
   for (const id of ids) {
     if (z[id] === undefined) continue;
@@ -815,32 +932,30 @@ function gpEdit(row, on) {
     const nv = gpShutterFor(angle, gpFpsNum(z));
     if (nv !== undefined && nv !== z[145]) { z[145] = nv; if (on) push.push('145'); }
   }
-  gpRender(); setDirty(true);
-  if (gpLive && gpCamReady && push.length) gpPushLive(push);
+  gpRender(); camEdited();
+  if (gpCamReady && push.length) gpPushLive(push);
 }
-$('#gp-live').onchange = e => { gpLive = e.target.checked;
-  try { localStorage.setItem('gplive', gpLive ? '1' : '0'); } catch (x) {} gpRender(); };
 $('#gp-rows').addEventListener('change', e => {
   const row = e.target.closest('.gpr'); if (!row) return;
   gpEdit(row, e.target.type === 'checkbox' ? e.target.checked : true);
 });
-// Select a zone; with 'keep in step' it is applied to the camera. `quiet` = show only.
+// Select a zone; it is applied to the camera unless `quiet`.
 function gpSelectZone(i, quiet) {
   gpSel = i; gpRender();
   const z = gpz[i], ids = GP_GROUPS.flatMap(g => g[1]).filter(id => z[id] !== undefined);
-  if (!quiet && gpLive && gpCamReady && ids.length) {
+  if (!quiet && gpCamReady && ids.length) {
     msg('applying zone ' + (i + 1) + ' to the camera');
     gpPushLive(ids, 350);
   }
 }
-$('#gp-clear').onclick = () => { gpz[gpSel] = {}; gpRender(); setDirty(true); };
+$('#gp-clear').onclick = () => { gpz[gpSel] = {}; gpRender(); camEdited(); };
 $('#gp-capture').onclick = () => {
   const gs = lastStatus && lastStatus.cam_state && lastStatus.cam_state.gp_set;
-  const ids = gs ? Object.keys(gs).filter(k => GP_SET[k]) : [];
+  const ids = gs ? Object.keys(gs).filter(k => GP_SET[k] && gpKnown(k, gs[k]) && (!gpCapsOn() || (gpCaps[k] || []).includes(gs[k]))) : [];
   if (!ids.length) { msg('camera has not reported its settings yet'); return; }
   gpz[gpSel] = {}; ids.forEach(k => { gpz[gpSel][k] = gs[k]; });
-  gpRender(); setDirty(true);
-  msg('captured ' + ids.length + ' settings into zone ' + (gpSel + 1) + ' -- Save to keep');
+  gpRender(); camEdited();
+  msg('captured ' + ids.length + ' settings into zone ' + (gpSel + 1));
 };
 function gpApplyText(za) {
   if (!za || !za.zone) return '\u2014';
@@ -884,8 +999,8 @@ function fillConfig(c) {
   walk(c, '');
 }
 
-function collectConfig() {
-  const c = { record:{switch:{}}, preset:{bands:[]}, osd:{lines:[],warn:{}},
+function collectConfig(auto) {      // auto: only the Cam control and OSD tabs
+  const c = auto ? { preset:{bands:[]}, osd:{lines:[]} } : { record:{switch:{}}, preset:{bands:[]}, osd:{lines:[],warn:{}},
               clock:{}, gps_push:{}, hilight:{}, msp:{}, wifi:{} };
   const set = (path, val) => {
     const p = path.split('.'); let o = c;
@@ -897,13 +1012,14 @@ function collectConfig() {
     }
     o[p[p.length-1]] = val;
   };
-  $$('input[name],select[name]').forEach(el => {
+  $$(auto ? AUTO_F : 'input[name],select[name]').forEach(el => {
     let name = el.name, val = getField(name);
     if (name.startsWith('osd.lines.')) { c.osd.lines[+name.split('.')[2]] = val; return; }
     set(name, val);
   });
   c.preset.n_zones = presetN;
   for (let i = 0; i < presetN; i++) { c.preset.bands[i] = c.preset.bands[i] || {}; c.preset.bands[i].gp = gpz[i] || {}; }
+  if (auto) return c;
   c.msp.baud = Number(c.msp.baud);
   c.rid.ignore = ridIgnore();            // replaces the whole stored list; blanks/duplicates dropped
   return c;
@@ -913,7 +1029,7 @@ let cfgBrand = '';            // paired camera brand, drives field gating
 let gateBrand = null;         // brand the OSD palette was last gated for
 let rebootBaseline = '';      // msp.baud + swap_pins at last load, to detect reboot-needed
 
-// ---- per-camera settings: Cam control, OSD, Remote ID and Clock belong to one paired camera ----
+// ---- per-camera settings ----
 let viewCam = '', camStored = true, camSig = '', camAuto = false, camConn = '';   // viewCam: 12 hex digits of the camera on screen ('' = none chosen)
 const camHex = a => (a || '').replace(/:/g, '').toLowerCase();
 const camList = () => (lastStatus && lastStatus.camera && lastStatus.camera.cameras) || [];
@@ -945,7 +1061,7 @@ function camselUi() {
   const ch = cc ? camHex(cc) : '';
   if (ch !== camConn) {
     camConn = ch;
-    if (ch && ch !== viewCam && !document.body.classList.contains('dirty')) { camAuto = true; loadConfig(ch); }
+    if (ch && ch !== viewCam && !dirtyCam) { camAuto = true; loadConfig(ch); }
   }
   const lock = L.length > 0 && !viewCam;              // no camera chosen: the camera pages are grayed out
   ['cam-control', 'osd', 'rid', 'clock'].forEach(id => { const x = $('#' + id); x.inert = lock; x.classList.toggle('camlock', lock); });
@@ -956,12 +1072,15 @@ function camselUi() {
 }
 $('#nocam-go').onclick = () => showTab('camera');
 $('#camsel-s').onchange = e => {
-  if (document.body.classList.contains('dirty') && !confirm('Discard unsaved changes?')) { e.target.value = viewCam; return; }
+  if (dirtyCam && !confirm('Discard unsaved Remote ID / Clock changes?')) { e.target.value = viewCam; return; }
   camAuto = true;                                     // the user chose (even "Select a camera"): stop choosing for them
   loadConfig(e.target.value);
 };
 
 async function loadConfig(cam) {
+  await autoSave();                                   // before the fields are refilled (and maybe for another camera)
+  const keep = document.body.classList.contains('dirty') && !dirtyCam
+    ? $$('input[name],select[name]').filter(x => !x.closest(AUTO + ',#rid,#clock')).map(x => [x, x.type === 'checkbox' ? x.checked : x.value]) : null;
   if (cam != null) { viewCam = cam; try { localStorage.setItem('camsel', cam); } catch (e) {} }
   const r = await fetch('/api/config' + camQ());
   if (r.status === 404) { viewCam = ''; return loadConfig(); }       // that camera was forgotten
@@ -984,6 +1103,7 @@ async function loadConfig(cam) {
   applyGates();
   ridUi();
   setDirty(false);
+  if (keep && keep.length) { keep.forEach(([x, v]) => { if (x.type === 'checkbox') x.checked = v; else x.value = v; }); setDirty(true, keep[0][0]); }   // unsaved Network / System edits survive a camera switch
 }
 
 // ---- field gating ----
@@ -1012,8 +1132,9 @@ function applyGates() {
   $('#gp-mode-row').hidden = !isGP;
   $('#gp-builder').hidden = idZones;
   $$('#zone-ids .zid').forEach(e => { e.hidden = !idZones; });
-  $$('#zone-ids .zt').forEach(e => { e.textContent = gpSimple ? 'Preset ID' : 'Mode ID'; });
+  $$('#zone-ids .zt').forEach(e => { e.textContent = gpSimple ? 'Preset' : 'Mode ID'; });
   $$('#zone-ids .zcap').forEach(e => { e.hidden = !gpSimple; });
+  zselRender();
   zwrap.hidden = !idZones;
   $('#dji-zone-note').hidden = !isDJI;
   $('#gp-simple-note').hidden = !gpSimple;
@@ -1024,7 +1145,7 @@ function applyGates() {
   $$('[name^="gps_push."]').forEach(i => i.disabled = !gp);
   if (gateBrand !== cfgBrand) {                          // OSD tokens the other brand cannot fill: grayed out, flagged where already used
     gateBrand = cfgBrand;
-    $$('#palette .pchip[data-t]').forEach(b => { const ok = tokOk(b.dataset.t); b.disabled = !ok; b.title = ok ? '' : tokWhy() + ' (this camera never reports it)'; });
+    $$('#palette .pchip[data-t]').forEach(b => { const ok = tokOk(b.dataset.t); b.disabled = !ok; b.title = ok ? '%' + b.dataset.t : tokWhy() + ' (this camera never reports it)'; });
     for (let i = 0; i < 4; i++) renderChips(i);
   }
 
@@ -1035,9 +1156,22 @@ $$('[name="record.mode"],[name="preset.enabled"],[name="preset.gp_mode"]').forEa
   el.addEventListener('change', applyGates));
 
 // ---- dirty tracking ----
-function setDirty(d) { document.body.classList.toggle('dirty', d); }
-document.addEventListener('input', e => { if (e.target.name) setDirty(true); });
+// Cam control and OSD save themselves (0.7 s after the last edit); the Save button is for the other tabs.
+// dirtyCam: unsaved edits in the other per-camera tabs (Remote ID, Clock), which belong to the camera on screen.
+const AUTO = '#cam-control,#osd', AUTO_F = '#cam-control [name],#osd [name]';
+let autoT = 0, autoQ = '', dirtyCam = false;
+function setDirty(d, el) { document.body.classList.toggle('dirty', d); dirtyCam = d && (dirtyCam || !el || !!el.closest('#rid,#clock')); }
+function camEdited() { clearTimeout(autoT); autoQ = camQ(); autoT = setTimeout(autoSave, 700); }
+async function autoSave(keep) {
+  if (!autoT) return;
+  clearTimeout(autoT); autoT = 0;
+  const r = await fetch('/api/config' + autoQ, { method: 'POST', keepalive: !!keep, headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(collectConfig(1)) }).then(x => x.json()).catch(() => ({ ok: false }));
+  if (!r.ok) msg('not saved: ' + (r.errors ? r.errors.join(', ') : 'the bridge did not answer'));
+}
+document.addEventListener('input', e => { const t = e.target; if (t.name) t.closest(AUTO) ? camEdited() : setDirty(true, t); });
 window.addEventListener('beforeunload', e => {
+  autoSave(1);
   if (document.body.classList.contains('dirty')) { e.preventDefault(); e.returnValue = ''; }
 });
 
@@ -1198,7 +1332,13 @@ function renderFound(list) {
   });
 }
 $('#camrefresh').onclick = async () => msg((await post('/api/camera/refresh')).ok ? 'refreshing camera…' : 'failed');
-$('#camtest').onclick = $('#rectest').onclick = async () => msg((await post('/api/camera/test')).ok ? 'recording 3 s…' : 'failed');
+let testWake = 0;                                                 // a test record is waiting for an asleep camera to wake
+async function camTest() {
+  const r = await post('/api/camera/test');
+  testWake = r.ok && r.waking ? Date.now() : 0;
+  msg(!r.ok ? 'failed' : r.waking ? 'waking the camera\u2026' : 'recording 3 s\u2026');
+}
+$('#camtest').onclick = $('#rectest').onclick = camTest;
 
 // ---- Binding tab: paired-camera list ----
 const brandTag = b => b === 'gopro' ? 'GoPro' : b === 'dji' ? 'DJI' : (b || 'Camera');
@@ -1215,7 +1355,7 @@ function askForget(cam) {
         poll();
       }, true);
 }
-// ---- camera names: asked right after pairing, changeable from the Binding tab ----
+// ---- camera names ----
 let nickAddr = '', nickQueue = null, knownCams = null;
 function nickOpen(cam, first) {
   nickAddr = cam.addr;
@@ -1255,7 +1395,9 @@ function renderCams(c) {
   const count = c ? (c.count | 0) : cams.length;
   $$('#pairrow [data-pair]').forEach(b => b.disabled = count >= 4);
   $('#pairfull').hidden = count < 4;
-  $('#camtest').disabled = $('#rectest').disabled = !cams.some(x => x.connected);
+  const up = cams.some(x => x.connected);
+  $('#camtest').disabled = $('#rectest').disabled = !up && !(c && c.asleep);   // an asleep camera is woken first
+  if (testWake && (up || Date.now() - testWake > 30000)) { const go = up; testWake = 0; if (go) setTimeout(camTest, 1500); }
   { const on = cams.some(x => x.connected && camHex(x.addr) === viewCam);      // the camera on screen is the connected one
     $$('.zapply,.zcap').forEach(b => { b.disabled = !on; }); }
   $('#forgetall').hidden = count < 2;
@@ -1280,12 +1422,19 @@ function renderCams(c) {
                  + '<option value="15">Slow (1.5 s)</option>';
       r.innerHTML = '<div class="camtop-wrap"><div class="caminfo"><div class="camtop">'
         + '<b class="camname"></b><span class="tag"></span></div>'
-        + '<div class="cammeta mono"></div></div>'
+        + '<div class="cammeta mono"></div>'
+        + '<label class="camwake" title="When RecLink powers up, switch this GoPro on if it is asleep. One camera at a time; switched off later, it stays off until a recording starts.">'
+        + '<input type="checkbox" class="wakechk">Wake at power-up</label></div>'
         + '<div class="camright"><span class="badge"></span>'
         + '<button type="button" class="ghost rename">Rename</button>'
         + '<button type="button" class="forget">Forget</button></div></div>'
         + '<div class="camadv adv-only"><span>Telemetry poll</span>'
         + '<select class="pollsel" aria-label="Telemetry poll interval">' + opts + '</select></div>';
+      r.querySelector('.wakechk').onchange = async e => {
+        const res = await post('/api/camera/poll', { addr: r.dataset.addr, wake: e.target.checked });
+        if (!res.ok) msg('could not save');
+        poll();
+      };
       const ps = r.querySelector('.pollsel');
       ps.onchange = async () => {
         const res = await post('/api/camera/poll', { addr: r.dataset.addr, poll_ds: +ps.value });
@@ -1300,11 +1449,13 @@ function renderCams(c) {
     const badge = r.querySelector('.badge');
     let txt = 'Standby', cls = 'badge';
     if (cam.connected) { txt = 'Connected · ' + c.rssi + ' dBm'; cls = 'badge ok'; }
+    else if (cam.asleep) { txt = 'Asleep'; cls = 'badge warn'; }
     else if (cam.active) { txt = 'Connecting…'; cls = 'badge warn'; }
     setText(badge, txt);
     if (badge.className !== cls) badge.className = cls;
     // Telemetry poll: GoPro only (DJI pushes status on its own schedule).
-    r.querySelector('.camadv').hidden = cam.brand !== 'gopro';
+    r.querySelector('.camadv.adv-only').hidden = r.querySelector('.camwake').hidden = cam.brand !== 'gopro';
+    r.querySelector('.wakechk').checked = !!cam.wake;
     const ps = r.querySelector('.pollsel');
     if (document.activeElement !== ps && cam.poll_ds) ps.value = cam.poll_ds;
     // Insert only when out of place -- re-parenting a node closes an open
@@ -1485,13 +1636,14 @@ async function poll() {
     }
   }
 
-  // verdict banner + fact tiles: whatever needs attention is listed first, empty values stay hidden
+  // verdict banner + fact tiles
   const ready = !!(c && c.link === 'READY'), isRec = !!(cs && cs.recording === 'true');
   const camNm = paired ? (c.name || c.brand.toUpperCase()) : '';
+  const sleepers = ((c && c.cameras) || []).filter(x => x.asleep).map(camLabel).join(', ');   // which camera is switched off
   const iss = [];                                                  // [text, 'bad'|'warn', acknowledgeable]
   if (!fcUp) iss.push(['No FC link', 'warn']);
   if (!paired) iss.push(['No camera paired', 'warn']);
-  else if (!ready) iss.push([c.link === 'LOST' ? 'Camera lost' : 'No camera', c.link === 'LOST' ? 'bad' : 'warn']);
+  else if (!ready) iss.push(c.asleep ? [(sleepers || 'Camera') + ' asleep', 'warn'] : [c.link === 'LOST' ? 'Camera lost' : 'No camera', c.link === 'LOST' ? 'bad' : 'warn']);
   if (ready) {
     if (cs.sd_missing) iss.push(['No SD card', 'bad']); else if (cs.sd_full) iss.push(['SD card full', 'bad']);
     if (cs.hot) iss.push(['Camera hot', 'bad']);
@@ -1528,9 +1680,10 @@ async function poll() {
   tile('ac', !fcUp ? 'No FC' : m.armed ? 'ARMED' : 'Disarmed', !fcUp ? 'warn' : m.armed ? 'bad' : 'ok',
        fcUp ? m.variant + ' \u00b7 MSP ' + m.api + ' \u00b7 OSD ' + m.canvas : 'Waiting for the flight controller',
        !fcUp ? '' : m.gps.present ? 'GPS ' + (m.gps.good ? 'fix' : 'no fix') + ' \u00b7 ' + m.gps.sats + ' sats' : 'No GPS on the FC');
-  const scan = paired && c.link === 'SCAN';                        // hunting: no brand or model yet
-  tile('cam', scan ? 'Scanning' : paired ? camNm : 'None', ready ? 'ok' : paired ? (c.link === 'LOST' ? 'bad' : 'warn') : '',
-       scan ? '' : paired ? c.brand.toUpperCase() + ' \u00b7 ' + (ready ? 'connected \u00b7 ' + c.rssi + ' dBm' : c.link.toLowerCase())
+  const asleep = paired && !ready && !!c.asleep;                  // switched off, still advertising (GoPro)
+  const scan = paired && c.link === 'SCAN' && !asleep;            // hunting: no brand or model yet
+  tile('cam', asleep ? 'Asleep' : scan ? 'Scanning' : paired ? camNm : 'None', ready ? 'ok' : paired ? (c.link === 'LOST' && !asleep ? 'bad' : 'warn') : '',
+       asleep ? (sleepers ? sleepers + ' \u00b7 ' : '') + 'switched off' : scan ? '' : paired ? c.brand.toUpperCase() + ' \u00b7 ' + (ready ? 'connected \u00b7 ' + c.rssi + ' dBm' : c.link.toLowerCase())
               : 'Pair one on the Binding tab');
   { const sg = $('#sig'); sg.hidden = !ready; const rs = c ? c.rssi : 0; sg.className = 'sig s' + (rs > -60 ? 4 : rs > -70 ? 3 : rs > -80 ? 2 : 1); }
   $('#c-cam').hidden = !paired;
@@ -1561,6 +1714,7 @@ async function poll() {
 
   { const rdy = !!(c && c.link === 'READY') && viewIsActive();                 // capabilities only mean something while connected
     if (rdy !== gpCamReady) { gpCamReady = rdy; gpRender(); }
+    gpFollowCam(cs && cs.gp_set);
     if (cs && cs.caps_gen !== undefined && cs.caps_gen !== gpCapsGen) { gpCapsGen = cs.caps_gen; gpLoadCaps(); } }
   if (cs && cs.model && cs.model !== gpModel) {        // learn the model once the camera reports it
     gpModel = cs.model;
@@ -1744,15 +1898,14 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target, n = t.name || '';
   if (n === 'osd.units') ridDistShow();
-  if (n === 'rid.ble_duty' && !+t.value && +getField('rid.stale_s') < 10) { setField('rid.stale_s', 10); setDirty(true); }
+  if (n === 'rid.ble_duty' && !+t.value && +getField('rid.stale_s') < 10) { setField('rid.stale_s', 10); setDirty(true, t); }
   if (n === 'osd.units' || n.startsWith('rid.')) ridUi();
 });
 
 // ---- OSD preview: the RID message replaces the %rp line ----
 const RID_TICK = 250, REDUCED = matchMedia('(prefers-reduced-motion: reduce)'), RTAG = ['', 'RID notice', 'RID warn', 'RID alert', 'RID alert'];
 let ridPh = 0;
-// 2 s steps: normal line, NOTICE, WARN (each alternating with the normal line), then two ALERTs one after the
-// other (alerts only, no normal line). The ! is the only part that blinks: slow at WARN, fast at ALERT.
+// 2 s steps: normal, NOTICE, WARN (alternating with normal), two ALERTs; the ! blinks (slow WARN, fast ALERT)
 function ridDemo(ph) {
   const k = ph >> 3, m = DIST.map(e => e.dataset.m | 0);
   if (!k) return null;
@@ -1898,7 +2051,7 @@ async function ridNearPoll() {
 function ridIgnoreAdd(id) {
   const free = ridIgn().find(e => !e.value.trim());
   if (!free) return msg('My aircraft list is full.');
-  free.value = id; setDirty(true); ridUi(); msg('Added. Save to apply.');
+  free.value = id; setDirty(true, free); ridUi(); msg('Added. Save to apply.');
 }
 
 loadConfig().catch(() => msg('could not load config — is the bridge up?'));

@@ -30,8 +30,8 @@ PIDs, or navigation.
 - **Camera telemetry → Betaflight OSD.** Recording state, elapsed / remaining
   time, camera battery, SD card free space (minutes *and* GB), resolution, frame
   rate, colour profile, shooting mode, Protune settings (ISO min/max, shutter, white balance,
-  colour, sharpness, EV, on/off), link status, camera model — 26 tokens across 4 freely
-  editable 16-character lines.
+  colour, sharpness, EV, on/off), the GoPro preset name, link status, camera model — 27 tokens
+  across 4 freely editable 16-character lines, arranged by drag and drop in the portal.
 - **Remote ID receiver (new in 0.3.0, off by default).** Hears other aircraft's
   Open Drone ID broadcasts — Bluetooth always, Wi-Fi only while armed — and puts
   a proximity warning on the OSD with the aircraft's number, distance, bearing
@@ -50,12 +50,19 @@ PIDs, or navigation.
   Protune (ISO, shutter angle, white balance, colour, sharpness, EV, 10-bit) —
   to the camera's video preset, checked against what the camera reports
   (*advanced* style), or simply **switches the camera to one of its own presets**
-  (*simple* style, new in 0.3.3, not yet tested on a camera: pick the preset on
-  the camera, press *Capture*); on a DJI each zone selects a camera mode. Zones and their settings are built in the
+  (*simple* style, the default since 0.3.4: pick the preset from the list read
+  from the camera, or select it on the camera and press *Capture*); on a DJI each
+  zone selects a camera mode. Zones and their settings are built in the
   portal, with option lists that follow what the camera actually allows.
 - **Highlight tags** (GoPro) punched into the recording from a momentary switch. A DJI has no highlight tag.
 - **Up to 4 paired cameras.** Any mix of GoPro and DJI. On power-up RecLink
   connects to whichever paired camera has the strongest signal — one at a time.
+- **A GoPro you switch off stays off** (0.3.4, bench-tested on a HERO12 Black).
+  A sleeping GoPro keeps advertising and connecting to it would wake it, so
+  RecLink leaves it asleep and the OSD shows `CAM ASLEEP`. It wakes the camera
+  only when a recording is asked for (arming, the record switch / button, or the
+  portal's *Test record*), or at power-up if *Wake at power-up* is ticked for that
+  camera on the Binding tab (one camera at a time).
 - **Camera clock sync** from the FC's GPS time, so your footage timestamps are
   right.
 - **DJI GPS position push** — feed the aircraft's fix to the camera for its own
@@ -141,8 +148,9 @@ red = camera lost. The LED does not change while the config portal is open. `led
 
 Other boards: copy `sdkconfig.defaults.board-supermini` and change the `CONFIG_BRIDGE_*` pins.
 
-The portal's web assets (`components/portal/www/`) are gzipped at build time and
-embedded in the app image, so `gzip` must be on `PATH`.
+The portal's web assets (`components/portal/www/`) are packed at build time by
+`components/portal/www_pack.py` (comments and JavaScript indentation removed, then
+gzipped with ESP-IDF's Python) and embedded in the app image.
 
 ---
 
@@ -155,27 +163,31 @@ While the aircraft is disarmed, RecLink hosts an open Wi-Fi network
   the problems listed), tiles for the aircraft and the camera, and a camera card
   (battery, SD space, time left, shooting mode, the GoPro Protune values and the
   result of the last zone push) that appears once a camera is paired. Values the
-  camera has not confirmed are hidden, not shown as dashes. The logo's aperture
+  camera has not confirmed are hidden, not shown as dashes. A GoPro that is
+  switched off shows as *Asleep*, with its name, and *Test record* wakes it first. The logo's aperture
   is white with no camera, green when one is connected and flashes red while
   recording.
 - **Cam control** — recording mode, the arm/switch triggers (with one-touch AUX
   channel auto-detect — flip the switch you want and it finds the channel for
   you), the zone builder (add up to 6 zones and set their edges on the slider;
-  per-zone camera settings, editable while a camera is connected, capture from
-  the camera, options filtered by the camera's capabilities; or, in simple style,
-  one camera preset per zone), highlight switch (GoPro). The camera list on the
-  per-camera tabs selects a camera by itself (the only paired one, else the
-  connected one).
-- **OSD** — pick analog or digital, add and arrange telemetry tokens on the four
-  lines, preview them against live or sample data (including a simulation of the
-  Remote ID message on the line that holds `%rp`).
+  in simple style one camera preset per zone, picked from the camera's own list;
+  in advanced style per-zone camera settings, kept in step with a connected
+  camera, captured from it, with only the options the camera offers), highlight
+  switch (GoPro). Changes on this tab and the OSD tab are saved as you make them.
+  The camera list on the per-camera tabs selects a camera by itself (the only
+  paired one, else the connected one) and follows a camera that connects.
+- **OSD** — pick analog or digital, then drag telemetry tokens onto the four
+  lines or straight onto the live preview, drag them around or off to remove them
+  (tap to add also works); each line shows its length out of 16 characters. The
+  preview uses live or sample data, including a simulation of the Remote ID
+  message on the line that holds `%rp`.
 - **Remote ID** — switch the receiver on, choose Bluetooth / Wi-Fi / both, set
   the warning distances and options, list your own aircraft to ignore, see the
   aircraft heard right now, and run a 30 s reception test that lists them
   (ID, range, bearing, above/below).
 - **Binding** — pair, list and forget cameras; a guided pairing flow for GoPro (with a
   GoPro Labs QR shortcut) and for DJI (pick the camera from a list, confirm the
-  request on its screen).
+  request on its screen); *Wake at power-up* on a GoPro's entry.
 - **Network** — Wi-Fi credentials, MSP baud rate and TX/RX swap, Wi-Fi/BLE
   transmit power.
 - **System** — LED brightness, advanced-mode toggle, OTA firmware upload,
@@ -239,18 +251,21 @@ Early development. The firmware builds for both targets and the full feature set
 is implemented, and it has been bench-tested on real ESP32-C3 hardware wired to
 a Betaflight FC and a GoPro HERO11 Black — MSP link, OSD rendering, recording
 triggers, the config portal and the settings-based zone presets all working.
-Version 0.3.3 is a **pre-release and may contain bugs**. It added GoPro
-*simple* zones (switch the camera's own preset), the DJI first pairing and
-guided DJI pairing in the portal, quicker camera swaps (an immediate drop from a
-camera that is still switching on is no longer mistaken for a lost pairing, a DJI
-that is switched off is let go, and a DJI that lost its key re-pairs by itself),
-a reworked Status tab with the camera state in the logo, and a tidier OSD token
-set (six tokens retired — `%bb %cn %gs %gf %fb %sp` — and `%cm` for the camera
-model; `%bi` now draws the battery glyph on a digital OSD too, **not yet checked
-on real goggles**). The portal's web files have grown to about 45.1 KB gzipped,
-under the 46,000 B budget in the spec (raised from 44,000 B on 2026-11-23). Version 0.3.2 (the multi-camera reconnect hardening, the
-first Osmo Action 6 session and the *Apply* button on DJI zones) was a
-pre-release as well. Several protocol
+Version 0.3.4 is a **pre-release and may contain bugs**. It reads the GoPro's
+own preset list (simple zones are now the default and pick from it), adds the
+`%pn` OSD token for the current GoPro preset name, makes zone pushes reliable on
+a HERO12 (the colour profile is set first, because changing it resets the other
+settings), shows only the options the camera offers in the zone editor, leaves a
+GoPro you switched off asleep, moves *Wake at power-up* to the Binding tab (one
+camera at a time), saves the Cam control and OSD tabs as you edit, and replaces
+the OSD editor with drag and drop. It was bench-tested on a HERO12 Black: zone
+pushes (15 of 15), simple zones, the preset list, `%pn` in the portal, wake at
+power-up and the new OSD editor. **Not checked:** `%pn`, `%bi` and `CAM ASLEEP`
+on real goggles, other GoPro models, waking an asleep GoPro by arming or by the
+record switch, and the OSD editor on a phone. The portal's web files are
+45,902 B gzipped, under the 46,000 B budget in the spec. Version 0.3.3 (GoPro
+simple zones, DJI pairing in the portal, quicker camera swaps, the reworked
+Status tab, a tidier OSD token set) and 0.3.2 were pre-releases as well. Several protocol
 constants are still assumed pending verification against a live GoPro / DJI
 capture (see [VERIFY.md](VERIFY.md)). The Remote ID receiver (new in 0.3.0) has
 been built for every board profile and booted on the ESP32-C3 board; its Wi-Fi

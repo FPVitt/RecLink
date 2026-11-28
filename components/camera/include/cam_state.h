@@ -21,6 +21,7 @@ typedef enum {
 
 typedef struct {
     cam_link_state_t link;
+    bool     asleep;           // not connected, and a bonded camera advertises that it is asleep (GoPro)
     uint32_t last_rx_ms;
     int8_t   rssi;
     char     name[32];
@@ -60,6 +61,7 @@ typedef struct {
     // the portal's "capture from camera".
     struct { uint8_t id; bool valid; uint8_t v; } gp_set[GP_PSET_MAX];
     val_u32_t gp_preset;        // GoPro status 97: the camera's active preset id (what Load Preset takes)
+    val_str_t preset_name;      // GoPro: that preset's name from the camera's preset list (%pn); blank if unknown
     char     model[24];         // GoPro model name from Get Hardware Info ("HERO11 Black"); "" until known
     uint8_t  gp_apply_zone;     // 1..3, 0 = none
     uint8_t  gp_apply_state;    // gp_apply_state_t

@@ -249,6 +249,32 @@ static void test_rid_any_enabled(void)
     CHECK(!cfg_rid_any_enabled());
 }
 
+static void test_wake_on_boot_per_camera(void)
+{
+    fresh();
+    cfg_set_camera_bond("gopro", A, "HERO12", 0);
+    CHECK(!cfg_cam_wake_on_boot(A));
+    CHECK_EQ(cfg_cam_set_wake(A, true), ESP_OK);
+    cfg_set_camera_bond("dji", B, "Osmo", 1);                          // a new camera does not inherit it
+    CHECK(cfg_cam_wake_on_boot(A)); CHECK(!cfg_cam_wake_on_boot(B));
+    cfg_set_active_camera(B);                                         // the DJI is active at boot
+    CHECK(cfg_cam_wake_on_boot(A));                                   // the bench bug: A must still wake
+    CHECK_EQ(cfg_cam_set_poll(A, 5), ESP_OK);                          // the poll rate keeps the flag...
+    CHECK(cfg_cam_wake_on_boot(A));
+    uint8_t pd = 0; cfg_cam_at(0, NULL, &pd); CHECK_EQ(pd, 5);         // ...and reads back without it
+    CHECK_EQ(cfg_cam_set_wake(B, true), ESP_OK);                       // one camera at a time
+    CHECK(!cfg_cam_wake_on_boot(A)); CHECK(cfg_cam_wake_on_boot(B));
+    cfg_t c; cfg_snapshot(&c); c.cam_poll_ds[0] |= CAM_POLL_WAKE; c.cam_poll_ds[1] |= CAM_POLL_WAKE;
+    char m[64]; cfg_validate(&c, m, sizeof m);                        // two set by hand: validate keeps one
+    CHECK(((c.cam_poll_ds[0] | 0) & CAM_POLL_WAKE) + 0 != 0 && !(c.cam_poll_ds[1] & CAM_POLL_WAKE));
+    CHECK_EQ(cfg_cam_set_wake(B, false), ESP_OK);
+    CHECK(!cfg_cam_wake_on_boot(A)); CHECK(!cfg_cam_wake_on_boot(B));
+    CHECK_EQ(cfg_cam_set_wake(B, true), ESP_OK);
+    CHECK_EQ(cfg_forget_camera(A), ESP_OK);                            // B moves to slot 0, flag with it
+    CHECK(cfg_cam_wake_on_boot(B));
+    CHECK_EQ(cfg_cam_set_wake(A, true), ESP_ERR_NOT_FOUND);
+}
+
 static void test_nicknames(void)
 {
     fresh();
@@ -295,6 +321,7 @@ int main(void)
     RUN(test_no_profile_inherits);
     RUN(test_forget_and_clear);
     RUN(test_rid_any_enabled);
+    RUN(test_wake_on_boot_per_camera);
     RUN(test_nicknames);
     TEST_MAIN_END();
 }

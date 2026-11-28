@@ -3,11 +3,15 @@
 // verify) and the portal. Anything not listed here can never be written to the
 // camera from a stored preset.
 //
-// A zone does NOT load a GoPro preset; it lists (setting id, option value)
-// pairs that the driver writes to the camera's active preset, in the order
-// below. The order matters: resolution first, then the settings whose valid
-// options depend on it (fps, lens, ...), Protune on/off before the Protune
-// sub-settings.
+// An *advanced* zone does not load a GoPro preset (a *simple* one does, by id: Load Preset);
+// it lists (setting id, option value) pairs that the driver writes to the camera's active preset, in the order
+// below. The order matters: colour profile first -- on a HERO12 changing it makes the
+// camera restore its own saved resolution / aspect / fps / lens / ISO / WB / colour for
+// that profile (bench 2026-11-28, HERO12 fw H23.01.02.44.70), so anything written before
+// it is undone. Then aspect before resolution (the aspect decides which resolutions are
+// offered), the settings whose options depend on the resolution (fps, lens, ...), and
+// Protune on/off before the Protune sub-settings. Only the runtime apply / poll order
+// uses this index; cfg stores setting ids, so reordering does not touch saved zones.
 //
 // IDs and option values: Open GoPro BLE spec settings 2/3/108/121/135/183/184;
 // 114/13/102/145/115/116/117/118/174 are unofficial (HERO11 gpControl dump,
@@ -22,13 +26,13 @@
 static inline uint8_t gp_pset_id(int idx)
 {
     static const uint8_t k_ids[GP_PSET_MAX] = {
-        2,    // video resolution
+        184,  // profile (HERO12+) -- first, see above
+        183,  // bit depth (HERO12+)
         108,  // video aspect ratio (HERO12+)
+        2,    // video resolution
         3,    // frames per second
         121,  // video lens
         135,  // hypersmooth
-        183,  // bit depth (HERO12+)
-        184,  // profile (HERO12+)
         114,  // Protune on/off
         13,   // ISO max
         102,  // ISO min

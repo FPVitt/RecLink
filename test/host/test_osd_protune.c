@@ -127,6 +127,17 @@ static void test_cam_model(void)
     setup(&c, &fc, &cam, 0); fmt(out, sizeof out, "%bb", &fc, &cam, &c); CHECK(strcmp(out, "%b") == 0 || strcmp(out, "%bb") == 0);
 }
 
+static void test_preset_name(void)
+{
+    cfg_t c; fc_state_t fc; cam_state_t cam; char out[32]; setup(&c, &fc, &cam, 1);
+    fmt(out, sizeof out, "[%pn]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);              // unknown: blank
+    put(&cam.preset_name, "Pov 1");
+    fmt(out, sizeof out, "[%pn]", &fc, &cam, &c); CHECK(strcmp(out, "[POV 1]") == 0);         // digital folds case
+    c.osd.fields_mask &= ~(1u << OSD_TOK_PN); fmt(out, sizeof out, "[%pn]", &fc, &cam, &c); CHECK(strcmp(out, "[]") == 0);
+    setup(&c, &fc, &cam, 1); put(&cam.preset_name, "Highest Quality");
+    fmt(out, sizeof out, "REC 12:34 %pn", &fc, &cam, &c); CHECK(strlen(out) == 16);             // the 16-char clamp
+}
+
 int main(void)
 {
     RUN(test_each_token);
@@ -134,6 +145,7 @@ int main(void)
     RUN(test_field_bit);
     RUN(test_battery_icon);
     RUN(test_cam_model);
+    RUN(test_preset_name);
     RUN(test_digital_and_clamp);
     TEST_MAIN_END();
 }

@@ -11,6 +11,13 @@
 #include <stdint.h>
 #include "gp_preset.h"
 
+// The camera's own video presets (GoPro Get Available Presets), for the portal's simple
+// zones: a zone loads one of these by id. The name is the preset's custom name or its
+// title ("Standard", "Custom 2"); empty if the camera's title is not known to us.
+#define CAM_PRESETS_MAX  16
+#define CAM_PRESET_NAME  20
+typedef struct { uint32_t id; char name[CAM_PRESET_NAME]; } cam_preset_t;
+
 typedef struct {
     uint16_t gen;                       // bumps whenever the content changes
     bool     have[GP_PSET_MAX];         // camera listed options for gp_pset_id(i)
@@ -20,7 +27,9 @@ typedef struct {
 void     cam_caps_init(void);
 void     cam_caps_get(cam_caps_t *out);                  // any task
 uint16_t cam_caps_gen(void);                             // any task, cheap
-void     cam_caps_publish(const cam_caps_t *c);          // driver / cam_task only
+void     cam_caps_publish(const cam_caps_t *c);          // driver / cam_task only (setting options)
+void     cam_caps_publish_presets(const cam_preset_t *p, int n);   // driver / cam_task only; bumps gen on a change
+int      cam_caps_presets(cam_preset_t *out, int max);  // any task: copies the list, returns its length (0 = unknown)
 
 static inline bool cam_caps_has(const cam_caps_t *c, int i, uint8_t v)
 {

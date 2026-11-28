@@ -224,8 +224,7 @@
       <fieldset id="gp-builder">
         <legend>Camera settings per zone</legend>
         <div class="gpt" id="gp-zt"></div>
-        <p class="muted" id="gp-model"></p>
-        <label class="gplive"><input type="checkbox" id="gp-live"> Keep the camera in step while editing</label>
+        <p class="muted"><span id="gp-model"></span> <span id="gp-sync" class="spin" role="status" aria-label="Syncing with the camera" title="Syncing with the camera"></span></p>
         <div id="gp-rows"></div>
         <div class="row">
           <button type="button" class="ghost" id="gp-capture">Capture from camera</button>
@@ -234,8 +233,8 @@
         <p class="muted">Tick a setting to push it to the camera when this zone is selected; the rest stay as they are. Needs the camera in a video preset.</p>
         <p class="muted" id="gp-state"></p>
       </fieldset>
-      <p class="muted" id="dji-zone-note" hidden>Each zone applies its DJI mode value. Apply switches the connected camera now (save first).</p>
-      <p class="muted" id="gp-simple-note" hidden>Each zone switches the camera to one of its own presets. Pick the preset on the camera, then press Capture. Apply switches the connected camera now (save first).</p>
+      <p class="muted" id="dji-zone-note" hidden>Each zone applies its DJI mode value. Apply switches the connected camera now.</p>
+      <p class="muted" id="gp-simple-note" hidden>Each zone switches the camera to one of its own presets: pick it from the list, or select it on the camera and press Capture. Apply switches the connected camera now.</p>
     </fieldset>
     <details class="adv adv-only">
       <summary>Advanced &mdash; timing &amp; behaviour</summary>
@@ -266,27 +265,22 @@
       <option value="1" selected>Digital</option>
     </select></label>
 
-  <div class="card" id="osdprev">
-    <h3>Preview</h3>
+  <div class="card" id="osdedit">
+    <h3>Layout</h3>
     <div id="osdscreen" class="osdscreen">
       <div id="osdlines" class="osdlines"></div>
     </div>
-    <p id="osdclip" class="warn-inline"></p>
-    <label>Simulate a connected camera<input type="checkbox" id="osdsim"></label>
-  </div>
-
-  <div class="card" id="osdedit">
-    <h3>Lines</h3>
-    <div id="palette" class="palette"></div>
-    <p class="warn-inline" id="osd-nol" hidden>Remote ID alerts have no line to appear on &mdash; add %rp to one of the four lines.</p>
-    <p class="muted"><b>%rp</b>: Remote ID warning, e.g. <b>!RID1 240M &#8599;+</b>. Alerts take the whole line; warnings alternate with it. Options: Remote ID tab.</p>
-    <p class="muted"><b>%ix %in %sh %wb %co %sa %ev %pt</b>: GoPro Protune settings (video presets).</p>
+    <label>Preview with a connected camera<input type="checkbox" id="osdsim" checked></label>
+    <p class="warn-inline" id="osd-nol" hidden>Remote ID alerts have no line to appear on &mdash; add the Remote ID warning to one of the four lines.</p>
     <div id="olines">
-      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"></div>
-      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"></div>
-      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"></div>
-      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"></div>
+      <div class="oline" data-i="0"><div class="olh"><b>Line 1</b><span class="cnt"></span></div><div class="chips" id="chips-0"></div><input type="hidden" name="osd.lines.0"></div>
+      <div class="oline" data-i="1"><div class="olh"><b>Line 2</b><span class="cnt"></span></div><div class="chips" id="chips-1"></div><input type="hidden" name="osd.lines.1"></div>
+      <div class="oline" data-i="2"><div class="olh"><b>Line 3</b><span class="cnt"></span></div><div class="chips" id="chips-2"></div><input type="hidden" name="osd.lines.2"></div>
+      <div class="oline" data-i="3"><div class="olh"><b>Line 4</b><span class="cnt"></span></div><div class="chips" id="chips-3"></div><input type="hidden" name="osd.lines.3"></div>
     </div>
+    <p class="muted">Drag a token onto a line or straight onto the preview (on a phone: hold it, then drag), or tap it to add it to the selected line. Drag a chip to move it; drag it off the lines to remove it.</p>
+    <div id="palette" class="palette"></div>
+    <p class="muted"><b>Remote ID warning</b>, e.g. <b>!RID1 240M &#8599;+</b>: alerts take the whole line, warnings alternate with it. Options: Remote ID tab.</p>
   </div>
 
   <label>Update rate &mdash; Hz (1&ndash;10)
@@ -310,7 +304,7 @@
 <section id="rid" class="tab">
   <p class="warn-inline">&#9888; Informational only, not collision avoidance. Many aircraft broadcast nothing.</p>
 
-  <p class="warn-inline" id="rid-nol" hidden>Remote ID alerts have no line to appear on &mdash; add %rp to one of the four lines (OSD tab).</p>
+  <p class="warn-inline" id="rid-nol" hidden>Remote ID alerts have no line to appear on &mdash; add the Remote ID warning to a line on the OSD tab.</p>
   <div id="rid-reboot" class="card" hidden>
     <h3 class="warn-inline">&#9888; Reboot to apply</h3>
     <p>Saved on, but not running yet.</p>

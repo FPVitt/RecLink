@@ -18,6 +18,8 @@ esp_err_t cam_submit(cam_op_t op, int32_t arg)
     return ESP_OK;
 }
 void osd_set_rec_fail(bool on) { g_rec_fail = on; }
+static bool g_wake;
+void cam_wake_for_record(bool on) { g_wake = on; }
 void applog_note(const char *fmt, ...) { (void)fmt; }
 
 // ---- harness ------------------------------------------------------------------------------------
@@ -43,7 +45,7 @@ static void setup(int mode, const char *brand)
     g_ctx.cam.busy = TRIBOOL_FALSE;
     g_ctx.fc.rc_channel_count = 8;
     g_ctx.fc.rc[4] = 1000;
-    g_starts = g_stops = 0; g_rec_fail = false;
+    g_starts = g_stops = 0; g_rec_fail = false; g_wake = false;
     ctrl_record_reset();
 }
 
@@ -273,6 +275,44 @@ static void test_strict_and_needs_both(void)
     g_ctx.armed_now = false; tick(200); CHECK(!desired());
 }
 
+// An asleep camera (GoPro, switched off) is woken only by a fresh request to record.
+static void test_wake_only_on_a_fresh_record_request(void)
+{
+    setup(REC_ARM, "gopro");
+    g_ctx.cam.link = CAM_LINK_SCAN; g_ctx.cam.asleep = true; g_ctx.cam.recording = TRIBOOL_UNKNOWN;
+    tick(0);                           CHECK(!g_wake);           // not asked to record: stays asleep
+    g_ctx.armed_now = true; tick(100); CHECK(g_wake);            // arming asks to record: wake it
+    tick(500);                         CHECK(g_wake);            // stays allowed until it connects
+    g_ctx.cam.link = CAM_LINK_READY; g_ctx.cam.asleep = false; g_ctx.cam_ready_edge = true;
+    tick(600);                         CHECK(!g_wake);
+    g_ctx.cam.recording = TRIBOOL_FALSE; tick(700);
+    CHECK_EQ(g_starts, 1);                                       // reconcile starts the clip
+    g_ctx.cam.link = CAM_LINK_SCAN; g_ctx.cam.asleep = true;     // the user switches it off, still armed
+    tick(2000); tick(3000);            CHECK(!g_wake);           // left off
+    g_ctx.armed_now = false; tick(4000); CHECK(!g_wake);
+}
+
+static void test_switch_press_wakes_even_if_already_on(void)
+{
+    setup(REC_SWITCH, "gopro");
+    g_ctx.fc.rc[4] = 2000; tick(0);    CHECK(desired());         // recording, camera READY
+    g_ctx.cam.link = CAM_LINK_SCAN; g_ctx.cam.asleep = true;     // camera shuts itself off mid-flight
+    tick(100);                         CHECK(!g_wake);
+    g_ctx.fc.rc[4] = 1000; tick(200);  CHECK(!g_wake);           // switch off ...
+    g_ctx.fc.rc[4] = 2000; tick(300);  CHECK(g_wake);            // ... and on again: wake it
+}
+
+static void test_button_press_while_asleep_means_start(void)
+{
+    setup(REC_SWITCH, "gopro");
+    g_cfg.record.sw.mode = RECSW_BUTTON;
+    g_ctx.fc.rc[4] = 2000; tick(0); g_ctx.fc.rc[4] = 1000; tick(100);
+    CHECK(desired());                                            // recording
+    g_ctx.cam.link = CAM_LINK_SCAN; g_ctx.cam.asleep = true;     // camera went off
+    g_ctx.fc.rc[4] = 2000; tick(200);
+    CHECK(desired()); CHECK(g_wake);                             // the press starts, it does not toggle off
+}
+
 int main(void)
 {
     RUN(test_arm_starts_and_stops);
@@ -290,5 +330,8 @@ int main(void)
     RUN(test_button_mode_toggles);
     RUN(test_combi_mode_cut_and_restart);
     RUN(test_strict_and_needs_both);
+    RUN(test_wake_only_on_a_fresh_record_request);
+    RUN(test_switch_press_wakes_even_if_already_on);
+    RUN(test_button_press_while_asleep_means_start);
     TEST_MAIN_END();
 }
