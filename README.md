@@ -263,7 +263,7 @@ pushes (15 of 15), simple zones, the preset list, `%pn` in the portal, wake at
 power-up and the new OSD editor. **Not checked:** `%pn`, `%bi` and `CAM ASLEEP`
 on real goggles, other GoPro models, waking an asleep GoPro by arming or by the
 record switch, and the OSD editor on a phone. The portal's web files are
-45,902 B gzipped, under the 46,000 B budget in the spec. Version 0.3.3 (GoPro
+45,947 B gzipped, under the 46,000 B budget in the spec. Version 0.3.3 (GoPro
 simple zones, DJI pairing in the portal, quicker camera swaps, the reworked
 Status tab, a tidier OSD token set) and 0.3.2 were pre-releases as well. Several protocol
 constants are still assumed pending verification against a live GoPro / DJI
